@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Orbit: Android TV launcher design</title>
+<style>
+:root{font-family:-apple-system,Inter,Segoe UI,sans-serif}
+body{margin:0;background:#101014;color:#e8e8ee}
+h1{font-size:20px;padding:24px 28px 0;margin:0;font-weight:600}
+h2{font-size:15px;margin:0 0 6px;letter-spacing:.04em;text-transform:uppercase;color:#9aa0b4}
+p.note{margin:0 0 14px;font-size:13px;color:#8b90a0;max-width:960px;line-height:1.5}
+section{padding:26px 28px}
+.tv{width:1280px;height:720px;border-radius:10px;overflow:hidden;position:relative;box-shadow:0 18px 50px #0008;transform-origin:top left}
+.scale{height:400px}.scale .tv{transform:scale(.555)}
+
+/* ---------- 4. ORBIT ---------- */
+.ob{background:#07080a;font-family:Inter,-apple-system,"Helvetica Neue",sans-serif;color:#fff}
+.ob .art{position:absolute;inset:0;background:url(bg-hero.jpg) center/cover no-repeat}
+.ob .scrim{position:absolute;inset:0;background:
+ linear-gradient(90deg,#05060acc 0%,#05060a8c 42%,#05060a1a 68%,transparent),
+ linear-gradient(0deg,#05060af2 16%,#05060ab3 34%,transparent 62%),
+ linear-gradient(180deg,#05060a99,transparent 24%)}
+.ob .desc{margin:14px 0 0;font-size:19px;line-height:1.45;color:#ffffffd9;font-weight:300;max-width:560px}
+.ob .wrap{position:relative;height:100%;padding:40px 64px 30px;box-sizing:border-box;display:flex;flex-direction:column}
+.ob .top{display:flex;justify-content:space-between;font-size:17px;color:#ffffff8c;letter-spacing:.07em}
+.ob .hero{margin-top:10px;max-width:640px}
+.ob .kicker{font-size:16px;letter-spacing:.26em;color:#7fd4ff;margin:0 0 10px}
+.ob h3{margin:0;font-size:52px;line-height:1.02;font-weight:300;letter-spacing:-.015em}
+.ob .meta{margin:12px 0 0;font-size:17px;color:#ffffffa6;letter-spacing:.06em}
+.ob .pbar{margin-top:10px;width:300px;height:3px;background:#ffffff26;border-radius:2px}
+.ob .pbar i{display:block;height:100%;width:54%;background:#fff;border-radius:2px}
+.ob .rows{margin-top:auto;display:flex;flex-direction:column;gap:20px}
+.ob .label{font-size:16px;letter-spacing:.2em;color:#ffffff59;margin:0 0 10px}
+.ob .apps{display:flex;gap:16px;align-items:flex-end}
+.ob .app{width:148px}
+.ob .tile{width:148px;height:88px;border-radius:14px;overflow:hidden;display:flex;align-items:center;
+ justify-content:center;gap:8px;background:#fff;box-shadow:0 8px 22px #0007;color:#111;
+ font-size:17px;font-weight:600;letter-spacing:-.01em}
+.ob .app span{display:block;margin-top:8px;font-size:16px;color:#fff;text-align:center;opacity:0}
+.ob .tile span{display:inline;margin:0;opacity:1;color:inherit}
+.ob .tile.wm{gap:3px}
+.ob .app.on span{opacity:1}
+.ob .app.on .tile{box-shadow:0 0 0 3px #fff,0 12px 30px #000b}
+.ob .app.add .tile{background:#1e2838;color:#9fc3ff;border:1px solid #ffffff1a;font-size:16px;
+ font-weight:500;flex-direction:column;gap:6px}
+.ob .app.gone{width:46px;opacity:.2}
+.ob .app.gone .tile{width:46px;transform:scale(.84);filter:grayscale(1)}
+.ob .inputs{display:flex;gap:12px;align-items:stretch}
+.ob .in{width:146px;height:88px;border-radius:14px;background:#2a3444;border:1px solid #ffffff14;
+ display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+ color:#dde5f0;text-align:center;padding:0 8px;box-sizing:border-box}
+.ob .in b{font-weight:500;font-size:17px;letter-spacing:.01em}
+.ob .in em{font-style:normal;font-size:15px;color:#ffffff8c;letter-spacing:.04em}
+.ob .in.cur{background:#1aa3c4;border-color:#63d8f0;color:#fff}
+.ob .in.cur em{color:#ffffffcc}
+.ob .in.sq{width:100px}
+.ob .in.sep{margin-left:auto}
+.ob .top .r{display:flex;align-items:center;gap:18px}
+.ob .av{width:34px;height:34px;border-radius:50%;background:#2b3242;border:1px solid #ffffff33;
+ display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ob .av svg{width:21px;height:21px}
+.ob .notice{margin:0 -64px 14px;padding:12px 64px;display:flex;align-items:center;gap:18px;
+ background:#0b1017a6;border-top:1px solid #ffffff1a;border-bottom:1px solid #ffffff1a}
+.ob .notice .tx{flex:1}
+.ob .notice b{display:block;font-size:19px;font-weight:400;letter-spacing:-.005em}
+.ob .notice i{font-style:normal;display:block;font-size:16px;color:#ffffff8c;margin-top:3px}
+.ob .notice .btn{font-size:17px;padding:9px 22px;border-radius:999px;border:1px solid #ffffff2e;
+ color:#ffffffd9;background:#ffffff0f}
+.ob .notice .btn.on{background:#fff;color:#111;border-color:#fff;box-shadow:0 0 0 3px #ffffff40}
+.ob .appsclip{margin-right:-64px;overflow:hidden}
+.ob.sc .apps{margin-left:-312px}
+.ob .apps{width:max-content}
+.ob .app.plus .tile{background:#1e2838;color:#9fc3ff;border:1px solid #ffffff1a;font-size:34px;font-weight:300}
+.ob .ovl{position:absolute;inset:0;background:#05070bf5;padding:54px 64px;box-sizing:border-box;
+ display:flex;flex-direction:column}
+.ob .ovl h5{margin:0;font-size:30px;font-weight:300;letter-spacing:-.01em}
+.ob .ovl .sub{margin:8px 0 30px;font-size:17px;color:#ffffff8c}
+.ob .grid{display:grid;grid-template-columns:repeat(6,148px);gap:18px}
+.ob .g{position:relative}
+.ob .g .nm{width:148px;height:88px;border-radius:14px;background:#1a2130;border:1px solid #ffffff14;
+ display:flex;align-items:center;justify-content:center;font-size:17px;color:#cfd8e6;text-align:center;padding:0 10px;box-sizing:border-box}
+.ob .g.on .tile,.ob .g.on .nm{box-shadow:0 0 0 3px #fff,0 12px 30px #000b}
+.ob .g .ck{position:absolute;top:-8px;right:-8px;width:28px;height:28px;border-radius:50%;background:#2f9e5b;
+ display:flex;align-items:center;justify-content:center;border:2px solid #05070b}
+.ob .ovl .hint{margin-top:30px;font-size:16px;color:#ffffff73;letter-spacing:.1em}
+.ob .toast{position:absolute;right:64px;top:96px;display:flex;align-items:center;gap:14px;
+ background:#0f141ceb;border:1px solid #ffffff24;border-radius:14px;padding:15px 22px;font-size:17px;
+ color:#e8eef7;box-shadow:0 18px 44px #000a}
+.ob .toast .ok{width:26px;height:26px;border-radius:50%;background:#2f9e5b;display:flex;
+ align-items:center;justify-content:center;flex:none}
+.ob .toast b{display:block;font-weight:500}
+.ob .toast i{font-style:normal;display:block;font-size:15px;color:#ffffff8c;margin-top:3px}
+
+/* ---------- 5. ORBIT LIVE (TiVimate hero) ---------- */
+.ob.lv .art{background:radial-gradient(60% 80% at 72% 34%,#2a3b57,#121724 55%,#080a10);filter:none}
+.ob.lv .ghost{position:absolute;right:92px;top:112px;width:360px;height:360px;border-radius:40px;
+ background:#ff6a1326;border:2px solid #ff6a1340;display:flex;align-items:center;justify-content:center;
+ font-size:92px;font-weight:700;color:#ff6a1333;letter-spacing:-.03em;filter:blur(1px)}
+.ob .chip{display:inline-flex;align-items:center;gap:12px;background:#ffffff14;border:1px solid #ffffff26;
+ border-radius:999px;padding:7px 16px 7px 8px;margin-bottom:14px}
+.ob .chip .lg{width:34px;height:34px;border-radius:9px;background:#ff6a13;color:#fff;font-size:12px;
+ font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:-.02em}
+.ob .chip b{font-size:17px;font-weight:500;letter-spacing:.08em;color:#fff}
+.ob .chip i{font-style:normal;font-size:15px;letter-spacing:.2em;color:#ff5a5a}
+.ob .slot{margin:12px 0 0;font-size:17px;color:#ffffffa6;letter-spacing:.06em}
+.ob .next{margin:14px 0 0;font-size:16px;color:#ffffff73;letter-spacing:.04em}
+
+/* ---------- 7. EPG FALLBACK LADDER ---------- */
+.fb{display:flex;gap:20px}
+.fbc{width:392px;background:#0b0f16;border:1px solid #ffffff14;border-radius:14px;padding:26px 28px;
+ box-sizing:border-box;font-family:Inter,-apple-system,sans-serif;color:#fff}
+.fbc .chip{display:inline-flex;align-items:center;gap:10px;background:#ffffff14;border:1px solid #ffffff26;
+ border-radius:999px;padding:5px 13px 5px 6px;margin-bottom:14px}
+.fbc .chip .lg{width:26px;height:26px;border-radius:7px;background:#ff6a13;color:#fff;font-size:10px;
+ font-weight:700;display:flex;align-items:center;justify-content:center}
+.fbc .chip b{font-size:12px;font-weight:500;letter-spacing:.08em}
+.fbc .chip i{font-style:normal;font-size:10px;letter-spacing:.18em;color:#ff5a5a}
+.fbc .chip i.off{color:#ffb020}
+.fbc h4{margin:0 0 12px;font-size:24px;font-weight:300;letter-spacing:-.01em}
+.fbc p{margin:10px 0 0;font-size:13px;line-height:1.45;color:#ffffffb0;font-weight:300}
+.fbc .sl{margin:12px 0 0;font-size:12px;color:#ffffff8c;letter-spacing:.06em}
+.fbc .bar{margin-top:14px;height:3px;width:220px;background:#ffffff26;border-radius:2px}
+.fbc .bar i{display:block;height:100%;background:#fff;border-radius:2px}
+.fbc .cap{margin-top:20px;padding-top:14px;border-top:1px solid #ffffff14;font-size:11px;
+ letter-spacing:.14em;color:#6f7b8d}
+.fbc .cap b{display:block;color:#9fb0c6;font-weight:500;margin-bottom:5px;letter-spacing:.1em}
+.fbc.warn{border-color:#ffb02033}
+</style>
+<h1>Orbit: Android TV launcher design</h1>
+<p class="note" style="margin:6px 0 0">The working design. Three rejected directions are in <a href="alternatives.html" style="color:#7fd4ff">alternatives.html</a>. Sections are numbered 4 to 9, continuing from the rejected directions.</p>
+<section><h2>4. Orbit (rounded tiles)</h2>
+<p class="note">The chosen design. Full-bleed artwork of the last played item, title and synopsis in the top third, a translucent notice strip directly above the apps, then rounded app tiles carrying each app's own banner, then an inputs row styled after the TV's native input picker: a distinct colour marks the current input, and All inputs opens the TV's own picker. Details on the notice deep-links to the settings screen that fixes it; Dismiss hides it until the condition recurs.</p>
+<div class="scale"><div class="tv ob">
+ <div class="art"></div><div class="scrim"></div>
+ <div class="wrap">
+  <div class="top"><span>Tuesday 20 October</span><div class="r"><div class="av"><svg viewBox="0 0 24 24" fill="#cbd3e1"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg></div><span>21:14</span></div></div>
+  <div class="hero">
+   <p class="kicker">CONTINUE WATCHING</p>
+   <h3>Night Watch</h3>
+   <p class="desc">A maintenance crew on the late shift finds that the building keeps rearranging its own floors.</p>
+   <p class="meta">S2 E5 &middot; THE SUB-LEVEL &middot; 33 MIN LEFT &middot; JELLYFIN &middot; 4K HDR</p>
+   <div class="pbar"><i></i></div>
+  </div>
+  <div class="rows">
+   <div class="notice"><div class="tx"><b>Ethernet is not connected</b><i>Select for options</i></div><span class="btn on">Details</span><span class="btn">Dismiss</span></div>
+   <div>
+    <p class="label">APPS</p>
+    <div class="appsclip"><div class="apps">
+     <div class="app on"><div class="tile" style="background:#101828;color:#fff"><svg viewBox="0 0 40 40" width="34" height="34"><defs><linearGradient id="jg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#AA5CC3"/><stop offset="1" stop-color="#00A4DC"/></linearGradient></defs><path d="M20 7c3 0 9 10 7 13s-13 3-15 0 5-13 8-13z" fill="url(#jg2)"/><path d="M20 19c2 0 6 7 5 9s-9 2-10 0 3-9 5-9z" fill="url(#jg2)"/></svg><span style="opacity:1;margin:0;font-size:17px">Jellyfin</span></div><span>Jellyfin</span></div>
+     <div class="app"><div class="tile wm"><span style="color:#1F8FD6">tivi</span><span style="color:#263445">mate</span></div><span>TiViMate</span></div>
+     <div class="app"><div class="tile" style="background:#1F1F1F;color:#E5A00D;font-size:16px"><svg viewBox="0 0 34 34" width="26" height="26"><path d="M9 4h10l9 13-9 13H9l9-13z" fill="#E5A00D"/></svg>plex</div><span>Plex</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 24" width="34" height="24"><rect width="34" height="24" rx="7" fill="#FF0000"/><path d="M14 7l9 5-9 5z" fill="#fff"/></svg><span style="opacity:1;margin:0;font-size:16px">YouTube</span></div><span>YouTube</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 34" width="28" height="28" fill="#17B2E7"><path d="M17 1l7 7-7 7-7-7z"/><path d="M8 10l6 6-6 6-6-6z"/><path d="M26 10l6 6-6 6-6-6z"/><path d="M17 19l7 7-7 7-7-7z"/></svg><span style="opacity:1;margin:0;font-size:16px">KODI</span></div><span>Kodi</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#E50914;font-size:15px;letter-spacing:.12em">NETFLIX</div><span>Netflix</span></div>
+     <div class="app"><div class="tile" style="background:#0F1C2E;color:#4DB8E8;font-size:15px">prime video</div><span>Prime Video</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#1DB954;font-size:16px">Spotify</div><span>Spotify</span></div>
+     <div class="app plus"><div class="tile">+</div><span>Add</span></div>
+    </div></div>
+   </div>
+   <div>
+    <p class="label">INPUTS</p>
+    <div class="inputs">
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>HDMI 1</b><em>Free</em></div>
+     <div class="in cur"><svg viewBox="0 0 40 24" width="32" height="19" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="34" height="13" rx="2.5"/><path d="M9 10.5h13" stroke-linecap="round"/><path d="M7 21h26" stroke-linecap="round"/></svg><b>Apple TV</b><em>HDMI 2</em></div>
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>Receiver</b><em>HDMI 3 eARC</em></div>
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>HDMI 4</b><em>Free</em></div>
+     <div class="in"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 13v8"/><path d="M8 21h8"/><path d="M7.5 9a5 5 0 019 0"/><path d="M4.5 10a8.5 8.5 0 0115 0"/><circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/></svg><b>Antenna</b><em>TV</em></div>
+     <div class="in"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h6a1 1 0 011 1v16a1 1 0 01-1 1h-6"/><path d="M3 12h11"/><path d="M10 8l4 4-4 4"/></svg><b>All inputs</b></div>
+     <div class="in sq sep"><svg viewBox="0 0 48 48" width="26" height="26"><path fill="#00A0FF" d="M11 4v40l18-20z"/><path fill="#00F076" d="M11 4l29 15-11 5z"/><path fill="#FFBD00" d="M40 19v10l-11-5z"/><path fill="#FF3A44" d="M11 44l29-15-11-5z"/></svg><em>Play Store</em></div>
+     <div class="in sq"><svg viewBox="0 0 48 48" width="27" height="27" fill="none" stroke="#fff" stroke-linecap="round"><circle cx="24" cy="24" r="10" stroke-width="4.5"/><circle cx="24" cy="24" r="3.5" stroke-width="3"/><g stroke-width="5"><path d="M24 11.5V7M24 41v-4.5M36.5 24H41M7 24h4.5M32.8 15.2l3.2-3.2M12 36l3.2-3.2M32.8 32.8l3.2 3.2M12 12l3.2 3.2"/></g></svg><em>Settings</em></div>
+    </div>
+   </div>
+  </div>
+ </div>
+</div></div></section>
+<section><h2>5. Orbit Live (same layout, TiViMate hero)</h2>
+<p class="note">What design 4 degrades to on live TV. TiViMate exposes no now-playing API, so the hero is built from the EPG: channel chip plus LIVE badge, programme title, EPG synopsis, the slot time with elapsed progress and a next-up line. Most channels have no artwork, so the backdrop falls back to a tint from the channel logo. Everything below the hero is identical to design 4.</p>
+<div class="scale"><div class="tv ob lv">
+ <div class="art"></div><div class="ghost">2</div><div class="scrim"></div>
+ <div class="wrap">
+  <div class="top"><span>Tuesday 20 October</span><div class="r"><div class="av"><svg viewBox="0 0 24 24" fill="#cbd3e1"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg></div><span>21:14</span></div></div>
+  <div class="hero">
+   <div class="chip"><span class="lg">C2</span><b>Channel 2</b><i>&#9679; LIVE</i></div>
+   <h3>The Archive Hour</h3>
+   <p class="desc">A documentary series revisiting events from the national broadcast archives.</p>
+   <p class="slot">21:05 &ndash; 21:40 &middot; TIVIMATE &middot; 1080i</p>
+   <div class="pbar"><i style="width:26%"></i></div>
+   <p class="next">NEXT &nbsp;21:40 &nbsp;News At Ten</p>
+  </div>
+  <div class="rows">
+   <div>
+    <p class="label">APPS</p>
+    <div class="appsclip"><div class="apps">
+     <div class="app on"><div class="tile" style="background:#101828;color:#fff"><svg viewBox="0 0 40 40" width="34" height="34"><defs><linearGradient id="jg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#AA5CC3"/><stop offset="1" stop-color="#00A4DC"/></linearGradient></defs><path d="M20 7c3 0 9 10 7 13s-13 3-15 0 5-13 8-13z" fill="url(#jg2)"/><path d="M20 19c2 0 6 7 5 9s-9 2-10 0 3-9 5-9z" fill="url(#jg2)"/></svg><span style="opacity:1;margin:0;font-size:17px">Jellyfin</span></div><span>Jellyfin</span></div>
+     <div class="app"><div class="tile wm"><span style="color:#1F8FD6">tivi</span><span style="color:#263445">mate</span></div><span>TiViMate</span></div>
+     <div class="app"><div class="tile" style="background:#1F1F1F;color:#E5A00D;font-size:16px"><svg viewBox="0 0 34 34" width="26" height="26"><path d="M9 4h10l9 13-9 13H9l9-13z" fill="#E5A00D"/></svg>plex</div><span>Plex</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 24" width="34" height="24"><rect width="34" height="24" rx="7" fill="#FF0000"/><path d="M14 7l9 5-9 5z" fill="#fff"/></svg><span style="opacity:1;margin:0;font-size:16px">YouTube</span></div><span>YouTube</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 34" width="28" height="28" fill="#17B2E7"><path d="M17 1l7 7-7 7-7-7z"/><path d="M8 10l6 6-6 6-6-6z"/><path d="M26 10l6 6-6 6-6-6z"/><path d="M17 19l7 7-7 7-7-7z"/></svg><span style="opacity:1;margin:0;font-size:16px">KODI</span></div><span>Kodi</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#E50914;font-size:15px;letter-spacing:.12em">NETFLIX</div><span>Netflix</span></div>
+     <div class="app"><div class="tile" style="background:#0F1C2E;color:#4DB8E8;font-size:15px">prime video</div><span>Prime Video</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#1DB954;font-size:16px">Spotify</div><span>Spotify</span></div>
+     <div class="app plus"><div class="tile">+</div><span>Add</span></div>
+    </div></div>
+   </div>
+   <div>
+    <p class="label">INPUTS</p>
+    <div class="inputs">
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>HDMI 1</b><em>Free</em></div>
+     <div class="in cur"><svg viewBox="0 0 40 24" width="32" height="19" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="34" height="13" rx="2.5"/><path d="M9 10.5h13" stroke-linecap="round"/><path d="M7 21h26" stroke-linecap="round"/></svg><b>Apple TV</b><em>HDMI 2</em></div>
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>Receiver</b><em>HDMI 3 eARC</em></div>
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>HDMI 4</b><em>Free</em></div>
+     <div class="in"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 13v8"/><path d="M8 21h8"/><path d="M7.5 9a5 5 0 019 0"/><path d="M4.5 10a8.5 8.5 0 0115 0"/><circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/></svg><b>Antenna</b><em>TV</em></div>
+     <div class="in"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h6a1 1 0 011 1v16a1 1 0 01-1 1h-6"/><path d="M3 12h11"/><path d="M10 8l4 4-4 4"/></svg><b>All inputs</b></div>
+     <div class="in sq sep"><svg viewBox="0 0 48 48" width="26" height="26"><path fill="#00A0FF" d="M11 4v40l18-20z"/><path fill="#00F076" d="M11 4l29 15-11 5z"/><path fill="#FFBD00" d="M40 19v10l-11-5z"/><path fill="#FF3A44" d="M11 44l29-15-11-5z"/></svg><em>Play Store</em></div>
+     <div class="in sq"><svg viewBox="0 0 48 48" width="27" height="27" fill="none" stroke="#fff" stroke-linecap="round"><circle cx="24" cy="24" r="10" stroke-width="4.5"/><circle cx="24" cy="24" r="3.5" stroke-width="3"/><g stroke-width="5"><path d="M24 11.5V7M24 41v-4.5M36.5 24H41M7 24h4.5M32.8 15.2l3.2-3.2M12 36l3.2-3.2M32.8 32.8l3.2 3.2M12 12l3.2 3.2"/></g></svg><em>Settings</em></div>
+    </div>
+   </div>
+  </div>
+ </div>
+</div></div></section>
+<section><h2>6. Unpin on uninstall</h2>
+<p class="note">The uninstall feedback. The launcher listens for package removal, drops the app from the pinned row on its own and collapses the gap, so no dead tile is ever left behind. A confirmation sits top right for a few seconds and then fades. Shown mid-animation: Kodi has just finished uninstalling.</p>
+<div class="scale"><div class="tv ob">
+ <div class="art"></div><div class="scrim"></div>
+ <div class="toast"><div class="ok"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div><div><b>Kodi uninstalled</b><i>Removed from your apps</i></div></div>
+ <div class="wrap">
+  <div class="top"><span>Tuesday 20 October</span><div class="r"><div class="av"><svg viewBox="0 0 24 24" fill="#cbd3e1"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg></div><span>21:14</span></div></div>
+  <div class="hero">
+   <p class="kicker">CONTINUE WATCHING</p>
+   <h3>Night Watch</h3>
+   <p class="desc">A maintenance crew on the late shift finds that the building keeps rearranging its own floors.</p>
+   <p class="meta">S2 E5 &middot; THE SUB-LEVEL &middot; 33 MIN LEFT &middot; JELLYFIN &middot; 4K HDR</p>
+   <div class="pbar"><i></i></div>
+  </div>
+  <div class="rows">
+   <div>
+    <p class="label">APPS</p>
+    <div class="appsclip"><div class="apps">
+     <div class="app on"><div class="tile" style="background:#101828;color:#fff"><svg viewBox="0 0 40 40" width="34" height="34"><defs><linearGradient id="jg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#AA5CC3"/><stop offset="1" stop-color="#00A4DC"/></linearGradient></defs><path d="M20 7c3 0 9 10 7 13s-13 3-15 0 5-13 8-13z" fill="url(#jg2)"/><path d="M20 19c2 0 6 7 5 9s-9 2-10 0 3-9 5-9z" fill="url(#jg2)"/></svg><span style="opacity:1;margin:0;font-size:17px">Jellyfin</span></div><span>Jellyfin</span></div>
+     <div class="app"><div class="tile wm"><span style="color:#1F8FD6">tivi</span><span style="color:#263445">mate</span></div><span>TiViMate</span></div>
+     <div class="app"><div class="tile" style="background:#1F1F1F;color:#E5A00D;font-size:16px"><svg viewBox="0 0 34 34" width="26" height="26"><path d="M9 4h10l9 13-9 13H9l9-13z" fill="#E5A00D"/></svg>plex</div><span>Plex</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 24" width="34" height="24"><rect width="34" height="24" rx="7" fill="#FF0000"/><path d="M14 7l9 5-9 5z" fill="#fff"/></svg><span style="opacity:1;margin:0;font-size:16px">YouTube</span></div><span>YouTube</span></div>
+     <div class="app gone"><div class="tile"><svg viewBox="0 0 34 34" width="28" height="28" fill="#17B2E7"><path d="M17 1l7 7-7 7-7-7z"/><path d="M8 10l6 6-6 6-6-6z"/><path d="M26 10l6 6-6 6-6-6z"/><path d="M17 19l7 7-7 7-7-7z"/></svg><span style="opacity:1;margin:0;font-size:16px">KODI</span></div><span>Kodi</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#E50914;font-size:15px;letter-spacing:.12em">NETFLIX</div><span>Netflix</span></div>
+     <div class="app"><div class="tile" style="background:#0F1C2E;color:#4DB8E8;font-size:15px">prime video</div><span>Prime Video</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#1DB954;font-size:16px">Spotify</div><span>Spotify</span></div>
+     <div class="app plus"><div class="tile">+</div><span>Add</span></div>
+    </div></div>
+   </div>
+   <div>
+    <p class="label">INPUTS</p>
+    <div class="inputs">
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>HDMI 1</b><em>Free</em></div>
+     <div class="in cur"><svg viewBox="0 0 40 24" width="32" height="19" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="34" height="13" rx="2.5"/><path d="M9 10.5h13" stroke-linecap="round"/><path d="M7 21h26" stroke-linecap="round"/></svg><b>Apple TV</b><em>HDMI 2</em></div>
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>Receiver</b><em>HDMI 3 eARC</em></div>
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>HDMI 4</b><em>Free</em></div>
+     <div class="in"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 13v8"/><path d="M8 21h8"/><path d="M7.5 9a5 5 0 019 0"/><path d="M4.5 10a8.5 8.5 0 0115 0"/><circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/></svg><b>Antenna</b><em>TV</em></div>
+     <div class="in"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h6a1 1 0 011 1v16a1 1 0 01-1 1h-6"/><path d="M3 12h11"/><path d="M10 8l4 4-4 4"/></svg><b>All inputs</b></div>
+     <div class="in sq sep"><svg viewBox="0 0 48 48" width="26" height="26"><path fill="#00A0FF" d="M11 4v40l18-20z"/><path fill="#00F076" d="M11 4l29 15-11 5z"/><path fill="#FFBD00" d="M40 19v10l-11-5z"/><path fill="#FF3A44" d="M11 44l29-15-11-5z"/></svg><em>Play Store</em></div>
+     <div class="in sq"><svg viewBox="0 0 48 48" width="27" height="27" fill="none" stroke="#fff" stroke-linecap="round"><circle cx="24" cy="24" r="10" stroke-width="4.5"/><circle cx="24" cy="24" r="3.5" stroke-width="3"/><g stroke-width="5"><path d="M24 11.5V7M24 41v-4.5M36.5 24H41M7 24h4.5M32.8 15.2l3.2-3.2M12 36l3.2-3.2M32.8 32.8l3.2 3.2M12 12l3.2 3.2"/></g></svg><em>Settings</em></div>
+    </div>
+   </div>
+  </div>
+ </div>
+</div></div></section>
+<section><h2>7. EPG fallback ladder</h2>
+<p class="note">What the live hero shows as guide data thins out. The rule: never invent a bar. Progress is only drawn when a real start and stop time exist, so a missing guide looks missing rather than broken, and the tile still launches in every tier.</p>
+<div class="fb">
+ <div class="fbc">
+  <div class="chip"><span class="lg">C2</span><b>Channel 2</b><i>&#9679; LIVE</i></div>
+  <h4>The Archive Hour</h4>
+  <p>A documentary series revisiting events from the national broadcast archives.</p>
+  <p class="sl">21:05 &ndash; 21:40 &middot; 1080i</p>
+  <div class="bar"><i style="width:26%"></i></div>
+  <div class="cap"><b>TIER 1 &middot; FULL MATCH</b>title, synopsis, times, artwork if the source carries it</div>
+ </div>
+ <div class="fbc">
+  <div class="chip"><span class="lg">C2</span><b>Channel 2</b><i>&#9679; LIVE</i></div>
+  <h4>The Archive Hour</h4>
+  <p class="sl">21:05 &ndash; 21:40</p>
+  <div class="bar"><i style="width:26%"></i></div>
+  <div class="cap"><b>TIER 2 &middot; TIMES ONLY</b>source has no synopsis for this channel, so the line is dropped, not faked</div>
+ </div>
+ <div class="fbc warn">
+  <div class="chip"><span class="lg">C2</span><b>Channel 2</b><i class="off">&#9679; NO GUIDE</i></div>
+  <h4>Live TV</h4>
+  <p>No guide data for this channel. Open the live TV app to see what is on.</p>
+  <p class="sl">LAST GUIDE UPDATE 2 DAYS AGO</p>
+  <div class="cap"><b>TIER 3 &middot; NO MATCH OR OFFLINE</b>unmatched channel id, gap in the guide, or the fetch failed; no progress bar is drawn</div>
+ </div>
+</div>
+</section>
+<section><h2>8. Scale, safe area and asset sizes</h2>
+<p class="note">The mockups above are 1280px wide and the TV lays out in 960dp, so every number here is mockup px multiplied by 0.75. Android TV reports the same 960 x 540dp whether the panel renders at 1080p or 2160p, so the layout is written once in dp and the 4K panel just gets more pixels per dp. Confirm the real values on the set with <code>adb shell wm size</code> and <code>adb shell wm density</code> before trusting this table.</p>
+<div class="fb">
+ <div class="fbc">
+  <h4>Layout</h4>
+  <p>Screen 960 x 540dp. Safe area inset 48dp horizontal, 27dp vertical, which is the 64px padding in the mockups.<br><br>
+  App tile 111 x 66dp, gap 12dp. Seven tiles plus gaps = 849dp, inside the 864dp of usable width.<br><br>
+  Input tile 110 x 66dp, gap 9dp; Play Store and Settings 75 x 66dp.<br><br>
+  Focus ring 3dp. Thinner disappears at couch distance.</p>
+  <div class="cap"><b>RULE</b>never a px dimension in a layout file, and no hardcoded 1920</div>
+ </div>
+ <div class="fbc">
+  <h4>Type</h4>
+  <p>Nothing below 12sp, which is 16px at mockup scale. Several labels in the earlier revisions sat at 8 to 10sp and have been raised.<br><br>
+  Hero title 39sp, synopsis 14sp, meta and section labels 12sp, tile labels 12sp.<br><br>
+  Use sp for text, dp for everything else, and test with the TV's own font size setting turned up.</p>
+  <div class="cap"><b>RULE</b>if it only reads on the Mac, it does not read from the couch</div>
+ </div>
+ <div class="fbc">
+  <h4>Assets</h4>
+  <p>Tile artwork is read from the installed app at runtime, so the TV shows each app's own official logo. The launcher ships none.<br><br>
+  Vector and adaptive icons render crisp at any size. Where an app only provides its 320 x 180 banner, sharpness depends on panel density: a downscale at 2x, about 1.4x upscale at 4x.<br><br>
+  The logos in these mockups are placeholders; a browser cannot call PackageManager.</p>
+  <div class="cap"><b>RULE</b>vector first, bitmap second, never a shipped copy of someone's logo</div>
+ </div>
+ </div>
+</div>
+</section>
+<section><h2>9. Add to favourites</h2>
+<p class="note">What the + tile at the end of the apps row opens. The row itself scrolls horizontally like the TV's own Favourite apps row: pinned apps first in your order, then every other installed app, then + last. Pinning from here is the same action as the long-press menu, just reachable without hunting for the app in the row.</p>
+<div class="scale"><div class="tv ob sc">
+ <div class="art"></div><div class="scrim"></div>
+ <div class="wrap">
+  <div class="top"><span>Tuesday 20 October</span><div class="r"><div class="av"><svg viewBox="0 0 24 24" fill="#cbd3e1"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg></div><span>21:14</span></div></div>
+  <div class="hero">
+   <p class="kicker">CONTINUE WATCHING</p>
+   <h3>Night Watch</h3>
+   <p class="desc">A maintenance crew on the late shift finds that the building keeps rearranging its own floors.</p>
+   <p class="meta">S2 E5 &middot; THE SUB-LEVEL &middot; 33 MIN LEFT &middot; JELLYFIN &middot; 4K HDR</p>
+   <div class="pbar"><i></i></div>
+  </div>
+  <div class="rows">
+   <div class="notice"><div class="tx"><b>Ethernet is not connected</b><i>Select for options</i></div><span class="btn on">Details</span><span class="btn">Dismiss</span></div>
+   <div>
+    <p class="label">APPS</p>
+    <div class="appsclip"><div class="apps">
+     <div class="app on"><div class="tile" style="background:#101828;color:#fff"><svg viewBox="0 0 40 40" width="34" height="34"><defs><linearGradient id="jg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#AA5CC3"/><stop offset="1" stop-color="#00A4DC"/></linearGradient></defs><path d="M20 7c3 0 9 10 7 13s-13 3-15 0 5-13 8-13z" fill="url(#jg2)"/><path d="M20 19c2 0 6 7 5 9s-9 2-10 0 3-9 5-9z" fill="url(#jg2)"/></svg><span style="opacity:1;margin:0;font-size:17px">Jellyfin</span></div><span>Jellyfin</span></div>
+     <div class="app"><div class="tile wm"><span style="color:#1F8FD6">tivi</span><span style="color:#263445">mate</span></div><span>TiViMate</span></div>
+     <div class="app"><div class="tile" style="background:#1F1F1F;color:#E5A00D;font-size:16px"><svg viewBox="0 0 34 34" width="26" height="26"><path d="M9 4h10l9 13-9 13H9l9-13z" fill="#E5A00D"/></svg>plex</div><span>Plex</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 24" width="34" height="24"><rect width="34" height="24" rx="7" fill="#FF0000"/><path d="M14 7l9 5-9 5z" fill="#fff"/></svg><span style="opacity:1;margin:0;font-size:16px">YouTube</span></div><span>YouTube</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 34" width="28" height="28" fill="#17B2E7"><path d="M17 1l7 7-7 7-7-7z"/><path d="M8 10l6 6-6 6-6-6z"/><path d="M26 10l6 6-6 6-6-6z"/><path d="M17 19l7 7-7 7-7-7z"/></svg><span style="opacity:1;margin:0;font-size:16px">KODI</span></div><span>Kodi</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#E50914;font-size:15px;letter-spacing:.12em">NETFLIX</div><span>Netflix</span></div>
+     <div class="app"><div class="tile" style="background:#0F1C2E;color:#4DB8E8;font-size:15px">prime video</div><span>Prime Video</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#1DB954;font-size:16px">Spotify</div><span>Spotify</span></div>
+     <div class="app plus"><div class="tile">+</div><span>Add</span></div>
+  <div class="hero">
+   <div class="chip"><span class="lg">C2</span><b>Channel 2</b><i>&#9679; LIVE</i></div>
+   <h3>The Archive Hour</h3>
+   <p class="desc">A documentary series revisiting events from the national broadcast archives.</p>
+   <p class="slot">21:05 &ndash; 21:40 &middot; TIVIMATE &middot; 1080i</p>
+   <div class="pbar"><i style="width:26%"></i></div>
+   <p class="next">NEXT &nbsp;21:40 &nbsp;News At Ten</p>
+  </div>
+  <div class="rows">
+   <div>
+    <p class="label">APPS</p>
+    <div class="appsclip"><div class="apps">
+     <div class="app on"><div class="tile" style="background:#101828;color:#fff"><svg viewBox="0 0 40 40" width="34" height="34"><defs><linearGradient id="jg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#AA5CC3"/><stop offset="1" stop-color="#00A4DC"/></linearGradient></defs><path d="M20 7c3 0 9 10 7 13s-13 3-15 0 5-13 8-13z" fill="url(#jg2)"/><path d="M20 19c2 0 6 7 5 9s-9 2-10 0 3-9 5-9z" fill="url(#jg2)"/></svg><span style="opacity:1;margin:0;font-size:17px">Jellyfin</span></div><span>Jellyfin</span></div>
+     <div class="app"><div class="tile wm"><span style="color:#1F8FD6">tivi</span><span style="color:#263445">mate</span></div><span>TiViMate</span></div>
+     <div class="app"><div class="tile" style="background:#1F1F1F;color:#E5A00D;font-size:16px"><svg viewBox="0 0 34 34" width="26" height="26"><path d="M9 4h10l9 13-9 13H9l9-13z" fill="#E5A00D"/></svg>plex</div><span>Plex</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 24" width="34" height="24"><rect width="34" height="24" rx="7" fill="#FF0000"/><path d="M14 7l9 5-9 5z" fill="#fff"/></svg><span style="opacity:1;margin:0;font-size:16px">YouTube</span></div><span>YouTube</span></div>
+     <div class="app"><div class="tile"><svg viewBox="0 0 34 34" width="28" height="28" fill="#17B2E7"><path d="M17 1l7 7-7 7-7-7z"/><path d="M8 10l6 6-6 6-6-6z"/><path d="M26 10l6 6-6 6-6-6z"/><path d="M17 19l7 7-7 7-7-7z"/></svg><span style="opacity:1;margin:0;font-size:16px">KODI</span></div><span>Kodi</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#E50914;font-size:15px;letter-spacing:.12em">NETFLIX</div><span>Netflix</span></div>
+     <div class="app"><div class="tile" style="background:#0F1C2E;color:#4DB8E8;font-size:15px">prime video</div><span>Prime Video</span></div>
+     <div class="app"><div class="tile" style="background:#000;color:#1DB954;font-size:16px">Spotify</div><span>Spotify</span></div>
+     <div class="app plus"><div class="tile">+</div><span>Add</span></div>
+    </div></div>
+   </div>
+   <div>
+    <p class="label">INPUTS</p>
+    <div class="inputs">
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>HDMI 1</b><em>Free</em></div>
+     <div class="in cur"><svg viewBox="0 0 40 24" width="32" height="19" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="34" height="13" rx="2.5"/><path d="M9 10.5h13" stroke-linecap="round"/><path d="M7 21h26" stroke-linecap="round"/></svg><b>Apple TV</b><em>HDMI 2</em></div>
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>Receiver</b><em>HDMI 3 eARC</em></div>
+     <div class="in"><svg viewBox="0 0 40 18" width="32" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h32l-3.5 10H7.5z" stroke-linejoin="round"/><path d="M9.5 7.5h21" stroke-width="2.6"/></svg><b>HDMI 4</b><em>Free</em></div>
+     <div class="in"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 13v8"/><path d="M8 21h8"/><path d="M7.5 9a5 5 0 019 0"/><path d="M4.5 10a8.5 8.5 0 0115 0"/><circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/></svg><b>Antenna</b><em>TV</em></div>
+     <div class="in"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h6a1 1 0 011 1v16a1 1 0 01-1 1h-6"/><path d="M3 12h11"/><path d="M10 8l4 4-4 4"/></svg><b>All inputs</b></div>
+     <div class="in sq sep"><svg viewBox="0 0 48 48" width="26" height="26"><path fill="#00A0FF" d="M11 4v40l18-20z"/><path fill="#00F076" d="M11 4l29 15-11 5z"/><path fill="#FFBD00" d="M40 19v10l-11-5z"/><path fill="#FF3A44" d="M11 44l29-15-11-5z"/></svg><em>Play Store</em></div>
+     <div class="in sq"><svg viewBox="0 0 48 48" width="27" height="27" fill="none" stroke="#fff" stroke-linecap="round"><circle cx="24" cy="24" r="10" stroke-width="4.5"/><circle cx="24" cy="24" r="3.5" stroke-width="3"/><g stroke-width="5"><path d="M24 11.5V7M24 41v-4.5M36.5 24H41M7 24h4.5M32.8 15.2l3.2-3.2M12 36l3.2-3.2M32.8 32.8l3.2 3.2M12 12l3.2 3.2"/></g></svg><em>Settings</em></div>
+    </div>
+   </div>
+  </div>
+ </div>
+ <div class="ovl">
+  <h5>Add to favourites</h5>
+  <p class="sub">Pinned apps are ticked. OK pins or unpins, Back closes.</p>
+  <div class="grid">
+   <div class="g"><div class="tile" style="background:#101828;color:#fff"><svg viewBox="0 0 40 40" width="34" height="34"><defs><linearGradient id="jg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#AA5CC3"/><stop offset="1" stop-color="#00A4DC"/></linearGradient></defs><path d="M20 7c3 0 9 10 7 13s-13 3-15 0 5-13 8-13z" fill="url(#jg2)"/><path d="M20 19c2 0 6 7 5 9s-9 2-10 0 3-9 5-9z" fill="url(#jg2)"/></svg><span style="opacity:1;margin:0;font-size:17px">Jellyfin</span></div><div class="ck"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+   <div class="g"><div class="tile wm"><span style="color:#1F8FD6">tivi</span><span style="color:#263445">mate</span></div><div class="ck"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+   <div class="g"><div class="tile" style="background:#1F1F1F;color:#E5A00D;font-size:16px"><svg viewBox="0 0 34 34" width="26" height="26"><path d="M9 4h10l9 13-9 13H9l9-13z" fill="#E5A00D"/></svg>plex</div><div class="ck"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+   <div class="g"><div class="tile"><svg viewBox="0 0 34 24" width="34" height="24"><rect width="34" height="24" rx="7" fill="#FF0000"/><path d="M14 7l9 5-9 5z" fill="#fff"/></svg><span style="opacity:1;margin:0;font-size:16px">YouTube</span></div><div class="ck"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+   <div class="g"><div class="tile"><svg viewBox="0 0 34 34" width="28" height="28" fill="#17B2E7"><path d="M17 1l7 7-7 7-7-7z"/><path d="M8 10l6 6-6 6-6-6z"/><path d="M26 10l6 6-6 6-6-6z"/><path d="M17 19l7 7-7 7-7-7z"/></svg><span style="opacity:1;margin:0;font-size:16px">KODI</span></div><div class="ck"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+   <div class="g"><div class="tile" style="background:#000;color:#E50914;font-size:15px;letter-spacing:.12em">NETFLIX</div><div class="ck"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+   <div class="g on"><div class="nm">Prime Video</div></div>
+   <div class="g"><div class="nm">Spotify</div></div>
+   <div class="g"><div class="nm">Max</div></div>
+   <div class="g"><div class="nm">Twitch</div></div>
+   <div class="g"><div class="nm">Disney+</div></div>
+   <div class="g"><div class="nm">Play Store</div></div>
+  </div>
+  <p class="hint">OK PIN / UNPIN &nbsp;&middot;&nbsp; BACK CLOSE</p>
+ </div>
+</div></div></section>
+</body></html>

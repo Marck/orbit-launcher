@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Orbit: alternatives considered</title>
+<style>
+:root{font-family:-apple-system,Inter,Segoe UI,sans-serif}
+body{margin:0;background:#101014;color:#e8e8ee}
+h1{font-size:20px;padding:24px 28px 0;margin:0;font-weight:600}
+h2{font-size:15px;margin:0 0 6px;letter-spacing:.04em;text-transform:uppercase;color:#9aa0b4}
+p.note{margin:0 0 14px;font-size:13px;color:#8b90a0;max-width:960px;line-height:1.5}
+section{padding:26px 28px}
+.tv{width:1280px;height:720px;border-radius:10px;overflow:hidden;position:relative;box-shadow:0 18px 50px #0008;transform-origin:top left}
+.scale{height:400px}.scale .tv{transform:scale(.555)}
+
+/* ---------- 1. NEON GRID (cyberpunk) ---------- */
+.cy{background:
+ radial-gradient(900px 500px at 15% 0%,#2a0b4a 0%,transparent 60%),
+ radial-gradient(800px 600px at 95% 100%,#04303c 0%,transparent 60%),
+ #06060b;
+ font-family:"SF Mono",ui-monospace,monospace;color:#d8f6ff}
+.cy .scan{position:absolute;inset:0;background:repeating-linear-gradient(#fff1 0 1px,transparent 1px 4px);opacity:.25;pointer-events:none}
+.cy .grid{position:absolute;inset:0;background:
+ linear-gradient(#ff2d9533 1px,transparent 1px) 0 0/100% 80px,
+ linear-gradient(90deg,#00e5ff22 1px,transparent 1px) 0 0/80px 100%;
+ mask-image:linear-gradient(#000,transparent 70%);opacity:.5}
+.cy .bar{position:relative;display:flex;justify-content:space-between;align-items:center;padding:22px 44px;font-size:17px;letter-spacing:.18em}
+.cy .bar .l{color:#ff2d95;text-shadow:0 0 14px #ff2d95aa}
+.cy .bar .r{color:#00e5ff;text-shadow:0 0 14px #00e5ffaa;display:flex;gap:26px}
+.cy .hero{position:relative;padding:4px 44px 0}
+.cy .hero h3{margin:0;font-size:54px;letter-spacing:.1em;color:#fff;text-shadow:2px 0 #ff2d95,-2px 0 #00e5ff}
+.cy .hero span{font-size:14px;color:#7de9ff;letter-spacing:.3em}
+.cy .row{position:relative;display:flex;gap:22px;padding:34px 44px 0}
+.cy .t{width:180px;height:112px;background:#0c0c18cc;border:1px solid #00e5ff55;
+ clip-path:polygon(0 0,100% 0,100% 76%,88% 100%,0 100%);display:flex;flex-direction:column;
+ justify-content:flex-end;padding:12px;box-sizing:border-box;font-size:13px;letter-spacing:.12em}
+.cy .t b{font-weight:500;color:#9ff}
+.cy .t i{font-style:normal;font-size:10px;color:#ff2d95;letter-spacing:.2em}
+.cy .t.on{border-color:#ff2d95;background:#1a0626ee;box-shadow:0 0 0 2px #ff2d9544,0 0 34px #ff2d9566;transform:translateY(-6px)}
+.cy .dock{position:absolute;left:44px;right:44px;bottom:30px;display:flex;justify-content:space-between;
+ border-top:1px solid #ffffff1a;padding-top:16px;font-size:12px;letter-spacing:.2em;color:#6d7b92}
+.cy .dock b{color:#00e5ff;font-weight:500}
+
+/* ---------- 2. CINEMA MINIMAL ---------- */
+.ci{background:#0a0a0a;font-family:"Helvetica Neue",Inter,sans-serif;color:#f2f2f2}
+.ci .art{position:absolute;inset:0;background:linear-gradient(100deg,#0a0a0a 38%,transparent),
+ linear-gradient(0deg,#0a0a0a 8%,transparent 55%),
+ linear-gradient(135deg,#3a4a63,#8d6b52 60%,#241c1a)}
+.ci .wrap{position:relative;height:100%;display:flex;flex-direction:column;justify-content:space-between;padding:52px 64px}
+.ci .top{display:flex;justify-content:space-between;font-size:14px;color:#ffffff99;letter-spacing:.05em}
+.ci h3{margin:0;font-size:64px;font-weight:200;letter-spacing:-.02em;line-height:1}
+.ci .meta{margin:14px 0 0;font-size:15px;color:#ffffffb0;letter-spacing:.08em}
+.ci .row{display:flex;gap:28px;margin-top:40px;align-items:flex-end}
+.ci .c{width:150px;height:92px;border-radius:12px;background:#ffffff0f;display:flex;align-items:center;
+ justify-content:center;font-size:15px;color:#ffffffcc;backdrop-filter:blur(8px)}
+.ci .c.on{background:#fff;color:#111;transform:scale(1.14);box-shadow:0 14px 40px #000a;font-weight:500}
+.ci .hint{font-size:13px;color:#ffffff66;letter-spacing:.14em}
+
+/* ---------- 3. CONTROL DOCK ---------- */
+.cd{background:#15171c;font-family:Inter,-apple-system,sans-serif;color:#dfe3ea;display:flex}
+.cd .rail{width:132px;background:#0f1115;display:flex;flex-direction:column;align-items:center;gap:20px;padding:30px 0;border-right:1px solid #ffffff10}
+.cd .rail .i{width:66px;height:66px;border-radius:18px;background:#1d222b;display:flex;align-items:center;justify-content:center;font-size:12px;color:#8b93a4}
+.cd .rail .i.on{background:#3d7dff;color:#fff;box-shadow:0 0 0 3px #3d7dff44}
+.cd .main{flex:1;padding:34px 40px;display:flex;flex-direction:column;gap:26px}
+.cd .hd{display:flex;justify-content:space-between;align-items:baseline}
+.cd .hd .clock{font-size:46px;font-weight:300;letter-spacing:-.01em}
+.cd .hd .sub{font-size:14px;color:#8b93a4}
+.cd .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.cd .k{background:#1b1f27;border-radius:14px;padding:16px 18px;height:96px;box-sizing:border-box;border:1px solid #ffffff0d}
+.cd .k b{display:block;font-size:12px;color:#8b93a4;font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.cd .k span{font-size:26px;font-weight:300}
+.cd .apps{display:grid;grid-template-columns:repeat(5,1fr);gap:18px}
+.cd .a{height:108px;border-radius:14px;background:#1b1f27;border:1px solid #ffffff0d;display:flex;align-items:flex-end;padding:14px;font-size:14px;color:#c3cad6}
+.cd .a.on{border-color:#3d7dff;background:#1d2636;box-shadow:0 0 0 2px #3d7dff55}
+
+</style>
+<h1>Alternatives considered, not chosen</h1>
+<p class="note" style="margin:6px 0 0">Kept for reference. The chosen direction is Orbit, in <a href="index.html" style="color:#7fd4ff">index.html</a>.</p>
+<section><h2>1. Neon Grid (cyberpunk)</h2>
+<p class="note">Magenta/cyan on near-black, mono type, scanlines, angular clipped tiles, glow on focus. Status strip with time, HDMI inputs and system load. Highest build effort: needs a custom launcher APK for the clipped tiles and glow; Projectivy gets you the wallpaper, dark theme, accent colour and mono-ish feel but square tiles.</p>
+<div class="scale"><div class="tv cy">
+ <div class="grid"></div>
+ <div class="bar"><div class="l">// HOME_</div><div class="r"><span>21:14</span><span>NET OK</span><span>4K HDR</span></div></div>
+ <div class="hero"><span>CONTINUE &gt;&gt;</span><h3>JELLYFIN</h3></div>
+ <div class="row">
+  <div class="t on"><i>01</i><b>JELLYFIN</b></div>
+  <div class="t"><i>02</i><b>YOUTUBE</b></div>
+  <div class="t"><i>03</i><b>NETFLIX</b></div>
+  <div class="t"><i>04</i><b>SPOTIFY</b></div>
+  <div class="t"><i>05</i><b>HDMI 2</b></div>
+  <div class="t"><i>06</i><b>SETTINGS</b></div>
+ </div>
+ <div class="dock"><span>SYS <b>CPU 12%</b> / <b>RAM 41%</b></span><span>PROFILE <b>LIVINGROOM</b></span><span>[ OK ] SELECT &nbsp; [ &#9664;&#9654; ] NAV</span></div>
+ <div class="scan"></div>
+</div></div></section>
+<section><h2>2. Cinema Minimal</h2>
+<p class="note">One full-bleed still from whatever you last watched, huge thin type, a single row of six apps, nothing else. No recommendation rows, no sponsored tiles. Lowest effort: Projectivy does this almost out of the box (one section, grid off, channels hidden, custom wallpaper).</p>
+<div class="scale"><div class="tv ci">
+ <div class="art"></div>
+ <div class="wrap">
+  <div class="top"><span>Tuesday 20 October</span><span>21:14</span></div>
+  <div>
+   <h3>Night Watch</h3>
+   <p class="meta">RESUME &nbsp;&middot;&nbsp; 1:12:40 LEFT &nbsp;&middot;&nbsp; JELLYFIN &nbsp;&middot;&nbsp; 4K HDR</p>
+   <div class="row">
+    <div class="c on">Jellyfin</div><div class="c">YouTube</div><div class="c">Netflix</div>
+    <div class="c">Spotify</div><div class="c">HDMI 2</div><div class="c">Apps</div>
+   </div>
+  </div>
+  <div class="hint">HOLD HOME FOR ALL APPS</div>
+ </div>
+</div></div></section>
+<section><h2>3. Control Dock</h2>
+<p class="note">Left rail of six pinned apps, right side a dashboard: clock, weather, cluster/home status tiles, then an app grid. Utilitarian, fast to hit with a d-pad, room for live data. Middle effort: Projectivy covers rail plus grid plus hardware monitor; the status tiles need a custom launcher or a widget-capable one.</p>
+<div class="scale"><div class="tv cd">
+ <div class="rail">
+  <div class="i on">JF</div><div class="i">YT</div><div class="i">NF</div><div class="i">SP</div><div class="i">HDMI</div><div class="i">&#9881;</div>
+ </div>
+ <div class="main">
+  <div class="hd"><div class="clock">21:14</div><div class="sub">Tuesday 20 Oct &nbsp;&middot;&nbsp; 11&deg;C light rain</div></div>
+  <div class="cards">
+   <div class="k"><b>Now playing</b><span>Paused</span></div>
+   <div class="k"><b>Downloads</b><span>3 active</span></div>
+   <div class="k"><b>Home</b><span>4 lights on</span></div>
+   <div class="k"><b>TV</b><span>CPU 12%</span></div>
+  </div>
+  <div class="apps">
+   <div class="a on">Jellyfin</div><div class="a">YouTube</div><div class="a">Netflix</div><div class="a">Plex</div><div class="a">Twitch</div>
+   <div class="a">Spotify</div><div class="a">Kodi</div><div class="a">HDMI 1</div><div class="a">HDMI 2</div><div class="a">All apps</div>
+  </div>
+ </div>
+</div></div></section>
+</body></html>

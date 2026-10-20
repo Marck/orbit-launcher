@@ -1,0 +1,11 @@
+_*.html
+*.tmp
+.DS_Store
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+*.keystore
+.idea/
