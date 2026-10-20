@@ -44,3 +44,32 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 CI builds the same artifact, but only on manual `workflow_dispatch`.
+
+## Setting the profile picture
+
+Select the avatar in the top bar. The picker offers Orbit's own set, which is drawn
+in code and always available, and any pictures on the TV. A chosen picture is copied
+into the app's own storage, cropped to a circle, and never leaves the TV.
+
+The signed-in account's picture cannot be used: no provider on an Android TV exposes
+it to a third-party app.
+
+To use your own picture, put one on the TV first, by downloading it with the TV's web
+browser, by plugging in a USB stick, or over adb:
+
+```bash
+adb push your-picture.png /sdcard/Download/
+```
+
+Listing them needs the pictures permission, which the picker asks for. A file copied
+in over adb is not indexed right away, so it may take reopening the picker once.
+
+## Waking the TV for testing
+
+With the panel off, screenshots come back blank and the UI never redraws, because
+there are no frames to drive it. Check and wake before testing anything visual:
+
+```bash
+adb shell dumpsys power | grep "Display Power"   # state=ON or OFF
+adb shell input keyevent 224                     # WAKEUP
+```
