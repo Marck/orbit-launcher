@@ -17,6 +17,10 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
+    <!-- Without this the system refuses the uninstall request outright. The dialog is still
+         the system's own, so nothing is removed without the owner confirming it there. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
     <application
         android:allowBackup="false"
         android:requestLegacyExternalStorage="true"
@@ -25,6 +29,16 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Orbit">
+
+        <activity
+            android:name=".InputPickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Orbit" />
+
+        <activity
+            android:name=".AppPickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Orbit" />
 
         <activity
             android:name=".AvatarPickerActivity"

@@ -12,6 +12,8 @@ data class LaunchableApp(
     val label: String,
     val art: Drawable?,
     val isBanner: Boolean,
+    /** A factory app cannot be uninstalled, so the option is not offered for one. */
+    val removable: Boolean,
 )
 
 /**
@@ -54,6 +56,8 @@ object AppRepository {
                 label = info.loadLabel(pm).toString(),
                 art = art,
                 isBanner = banner != null,
+                removable = (info.activityInfo.applicationInfo.flags and
+                    android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0,
             )
         }
         return apps.sortedBy { it.label.lowercase() }.also { cache = it }

@@ -3,7 +3,9 @@ package app.orbit.launcher
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -50,17 +54,25 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -85,6 +97,20 @@ private val Surface = Color(0xFF14181F)
 private val OnSurface = Color(0xFFDDE5F0)
 private val Muted = Color(0xFF8B93A4)
 private val LastInput = Color(0xFF1AA3C4)
+private val Editing = Color(0xFFFFC14D)
+
+private const val ADD_TILE = "add-favourite"
+private const val SETTINGS_TILE = "settings-tile"
+private const val ADD_INPUT_TILE = "add-input"
+
+/** What the long-press menu is acting on. */
+private data class TileMenu(
+    val key: String,
+    val id: String,
+    val label: String,
+    val pinned: Boolean,
+    val packageName: String? = null,
+)
 
 /**
  * Counts returns to the launcher.
@@ -115,47 +141,264 @@ private fun HomeScreen() {
     // Off the main thread, all of it. produceState runs its producer on the composition's
     // context, so reading every launcher activity and decoding its artwork there holds up the
     // first frame and the screen stays black until it finishes.
-    val apps by produceState(initialValue = AppRepository.cached()) {
+    // Re-read on every return, so an app removed through the system dialog disappears here.
+    val apps by produceState(initialValue = AppRepository.cached(), Returns.count) {
         value = withContext(Dispatchers.IO) { AppRepository.load(context) }
     }
-    val inputs by produceState(initialValue = emptyList<TvInput>()) {
+    val inputs by produceState(initialValue = emptyList<TvInput>(), Returns.count) {
         value = withContext(Dispatchers.IO) { InputRepository.load(context) }
     }
-    val isDefaultHome by produceState(initialValue = true) {
+    val isDefaultHome by produceState(initialValue = true, Returns.count) {
         value = withContext(Dispatchers.IO) { AppRepository.isDefaultHome(context) }
     }
     var noticeDismissed by remember { mutableStateOf(false) }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        Column(Modifier.padding(horizontal = SafeH, vertical = SafeV)) {
-            TopBar()
-            Spacer(Modifier.height(10.dp))
-            Hero()
+    // Favourites first, in the owner's order. Reading the revision here is what reorders the
+    // rows the moment a pin changes, without touching the device again.
+    val pinRevision = PinStore.revision
+    val appPins = remember(pinRevision) { PinStore.pinned(context, PinStore.APPS) }
+    val inputPins = remember(pinRevision) { PinStore.pinned(context, PinStore.INPUTS) }
+    val orderedApps = remember(apps, appPins) { PinStore.arrange(apps, appPins) { it.packageName } }
+    val orderedInputs = remember(inputs, inputPins) { PinStore.arrange(inputs, inputPins) { it.id } }
+
+    var menu by remember { mutableStateOf<TileMenu?>(null) }
+    var editing by remember { mutableStateOf<String?>(null) }
+    var editingKey by remember { mutableStateOf(PinStore.APPS) }
+    var editSnapshot by remember { mutableStateOf<List<String>?>(null) }
+    var confirmation by remember { mutableStateOf<String?>(null) }
+    // Closing the menu has to hand focus back to the tile it belonged to. Without this the
+    // focus falls to whatever comes first on screen and the remote walks off somewhere else.
+    var refocusApps by remember { mutableIntStateOf(0) }
+    var refocusInputs by remember { mutableIntStateOf(0) }
+    var known by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    // An app can be removed from anywhere, so notice it by comparing successive reads rather
+    // than by watching the uninstall we started.
+    LaunchedEffect(apps) {
+        if (apps.isEmpty()) return@LaunchedEffect
+        val present = apps.map { it.packageName }.toSet()
+        if (known.isNotEmpty() && (known - present).isNotEmpty()) confirmation = "It's gone now"
+        PinStore.prune(context, PinStore.APPS, present)
+        known = present
+    }
+    LaunchedEffect(inputs) {
+        if (inputs.isNotEmpty()) PinStore.prune(context, PinStore.INPUTS, inputs.map { it.id }.toSet())
+    }
+    LaunchedEffect(confirmation) {
+        if (confirmation != null) {
+            delay(2600)
+            confirmation = null
         }
-        Spacer(Modifier.weight(1f))
-        if (!isDefaultHome && !noticeDismissed) {
-            Notice(
-                title = "Orbit is not the home app yet",
-                detail = "Set it as default so the home button opens Orbit",
-                onDetails = { context.startActivitySafely(Intent(Settings.ACTION_HOME_SETTINGS)) },
-                onDismiss = { noticeDismissed = true },
+    }
+
+    fun closeMenu(target: TileMenu) {
+        menu = null
+        if (target.key == PinStore.APPS) refocusApps++ else refocusInputs++
+    }
+
+    fun beginEdit(key: String, id: String) {
+        editSnapshot = PinStore.pinned(context, key)
+        editingKey = key
+        // Only a favourite has a place in the order, so moving one pins it first.
+        if (!PinStore.isPinned(context, key, id)) PinStore.toggle(context, key, id)
+        editing = id
+    }
+
+    fun endEdit(revert: Boolean) {
+        if (revert) editSnapshot?.let { PinStore.replace(context, editingKey, it) }
+        editing = null
+        editSnapshot = null
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Column(Modifier.fillMaxSize()) {
+            Column(Modifier.padding(horizontal = SafeH, vertical = SafeV)) {
+                TopBar()
+                Spacer(Modifier.height(10.dp))
+                Hero()
+            }
+            Spacer(Modifier.weight(1f))
+            if (!isDefaultHome && !noticeDismissed) {
+                Notice(
+                    title = "Orbit is not the home app yet",
+                    detail = "Set it as default so the home button opens Orbit",
+                    onDetails = { context.startActivitySafely(Intent(Settings.ACTION_HOME_SETTINGS)) },
+                    onDismiss = { noticeDismissed = true },
+                )
+                Spacer(Modifier.height(14.dp))
+            }
+            RowLabel(if (editing != null && editingKey == PinStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
+            AppsRow(
+                apps = orderedApps,
+                pins = appPins,
+                refocus = refocusApps,
+                editing = editing.takeIf { editingKey == PinStore.APPS },
+                onMenu = { app ->
+                    menu = TileMenu(
+                        key = PinStore.APPS,
+                        id = app.packageName,
+                        label = app.label,
+                        pinned = app.packageName in appPins,
+                        // Only set when the system would actually accept an uninstall, which
+                        // is what decides whether the entry is offered at all.
+                        packageName = app.packageName.takeIf { app.removable },
+                    )
+                },
+                onMove = { delta -> editing?.let { PinStore.move(context, PinStore.APPS, it, delta) } },
+                onEndEdit = { revert -> endEdit(revert) },
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(20.dp))
+            RowLabel(if (editing != null && editingKey == PinStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
+            InputsRow(
+                inputs = orderedInputs,
+                pins = inputPins,
+                refocus = refocusInputs,
+                editing = editing.takeIf { editingKey == PinStore.INPUTS },
+                onMenu = { input ->
+                    menu = TileMenu(
+                        key = PinStore.INPUTS,
+                        id = input.id,
+                        label = input.label,
+                        pinned = input.id in inputPins,
+                    )
+                },
+                onMove = { delta -> editing?.let { PinStore.move(context, PinStore.INPUTS, it, delta) } },
+                onEndEdit = { revert -> endEdit(revert) },
+            )
         }
-        RowLabel("APPS")
-        AppsRow(apps)
-        Spacer(Modifier.height(20.dp))
-        RowLabel("INPUTS")
-        InputsRow(inputs)
+
+        confirmation?.let { Confirmation(it) }
+
+        menu?.let { target ->
+            TileMenuSheet(
+                target = target,
+                onPin = {
+                    PinStore.toggle(context, target.key, target.id)
+                    confirmation = if (target.pinned) "Removed from favourites" else "Added to favourites"
+                    closeMenu(target)
+                },
+                onMove = {
+                    closeMenu(target)
+                    beginEdit(target.key, target.id)
+                },
+                onUninstall = {
+                    closeMenu(target)
+                    target.packageName?.let { pkg ->
+                        // The white frame before the dialog is the system uninstaller's own
+                        // starting window, drawn from its light theme. FLAG_ACTIVITY_NO_ANIMATION
+                        // was tried and does not suppress it; another app's window is not ours
+                        // to restyle.
+                        context.startActivitySafely(
+                            Intent(Intent.ACTION_DELETE, Uri.fromParts("package", pkg, null))
+                        )
+                    }
+                },
+                onDismiss = { closeMenu(target) },
+            )
+        }
     }
 }
 
 @Composable
-private fun AppsRow(apps: List<LaunchableApp>) {
+private fun Confirmation(text: String) {
+    Box(Modifier.fillMaxSize().padding(horizontal = SafeH, vertical = SafeV)) {
+        Text(
+            text,
+            color = Color.White,
+            fontSize = 13.sp,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 28.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0xCC1E2838))
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+        )
+    }
+}
+
+/** The long-press menu. Uninstall is deliberately handed to the system to confirm. */
+@Composable
+private fun TileMenuSheet(
+    target: TileMenu,
+    onPin: () -> Unit,
+    onMove: () -> Unit,
+    onUninstall: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(target.id) {
+        repeat(30) {
+            if (runCatching { first.requestFocus() }.isSuccess) return@LaunchedEffect
+            delay(16)
+        }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xCC000000))
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp && event.key == Key.Back) {
+                    onDismiss()
+                    true
+                } else {
+                    false
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF1A2130))
+                .padding(horizontal = 24.dp, vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(target.label, color = Color.White, fontSize = 16.sp)
+            Spacer(Modifier.height(14.dp))
+            MenuEntry(
+                label = if (target.pinned) "Remove from favourites" else "Add to favourites",
+                requester = first,
+                onClick = onPin,
+            )
+            Spacer(Modifier.height(8.dp))
+            MenuEntry(label = "Move", requester = null, onClick = onMove)
+            if (target.packageName != null) {
+                Spacer(Modifier.height(8.dp))
+                MenuEntry(label = "Uninstall", requester = null, onClick = onUninstall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuEntry(label: String, requester: FocusRequester?, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .width(220.dp)
+            .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .clickable(onClick = onClick)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (focused) Color.White else Color(0x1FFFFFFF))
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = if (focused) Color.Black else OnSurface, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun AppsRow(
+    apps: List<LaunchableApp>,
+    pins: List<String>,
+    refocus: Int,
+    editing: String?,
+    onMenu: (LaunchableApp) -> Unit,
+    onMove: (Int) -> Unit,
+    onEndEdit: (Boolean) -> Unit,
+) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -163,8 +406,32 @@ private fun AppsRow(apps: List<LaunchableApp>) {
     // tile's own composition, which is what used to yank focus back while arrowing left.
     var lastFocused by remember { mutableStateOf<String?>(null) }
     val firstPackage = apps.firstOrNull()?.packageName
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(firstPackage, Returns.count) {
+    fun jumpTo(index: Int, id: String) {
+        scope.launch {
+            runCatching { listState.scrollToItem(index) }
+            requesters[id].focusWhenReady()
+        }
+    }
+
+    // Only when the tile being moved has actually left the screen. Scrolling on every swap
+    // drags it to the left edge, which reads as the row jumping rather than the tile moving.
+    LaunchedEffect(editing, apps) {
+        val moving = editing ?: return@LaunchedEffect
+        val index = apps.indexOfFirst { it.packageName == moving }
+        if (index < 0) return@LaunchedEffect
+        val layout = listState.layoutInfo
+        val visible = layout.visibleItemsInfo.any {
+            it.index == index && it.offset >= 0 && it.offset + it.size <= layout.viewportEndOffset
+        }
+        if (!visible) runCatching { listState.animateScrollToItem(index) }
+    }
+
+    // Keyed on the list itself, not just its first entry: when the tile that had focus is
+    // uninstalled the first entry is unchanged, so nothing would re-run and the focus would be
+    // left on a tile that no longer exists.
+    LaunchedEffect(apps, Returns.count, refocus) {
         if (firstPackage == null) return@LaunchedEffect
         val target = lastFocused?.takeIf { wanted -> apps.any { it.packageName == wanted } }
             ?: firstPackage
@@ -193,42 +460,112 @@ private fun AppsRow(apps: List<LaunchableApp>) {
         itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
             AppTile(
                 app = app,
+                pinned = app.packageName in pins,
+                editing = editing == app.packageName,
                 requester = requesters.getOrPut(app.packageName) { FocusRequester() },
                 onFocused = { lastFocused = app.packageName },
                 onClick = {
                     AppRepository.launchIntent(context, app.packageName)
                         ?.let { context.startActivitySafely(it) }
                 },
+                onMenu = { onMenu(app) },
+                onMove = onMove,
+                onEndEdit = onEndEdit,
+                onEdgeLeft = if (index == 0) {
+                    { jumpTo(apps.size, ADD_TILE) }
+                } else {
+                    null
+                },
             )
         }
-        if (apps.isNotEmpty()) item(key = "add-favourite") { PlusTile() }
+        if (apps.isNotEmpty()) item(key = ADD_TILE) {
+            PlusTile(
+                requester = requesters.getOrPut(ADD_TILE) { FocusRequester() },
+                onEdgeRight = { firstPackage?.let { jumpTo(0, it) } },
+            ) { context.startActivitySafely(Intent(context, AppPickerActivity::class.java)) }
+        }
     }
 }
 
 @Composable
-private fun InputsRow(inputs: List<TvInput>) {
+private fun InputsRow(
+    inputs: List<TvInput>,
+    pins: List<String>,
+    refocus: Int,
+    editing: String?,
+    onMenu: (TvInput) -> Unit,
+    onMove: (Int) -> Unit,
+    onEndEdit: (Boolean) -> Unit,
+) {
     val context = LocalContext.current
     val lastInput = remember(inputs) { InputRepository.lastUsedInput(context) }
+    val requesters = remember { mutableMapOf<String, FocusRequester>() }
+    var lastFocused by remember { mutableStateOf<String?>(null) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    fun jumpTo(id: String, index: Int? = null) {
+        scope.launch {
+            if (index != null) runCatching { listState.scrollToItem(index) }
+            requesters[id].focusWhenReady()
+        }
+    }
+
+    // Only ever on an explicit request, never on composition, so the row cannot steal focus
+    // from the apps above it.
+    LaunchedEffect(refocus) {
+        if (refocus == 0) return@LaunchedEffect
+        val target = lastFocused ?: return@LaunchedEffect
+        repeat(30) {
+            if (runCatching { requesters[target]?.requestFocus() != null }.getOrDefault(false)) {
+                return@LaunchedEffect
+            }
+            delay(16)
+        }
+    }
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         LazyRow(
             modifier = Modifier.weight(1f),
+            state = listState,
             horizontalArrangement = Arrangement.spacedBy(9.dp),
             contentPadding = PaddingValues(start = SafeH),
         ) {
-            itemsIndexed(inputs, key = { _, input -> input.id }) { _, input ->
+            itemsIndexed(inputs, key = { _, input -> input.id }) { index, input ->
                 InputTile(
                     label = input.label,
                     sub = input.sub,
                     highlighted = input.id == lastInput,
                     dimmed = !input.connected,
+                    pinned = input.id in pins,
+                    editing = editing == input.id,
+                    requester = requesters.getOrPut(input.id) { FocusRequester() },
+                    onFocused = { lastFocused = input.id },
+                    onMenu = { onMenu(input) },
+                    onMove = onMove,
+                    onEndEdit = onEndEdit,
+                    onEdgeLeft = if (index == 0) {
+                        { jumpTo(SETTINGS_TILE) }
+                    } else {
+                        null
+                    },
                 ) {
                     InputRepository.rememberUse(context, input.id)
                     context.startActivitySafely(InputRepository.switchIntent(input.id))
                 }
             }
+            if (inputs.isNotEmpty()) item(key = ADD_INPUT_TILE) {
+                PlusTile(
+                    requester = requesters.getOrPut(ADD_INPUT_TILE) { FocusRequester() },
+                    onEdgeRight = null,
+                    width = InputW,
+                    label = "Pin",
+                ) { context.startActivitySafely(Intent(context, InputPickerActivity::class.java)) }
+            }
             item(key = "all-inputs") {
-                InputTile(label = "All inputs", sub = null, highlighted = false, dimmed = false) {
+                InputTile(label = "All inputs", sub = null, highlighted = false, dimmed = false,
+                    pinned = false, editing = false, requester = null, onFocused = {},
+                    onMenu = {}, onMove = {}, onEndEdit = {}) {
                     InputRepository.allInputsIntent(context)?.let { context.startActivitySafely(it) }
                 }
             }
@@ -244,6 +581,8 @@ private fun InputsRow(inputs: List<TvInput>) {
         SquareTile(
             icon = remember { InputRepository.iconFor(context, settingsIntent) },
             fallback = "Settings",
+            requester = requesters.getOrPut(SETTINGS_TILE) { FocusRequester() },
+            onEdgeRight = { inputs.firstOrNull()?.let { jumpTo(it.id, 0) } },
         ) { context.startActivitySafely(settingsIntent) }
         Spacer(Modifier.width(SafeH))
     }
@@ -375,12 +714,130 @@ private fun RowLabel(text: String) {
     Spacer(Modifier.height(8.dp))
 }
 
+
+/**
+ * Requests focus once the target exists.
+ *
+ * A row composes only what is on screen, so after scrolling to the far end the requester there
+ * is not attached for another frame or two.
+ */
+private suspend fun FocusRequester?.focusWhenReady(): Boolean {
+    repeat(30) {
+        if (runCatching { this?.requestFocus() != null }.getOrDefault(false)) return true
+        delay(16)
+    }
+    return false
+}
+
+/** How long OK must be held for the menu rather than a launch, if no long-press flag arrives. */
+private const val LongPressMs = 500L
+
+/** Android marks a held key with a flag and a repeat, which is the signal to trust. */
+private fun androidx.compose.ui.input.key.KeyEvent.isHeld(): Boolean {
+    val native = nativeKeyEvent
+    return native.repeatCount > 0 ||
+        (native.flags and android.view.KeyEvent.FLAG_LONG_PRESS) != 0
+}
+
+/**
+ * Keys for a tile that can be moved.
+ *
+ * The hold is measured here rather than left to `combinedClickable`, whose long-press handling
+ * for hardware keys is not something to depend on sight unseen. Holding OK opens the menu and
+ * swallows the release so the tile does not also activate; a tap falls through untouched. Menu
+ * does the same, for remotes that have the key.
+ *
+ * While moving, every key is swallowed: left and right reorder instead of changing focus, OK
+ * keeps the new place, Back puts the order back.
+ */
+@Composable
+private fun Modifier.tileKeys(
+    editing: Boolean,
+    onMenu: () -> Unit,
+    onMove: (Int) -> Unit,
+    onEndEdit: (Boolean) -> Unit,
+    onEdgeLeft: (() -> Unit)? = null,
+    onEdgeRight: (() -> Unit)? = null,
+): Modifier {
+    var pressedAt by remember { mutableLongStateOf(0L) }
+    // Identified by the press itself, because opening the menu moves focus away and the tile
+    // never sees the release. A flag cleared on release would stay set and eat the next hold.
+    var handledPress by remember { mutableLongStateOf(0L) }
+    return onPreviewKeyEvent { event ->
+        val down = event.type == KeyEventType.KeyDown
+        val up = event.type == KeyEventType.KeyUp
+        val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
+        when {
+            editing && event.key == Key.DirectionLeft -> { if (down) onMove(-1); true }
+            editing && event.key == Key.DirectionRight -> { if (down) onMove(1); true }
+            editing && ok -> { if (up) onEndEdit(false); true }
+            editing && event.key == Key.Back -> { if (up) onEndEdit(true); true }
+            editing -> true
+            // At either end, left and right jump to the other end rather than stopping dead.
+            down && event.key == Key.DirectionLeft && onEdgeLeft != null -> { onEdgeLeft(); true }
+            down && event.key == Key.DirectionRight && onEdgeRight != null -> { onEdgeRight(); true }
+            event.key == Key.DirectionLeft && onEdgeLeft != null -> true
+            event.key == Key.DirectionRight && onEdgeRight != null -> true
+            up && event.key == Key.Menu -> { onMenu(); true }
+            ok && down && event.isHeld() -> {
+                // The system has decided this is a hold. Auto-repeat keeps sending downs, so
+                // act once per press.
+                val press = event.nativeKeyEvent.downTime
+                if (handledPress != press) {
+                    handledPress = press
+                    onMenu()
+                }
+                true
+            }
+            ok && down -> {
+                if (pressedAt == 0L) pressedAt = SystemClock.elapsedRealtime()
+                false
+            }
+            ok && up -> {
+                val press = event.nativeKeyEvent.downTime
+                val duration = SystemClock.elapsedRealtime() - pressedAt
+                val longByTime = pressedAt != 0L && duration >= LongPressMs
+                pressedAt = 0L
+                when {
+                    // The menu is already open for this press; swallow the release so the tile
+                    // does not activate as well.
+                    handledPress == press -> true
+                    // A hold that never produced a flag still counts, so a remote that does not
+                    // send one is not left without the menu.
+                    longByTime -> { onMenu(); true }
+                    else -> false
+                }
+            }
+            else -> false
+        }
+    }
+}
+
+
+@Composable
+private fun BoxScope.FavouriteDot() {
+    Box(
+        Modifier
+            .align(Alignment.TopEnd)
+            .padding(5.dp)
+            .size(7.dp)
+            .clip(CircleShape)
+            .background(LastInput)
+    )
+}
+
 @Composable
 private fun AppTile(
     app: LaunchableApp,
+    pinned: Boolean,
+    editing: Boolean,
     requester: FocusRequester?,
     onFocused: () -> Unit,
     onClick: () -> Unit,
+    onMenu: () -> Unit,
+    onMove: (Int) -> Unit,
+    onEndEdit: (Boolean) -> Unit,
+    onEdgeLeft: (() -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -393,13 +850,14 @@ private fun AppTile(
                     focused = it.isFocused
                     if (it.isFocused) onFocused()
                 }
+                .tileKeys(editing, onMenu, onMove, onEndEdit, onEdgeLeft = onEdgeLeft)
                 .focusable()
                 .clickable(onClick = onClick)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Surface)
                 .border(
-                    width = if (focused) 3.dp else 0.dp,
-                    color = if (focused) Color.White else Color.Transparent,
+                    width = if (editing || focused) 3.dp else 0.dp,
+                    color = if (editing) Editing else if (focused) Color.White else Color.Transparent,
                     shape = RoundedCornerShape(10.dp),
                 ),
             contentAlignment = Alignment.Center,
@@ -417,11 +875,16 @@ private fun AppTile(
             } else {
                 Text(app.label, color = OnSurface, fontSize = 12.sp)
             }
+            if (pinned) FavouriteDot()
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            text = if (focused) app.label else "",
-            color = Color.White,
+            text = when {
+                editing -> "Left or right to move"
+                focused -> app.label
+                else -> ""
+            },
+            color = if (editing) Editing else Color.White,
             fontSize = 12.sp,
             maxLines = 1,
         )
@@ -429,15 +892,30 @@ private fun AppTile(
 }
 
 @Composable
-private fun PlusTile() {
+private fun PlusTile(
+    requester: FocusRequester,
+    onEdgeRight: (() -> Unit)?,
+    width: Dp = TileW,
+    label: String = "Add",
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
-                .size(TileW, TileH)
+                .size(width, TileH)
                 .scale(if (focused) 1.06f else 1f)
+                .focusRequester(requester)
                 .onFocusChanged { focused = it.isFocused }
+                .tileKeys(
+                    editing = false,
+                    onMenu = {},
+                    onMove = {},
+                    onEndEdit = {},
+                    onEdgeRight = onEdgeRight,
+                )
                 .focusable()
+                .clickable(onClick = onClick)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF1E2838))
                 .border(
@@ -450,7 +928,7 @@ private fun PlusTile() {
             Text("+", color = Color(0xFF9FC3FF), fontSize = 26.sp, fontWeight = FontWeight.Light)
         }
         Spacer(Modifier.height(6.dp))
-        Text(if (focused) "Add" else "", color = Color.White, fontSize = 12.sp)
+        Text(if (focused) label else "", color = Color.White, fontSize = 12.sp)
     }
 }
 
@@ -460,6 +938,14 @@ private fun InputTile(
     sub: String?,
     highlighted: Boolean,
     dimmed: Boolean,
+    pinned: Boolean,
+    editing: Boolean,
+    requester: FocusRequester?,
+    onFocused: () -> Unit,
+    onMenu: () -> Unit,
+    onMove: (Int) -> Unit,
+    onEndEdit: (Boolean) -> Unit,
+    onEdgeLeft: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -468,14 +954,19 @@ private fun InputTile(
             .size(InputW, TileH)
             .scale(if (focused) 1.06f else 1f)
             .alpha(if (dimmed) 0.45f else 1f)
-            .onFocusChanged { focused = it.isFocused }
+            .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocused()
+            }
+            .tileKeys(editing, onMenu, onMove, onEndEdit, onEdgeLeft = onEdgeLeft)
             .focusable()
             .clickable(onClick = onClick)
             .clip(RoundedCornerShape(10.dp))
             .background(if (highlighted) LastInput else Color(0xFF2A3444))
             .border(
-                width = if (focused) 3.dp else 0.dp,
-                color = if (focused) Color.White else Color.Transparent,
+                width = if (editing || focused) 3.dp else 0.dp,
+                color = if (editing) Editing else if (focused) Color.White else Color.Transparent,
                 shape = RoundedCornerShape(10.dp),
             ),
         contentAlignment = Alignment.Center,
@@ -503,17 +994,32 @@ private fun InputTile(
                 )
             }
         }
+        if (pinned) FavouriteDot()
     }
 }
 
 @Composable
-private fun SquareTile(icon: Drawable?, fallback: String, onClick: () -> Unit) {
+private fun SquareTile(
+    icon: Drawable?,
+    fallback: String,
+    requester: FocusRequester? = null,
+    onEdgeRight: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
             .size(SquareW, TileH)
             .scale(if (focused) 1.06f else 1f)
+            .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
             .onFocusChanged { focused = it.isFocused }
+            .tileKeys(
+                editing = false,
+                onMenu = {},
+                onMove = {},
+                onEndEdit = {},
+                onEdgeRight = onEdgeRight,
+            )
             .focusable()
             .clickable(onClick = onClick)
             .clip(RoundedCornerShape(10.dp))

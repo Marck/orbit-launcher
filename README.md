@@ -45,6 +45,23 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 CI builds the same artifact, but only on manual `workflow_dispatch`.
 
+## Favourites and order
+
+Hold OK on an app or input tile, or press Menu, to open its menu:
+
+- **Add to favourites** keeps it at the front of the row. Favourites are stored
+  as package names, so they survive an update or a reinstall.
+- **Move** starts a move: left and right change its place, OK keeps it, Back puts
+  the order back.
+- **Uninstall** hands over to the system, which does the confirming. An app
+  removed anywhere drops out of favourites by itself.
+
+The `+` tile in each row opens a grid of everything available, with favourites
+ticked.
+
+At either end of a row or grid, left and right wrap around, so the far end is one
+press away rather than a long walk.
+
 ## Setting the profile picture
 
 Select the avatar in the top bar. The picker offers Orbit's own set, which is drawn
