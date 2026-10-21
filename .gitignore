@@ -9,3 +9,6 @@ local.properties
 *.apk
 *.keystore
 .idea/
+
+# Kotlin compiler scratch
+.kotlin/

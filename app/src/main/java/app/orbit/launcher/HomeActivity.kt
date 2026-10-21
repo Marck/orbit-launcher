@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.text.format.DateFormat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -58,6 +59,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -168,6 +170,7 @@ private const val ADD_INPUT_TILE = "add-input"
 private data class TileMenu(
     val key: String,
     val id: String,
+    val label: String,
     /** The tile and its label on screen, for the menu to point at and to leave undimmed. */
     val anchor: Rect,
     val packageName: String? = null,
@@ -272,8 +275,28 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     }
     // Null until the first read lands. A TV can have no inputs at all, so an empty list cannot
     // stand in for "not read yet" the way it does for apps.
-    val inputs by produceState<List<TvInput>?>(initialValue = null, Returns.count) {
-        value = withContext(Dispatchers.IO) { InputRepository.load(context) }
+    var inputs by remember { mutableStateOf<List<TvInput>?>(null) }
+    LaunchedEffect(Returns.count) {
+        inputs = withContext(Dispatchers.IO) { InputRepository.load(context) }
+    }
+    // The TV also says when an input comes, goes or changes while Orbit is in front, such as a
+    // console being switched on, which would otherwise only show after leaving and coming back.
+    // A device coming up reports several changes in a row, so the read waits for them to stop.
+    var inputsChanged by remember { mutableIntStateOf(0) }
+    DisposableEffect(context) {
+        val stop = InputRepository.watch(context) { inputsChanged++ }
+        onDispose { stop() }
+    }
+    LaunchedEffect(inputsChanged) {
+        if (inputsChanged == 0) return@LaunchedEffect
+        delay(300)
+        inputs = withContext(Dispatchers.IO) { InputRepository.load(context) }
+    }
+    // Read again on every return too, so a store disabled or enabled meanwhile is picked up. The
+    // previous read stays up until then, so the buttons do not blink out and back.
+    var destinations by remember { mutableStateOf(Destinations.last) }
+    LaunchedEffect(Returns.count) {
+        destinations = withContext(Dispatchers.IO) { Destinations.read(context) }
     }
     // With the home button service on, Home reaches Orbit without it being the home app, and the
     // notice would be asking for something already done.
@@ -365,6 +388,19 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         editSnapshot = null
     }
 
+    // OK that opens nothing at all reads as the remote not working, so a failure says so.
+    fun openApp(packageName: String, label: String) {
+        if (!context.launchApp(packageName)) confirmation = "Couldn't open $label"
+    }
+
+    fun switchTo(inputId: String, label: String) {
+        if (!context.switchToInput(inputId)) confirmation = "Couldn't switch to $label"
+    }
+
+    fun open(intent: Intent, label: String) {
+        if (!context.startActivitySafely(intent)) confirmation = "Couldn't open $label"
+    }
+
     fun refocus(where: Zone) {
         when (where) {
             Zone.APPS -> refocusApps++
@@ -385,6 +421,13 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 else -> Zone.INPUTS
             }
         )
+    }
+
+    // A top bar button can go while it has focus: the Play Store, disabled while Orbit was out
+    // of sight, goes when the read on return lands, after focus was already put back on it.
+    // Asking the top bar to put it back again finds the button gone and hands focus to the apps.
+    LaunchedEffect(destinations.inputs != null, destinations.store != null) {
+        if (zone == Zone.TOP && menu == null) refocusTop++
     }
 
     // Leaving puts away the menu and any move not yet kept, so coming back finds the rows as
@@ -416,6 +459,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             Column(Modifier.padding(start = SafeH, top = SafeV, end = SafeH)) {
                 TopBar(
                     first = topBarFocus,
+                    destinations = destinations,
                     refocus = refocusTop,
                     last = lastTop,
                     onFocused = { name ->
@@ -428,6 +472,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                         zone = Zone.APPS
                         refocusApps++
                     },
+                    onOpen = ::open,
                 )
                 Spacer(Modifier.height(10.dp))
                 Hero(
@@ -479,10 +524,12 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 active = zone == Zone.APPS && menu == null,
                 onFocused = { moveTo(Zone.APPS) },
                 editing = editing.takeIf { editingKey == FavoriteStore.APPS },
+                onOpen = { app -> openApp(app.packageName, app.label) },
                 onMenu = { app, anchor ->
                     menu = TileMenu(
                         key = FavoriteStore.APPS,
                         id = app.packageName,
+                        label = app.label,
                         anchor = anchor,
                         // Only set when the system would actually accept an uninstall, which
                         // is what decides whether the entry is offered at all.
@@ -507,8 +554,14 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 active = zone == Zone.INPUTS && menu == null,
                 onFocused = { moveTo(Zone.INPUTS) },
                 editing = editing.takeIf { editingKey == FavoriteStore.INPUTS },
+                onOpen = { input -> switchTo(input.id, input.label) },
                 onMenu = { input, anchor ->
-                    menu = TileMenu(key = FavoriteStore.INPUTS, id = input.id, anchor = anchor)
+                    menu = TileMenu(
+                        key = FavoriteStore.INPUTS,
+                        id = input.id,
+                        label = input.label,
+                        anchor = anchor,
+                    )
                 },
                 onMove = { delta ->
                     editing?.let {
@@ -530,9 +583,9 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 onOpen = {
                     closeMenu(target)
                     if (target.key == FavoriteStore.APPS) {
-                        context.launchApp(target.id)
+                        openApp(target.id, target.label)
                     } else {
-                        context.switchToInput(target.id)
+                        switchTo(target.id, target.label)
                     }
                 },
                 onRemove = {
@@ -774,6 +827,7 @@ private fun AppsRow(
     active: Boolean,
     onFocused: () -> Unit,
     editing: String?,
+    onOpen: (LaunchableApp) -> Unit,
     onMenu: (LaunchableApp, Rect) -> Unit,
     onMove: (Int) -> Unit,
     onEndEdit: (Boolean) -> Unit,
@@ -862,7 +916,7 @@ private fun AppsRow(
                     lastFocused = app.packageName
                     lastIndex = index
                 },
-                onClick = { context.launchApp(app.packageName) },
+                onClick = { onOpen(app) },
                 onMenu = { anchor -> onMenu(app, anchor) },
                 onMove = { delta -> listState.holdStill(); onMove(delta) },
                 onEndEdit = onEndEdit,
@@ -896,6 +950,7 @@ private fun InputsRow(
     active: Boolean,
     onFocused: () -> Unit,
     editing: String?,
+    onOpen: (TvInput) -> Unit,
     onMenu: (TvInput, Rect) -> Unit,
     onMove: (Int) -> Unit,
     onEndEdit: (Boolean) -> Unit,
@@ -974,7 +1029,7 @@ private fun InputsRow(
                 } else {
                     null
                 },
-            ) { context.switchToInput(input.id) }
+            ) { onOpen(input) }
         }
         if (ready) item(key = ADD_INPUT_TILE) {
             PlusTile(
@@ -995,16 +1050,20 @@ private fun InputsRow(
  * The date, the way out to the TV's own screens, the profile picture and the time.
  *
  * [last] is the button last used, for focus to come back to after where it led, and
- * [onFocused] reports each button by name as it takes focus.
+ * [onFocused] reports each button by name as it takes focus. [onOpen] starts where a button leads,
+ * given the name to tell the owner if it cannot.
  */
 @Composable
 private fun TopBar(
     first: FocusRequester,
+    destinations: Destinations,
     refocus: Int,
     last: String?,
     onFocused: (String) -> Unit,
     onLost: () -> Unit,
+    onOpen: (Intent, String) -> Unit,
 ) {
+    val context = LocalContext.current
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val button: (String) -> Modifier = { name ->
         Modifier
@@ -1016,22 +1075,69 @@ private fun TopBar(
         if (!requesters[last].focusWhenReady()) onLost()
     }
 
-    val now by produceState(initialValue = Date()) {
+    // The 12 or 24 hour setting is read again on every tick, so changing it on the TV shows
+    // within the minute. Each tick lands on the minute itself, so the clock turns over with the
+    // others in the room rather than up to a tick behind them.
+    var now by remember { mutableStateOf(Date()) }
+    var twentyFour by remember { mutableStateOf(DateFormat.is24HourFormat(context)) }
+    LaunchedEffect(Unit) {
         while (true) {
-            value = Date()
-            delay(10_000)
+            now = Date()
+            twentyFour = DateFormat.is24HourFormat(context)
+            delay(60_000 - System.currentTimeMillis() % 60_000)
         }
     }
-    val date = remember { SimpleDateFormat("EEEE d MMMM", Locale.getDefault()) }
-    val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    // In the order the language puts them: "Monday 3 March" here, "Monday, March 3" there.
+    val date = remember {
+        val locale = Locale.getDefault()
+        SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale)
+    }
+    // Twelve hour time leaves off AM and PM, the way the stock launcher's clock does.
+    val time = remember(twentyFour) {
+        SimpleDateFormat(if (twentyFour) "HH:mm" else "h:mm", Locale.getDefault())
+    }
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(date.format(now), color = Muted, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
-        Shortcuts(first, button)
+        Shortcuts(first, button, destinations, onOpen)
         Avatar(button)
         Spacer(Modifier.width(9.dp))
         Text(time.format(now), color = Muted, fontSize = 12.sp)
+    }
+}
+
+/**
+ * Where the top bar's buttons lead, and the store's own icon, so it reads as the store at a
+ * glance. Null where the TV has nowhere for a button to go.
+ */
+private class Destinations(
+    val search: Intent? = null,
+    val inputs: Intent? = null,
+    val store: Intent? = null,
+    val storeIcon: ImageBitmap? = null,
+) {
+    companion object {
+        /**
+         * The last read, kept for the lifetime of the process. A screen started again shows its
+         * buttons from the first frame, so focus coming back to one of them finds it there.
+         */
+        @Volatile
+        var last = Destinations()
+            private set
+
+        /** Package manager lookups and an icon decode, so never on the main thread. */
+        fun read(context: Context): Destinations {
+            val store = InputRepository.storeIntent(context)
+            return Destinations(
+                search = InputRepository.searchIntent(context),
+                inputs = InputRepository.allInputsIntent(context),
+                store = store,
+                storeIcon = runCatching {
+                    InputRepository.iconFor(context, store)?.toBitmap()?.asImageBitmap()
+                }.getOrNull(),
+            ).also { last = it }
+        }
     }
 }
 
@@ -1042,19 +1148,20 @@ private fun TopBar(
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
+private fun Shortcuts(
+    first: FocusRequester,
+    button: (String) -> Modifier,
+    destinations: Destinations,
+    onOpen: (Intent, String) -> Unit,
+) {
     val context = LocalContext.current
-    val searchIntent = remember { InputRepository.searchIntent(context) }
-    val inputsIntent = remember { InputRepository.allInputsIntent(context) }
-    val storeIntent = remember { InputRepository.storeIntent(context) }
+    val searchIntent = destinations.search
+    val inputsIntent = destinations.inputs
+    val storeIntent = destinations.store
     val settingsIntent = remember { InputRepository.settingsIntent() }
-    // The store's own icon, so it reads as the store at a glance. Inputs and settings have no
-    // icon worth borrowing, so they get the same glyphs the stock top bar uses.
-    val storeIcon = remember(storeIntent) {
-        runCatching {
-            InputRepository.iconFor(context, storeIntent)?.toBitmap()?.asImageBitmap()
-        }.getOrNull()
-    }
+    // Inputs and settings have no icon worth borrowing, so they get the same glyphs the stock top
+    // bar uses.
+    val storeIcon = destinations.storeIcon
 
     // Leftmost, as on the stock top bar. It carries the shared requester and holds the left
     // edge, which pass to All apps when the TV has no search to offer.
@@ -1098,7 +1205,7 @@ private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
     Spacer(Modifier.width(9.dp))
 
     if (inputsIntent != null) {
-        TopBarButton(button("inputs"), onClick = { context.startActivitySafely(inputsIntent) }) {
+        TopBarButton(button("inputs"), onClick = { onOpen(inputsIntent, "All inputs") }) {
             Icon(
                 imageVector = Glyphs.Input,
                 contentDescription = "All inputs",
@@ -1109,7 +1216,7 @@ private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
         Spacer(Modifier.width(9.dp))
     }
     if (storeIntent != null) {
-        TopBarButton(button("store"), onClick = { context.startActivitySafely(storeIntent) }) {
+        TopBarButton(button("store"), onClick = { onOpen(storeIntent, "Play Store") }) {
             if (storeIcon != null) {
                 Image(
                     bitmap = storeIcon,
@@ -1128,7 +1235,7 @@ private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
         }
         Spacer(Modifier.width(9.dp))
     }
-    TopBarButton(button("settings"), onClick = { context.startActivitySafely(settingsIntent) }) {
+    TopBarButton(button("settings"), onClick = { onOpen(settingsIntent, "Settings") }) {
         Icon(
             imageVector = Icons.Filled.Settings,
             contentDescription = "Settings",
@@ -1711,7 +1818,9 @@ private fun AppTile(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            val bitmap = remember(app.packageName) {
+            // Keyed on the artwork itself, which the list hands back unchanged until the app is
+            // updated. A new banner then shows on the next return, and nothing else is redrawn.
+            val bitmap = remember(app.art) {
                 runCatching { app.art?.toBitmap()?.asImageBitmap() }.getOrNull()
             }
             if (bitmap != null) {
@@ -1902,15 +2011,20 @@ private fun InputTile(
 private fun LayoutCoordinates.rootBounds(): Rect =
     findRootCoordinates().localBoundingBoxOf(this, clipBounds = false)
 
-private fun Context.launchApp(packageName: String) {
-    AppRepository.launch(this, packageName)
-}
+/** Says whether the app could be started. One can lose its launcher entry while installed. */
+private fun Context.launchApp(packageName: String): Boolean = AppRepository.launch(this, packageName)
 
-private fun Context.switchToInput(inputId: String) {
-    InputRepository.rememberUse(this, inputId)
-    LastOpened.record(this, LastOpened.INPUT, inputId)
-    startActivitySafely(InputRepository.switchIntent(inputId))
-}
+/**
+ * Marks the input as last used only once the switch is under way, so a failed one does not, and
+ * records it for the hero at the same time.
+ */
+private fun Context.switchToInput(inputId: String): Boolean =
+    startActivitySafely(InputRepository.switchIntent(inputId)).also { switched ->
+        if (switched) {
+            InputRepository.rememberUse(this, inputId)
+            LastOpened.record(this, LastOpened.INPUT, inputId)
+        }
+    }
 
 /** Starts [intent], and says whether it could. A TV can lack any of the screens Orbit links to. */
 private fun Context.startActivitySafely(intent: Intent): Boolean =

@@ -6,6 +6,8 @@ import android.graphics.drawable.Drawable
 import android.media.tv.TvContract
 import android.media.tv.TvInputInfo
 import android.media.tv.TvInputManager
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 
 /**
@@ -74,6 +76,26 @@ object InputRepository {
                     }.getOrDefault(true),
                 )
             }
+    }
+
+    /**
+     * Calls [onChange] on the main thread whenever the TV reports an input coming, going or
+     * changing state, such as a console plugged in or switched on. Returns what stops it.
+     *
+     * A TV without the input service has nothing to report, and gets a stop that does nothing.
+     */
+    fun watch(context: Context, onChange: () -> Unit): () -> Unit {
+        val manager = context.getSystemService(Context.TV_INPUT_SERVICE) as? TvInputManager
+            ?: return {}
+        val callback = object : TvInputManager.TvInputCallback() {
+            override fun onInputAdded(inputId: String) = onChange()
+            override fun onInputRemoved(inputId: String) = onChange()
+            override fun onInputUpdated(inputId: String) = onChange()
+            override fun onInputStateChanged(inputId: String, state: Int) = onChange()
+        }
+        runCatching { manager.registerCallback(callback, Handler(Looper.getMainLooper())) }
+            .onFailure { return {} }
+        return { runCatching { manager.unregisterCallback(callback) } }
     }
 
     /**
