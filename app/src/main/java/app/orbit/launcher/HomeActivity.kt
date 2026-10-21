@@ -47,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -212,6 +213,9 @@ private fun HomeScreen() {
     val favoriteApps = remember(apps, appFavorites) {
         FavoriteStore.pick(apps, appFavorites) { it.packageName }
     }
+    // Input favorites are never pruned, unlike apps. An input can drop out of the list for a
+    // while, at boot or when a console on HDMI-CEC goes to standby, and should be back in its
+    // place when it returns. Until then it is simply not shown.
     val favoriteInputs = remember(inputs, inputFavorites) {
         FavoriteStore.pick(inputs.orEmpty(), inputFavorites) { it.id }
     }
@@ -235,11 +239,6 @@ private fun HomeScreen() {
         if (known.isNotEmpty() && (known - present).isNotEmpty()) confirmation = "It's gone now"
         FavoriteStore.prune(context, FavoriteStore.APPS, present)
         known = present
-    }
-    LaunchedEffect(inputs) {
-        val all = inputs
-        if (all.isNullOrEmpty()) return@LaunchedEffect
-        FavoriteStore.prune(context, FavoriteStore.INPUTS, all.map { it.id }.toSet())
     }
     LaunchedEffect(confirmation) {
         if (confirmation != null) {
@@ -300,7 +299,11 @@ private fun HomeScreen() {
                         packageName = app.packageName.takeIf { app.removable },
                     )
                 },
-                onMove = { delta -> editing?.let { FavoriteStore.move(context, FavoriteStore.APPS, it, delta) } },
+                onMove = { delta ->
+                    editing?.let {
+                        FavoriteStore.move(context, FavoriteStore.APPS, it, delta, favoriteApps.map { a -> a.packageName })
+                    }
+                },
                 onEndEdit = { revert -> endEdit(revert) },
             )
             // Smaller than it looks: the apps row already ends in room for its tile labels.
@@ -315,7 +318,11 @@ private fun HomeScreen() {
                 onMenu = { input, anchor ->
                     menu = TileMenu(key = FavoriteStore.INPUTS, id = input.id, anchor = anchor)
                 },
-                onMove = { delta -> editing?.let { FavoriteStore.move(context, FavoriteStore.INPUTS, it, delta) } },
+                onMove = { delta ->
+                    editing?.let {
+                        FavoriteStore.move(context, FavoriteStore.INPUTS, it, delta, favoriteInputs.map { i -> i.id })
+                    }
+                },
                 onEndEdit = { revert -> endEdit(revert) },
             )
         }
@@ -384,8 +391,8 @@ private class MenuItem(val label: String, val icon: ImageVector, val onClick: ()
  * stays lit while the rest of the screen dims. Uninstall is deliberately handed to the system to
  * confirm.
  *
- * The card hangs below the tile when it fits and stands above it when it does not, which is
- * always the case for the inputs row at the bottom of the screen.
+ * The card hangs below the tile when it fits and stands above it when it does not. With both
+ * rows in the lower half of the screen, as they are now, it stands above in either row.
  */
 @Composable
 private fun TileMenuSheet(
@@ -404,6 +411,7 @@ private fun TileMenuSheet(
     }
     val requesters = remember(items.size) { List(items.size) { FocusRequester() } }
     var current by remember { mutableIntStateOf(0) }
+    var armed by remember(target.id) { mutableStateOf(false) }
     LaunchedEffect(target.id) { requesters.first().focusWhenReady() }
 
     Layout(
@@ -426,7 +434,10 @@ private fun TileMenuSheet(
         modifier = Modifier
             .fillMaxSize()
             .drawBehind {
-                val hole = target.anchor.inflate(2.dp.toPx())
+                // Only above and below: a grown tile already reaches into the gap beside it, and
+                // widening the hole would light the edge of its neighbour.
+                val pad = 2.dp.toPx()
+                val hole = target.anchor.let { Rect(it.left, it.top - pad, it.right, it.bottom + pad) }
                 clipPath(
                     Path().apply { addRoundRect(RoundRect(hole, CornerRadius(12.dp.toPx()))) },
                     clipOp = ClipOp.Difference,
@@ -443,6 +454,16 @@ private fun TileMenuSheet(
                     event.key == Key.DirectionLeft || event.key == Key.DirectionRight -> true
                     event.key == Key.DirectionUp && current == 0 -> true
                     event.key == Key.DirectionDown && current == items.lastIndex -> true
+                    // Holding OK opens the menu while OK is still down, and focus is already on
+                    // Open when it comes back up. OK only counts once the menu has seen a fresh
+                    // press of it, so the repeats and the release of that hold press nothing.
+                    event.key == Key.DirectionCenter || event.key == Key.Enter ||
+                        event.key == Key.NumPadEnter -> {
+                        if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                            armed = true
+                        }
+                        !armed
+                    }
                     else -> false
                 }
             },
@@ -546,6 +567,12 @@ private fun AppsRow(
     var lastFocused by remember { mutableStateOf<String?>(null) }
     var lastIndex by remember { mutableIntStateOf(0) }
     val ids = remember(apps) { apps.map { it.packageName } + ADD_TILE }
+    // A move changes where the focused tile sits. Keep its place current, so that when it leaves
+    // the row the focus goes to whatever slid into that place.
+    SideEffect {
+        val at = lastFocused?.let { ids.indexOf(it) } ?: -1
+        if (at >= 0) lastIndex = at
+    }
     val firstPackage = apps.firstOrNull()?.packageName
     val scope = rememberCoroutineScope()
 
@@ -645,6 +672,10 @@ private fun InputsRow(
     var lastFocused by remember { mutableStateOf<String?>(null) }
     var lastIndex by remember { mutableIntStateOf(0) }
     val ids = remember(inputs) { inputs.map { it.id } + ADD_INPUT_TILE }
+    SideEffect {
+        val at = lastFocused?.let { ids.indexOf(it) } ?: -1
+        if (at >= 0) lastIndex = at
+    }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -990,6 +1021,9 @@ private fun Modifier.tileKeys(
                 val press = event.nativeKeyEvent.downTime
                 if (handledPress != press) {
                     handledPress = press
+                    // The menu takes the release, so the tile never clears this itself. Left
+                    // set, it would make the next quick tap read as a hold.
+                    pressedAt = 0L
                     onMenu()
                 }
                 true
