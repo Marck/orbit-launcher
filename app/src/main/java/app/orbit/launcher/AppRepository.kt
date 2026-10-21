@@ -1,0 +1,79 @@
+package app.orbit.launcher
+
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
+import android.graphics.drawable.Drawable
+
+/** One launchable app, with the artwork the app itself ships. */
+data class LaunchableApp(
+    val packageName: String,
+    val label: String,
+    val art: Drawable?,
+    val isBanner: Boolean,
+)
+
+/**
+ * Builds the app row from what is installed. Leanback entries first, then any
+ * plain launcher entries, so sideloaded phone apps are not invisible.
+ *
+ * Artwork comes from the app itself: its banner when it has one, otherwise its
+ * icon. The launcher ships no third-party artwork.
+ */
+object AppRepository {
+
+    /**
+     * Last loaded list, kept for the lifetime of the process.
+     *
+     * Reading every launcher activity and decoding its artwork takes long enough to see, and the
+     * launcher is reopened constantly. Showing the previous list straight away makes reopening
+     * instant, and the refresh replaces it when it lands.
+     */
+    @Volatile
+    private var cache: List<LaunchableApp>? = null
+
+    fun cached(): List<LaunchableApp> = cache.orEmpty()
+
+    fun load(context: Context): List<LaunchableApp> {
+        val pm = context.packageManager
+        val leanback = query(pm, Intent.CATEGORY_LEANBACK_LAUNCHER)
+        val plain = query(pm, Intent.CATEGORY_LAUNCHER)
+
+        val seen = mutableSetOf(context.packageName)
+        val apps = mutableListOf<LaunchableApp>()
+
+        for (info in leanback + plain) {
+            val pkg = info.activityInfo.packageName
+            if (!seen.add(pkg)) continue
+
+            val banner = runCatching { info.activityInfo.loadBanner(pm) }.getOrNull()
+            val art = banner ?: runCatching { info.loadIcon(pm) }.getOrNull()
+            apps += LaunchableApp(
+                packageName = pkg,
+                label = info.loadLabel(pm).toString(),
+                art = art,
+                isBanner = banner != null,
+            )
+        }
+        return apps.sortedBy { it.label.lowercase() }.also { cache = it }
+    }
+
+    fun launchIntent(context: Context, packageName: String): Intent? {
+        val pm = context.packageManager
+        return pm.getLeanbackLaunchIntentForPackage(packageName)
+            ?: pm.getLaunchIntentForPackage(packageName)
+    }
+
+    private fun query(pm: PackageManager, category: String): List<ResolveInfo> =
+        pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0)
+
+    /** True when Orbit is already the system's preferred home app. */
+    fun isDefaultHome(context: Context): Boolean {
+        val resolved = context.packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            PackageManager.MATCH_DEFAULT_ONLY,
+        )
+        return resolved?.activityInfo?.packageName == context.packageName
+    }
+}
