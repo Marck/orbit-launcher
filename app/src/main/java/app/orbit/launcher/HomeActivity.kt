@@ -1,5 +1,7 @@
 package app.orbit.launcher
 
+import android.annotation.SuppressLint
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -7,16 +9,22 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -46,6 +54,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -54,14 +63,18 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
@@ -85,6 +98,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,9 +108,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import kotlin.math.roundToInt
+import kotlin.reflect.KProperty
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -165,27 +182,82 @@ private class Spot {
  * Counts returns to the launcher.
  *
  * Compose does not restore focus across an activity switch, so coming back from an app or from
- * the picker leaves nothing focused and the remote does nothing at all. The apps row watches this
- * and takes focus back.
+ * the picker leaves nothing focused and the remote does nothing at all. The home screen watches
+ * this and puts focus back where it was.
  */
 private object Returns {
     var count by mutableIntStateOf(0)
 }
 
+/** The parts of the screen focus can be in, so a return can put it back in the same one. */
+private enum class Zone { APPS, INPUTS, TOP }
+
+/**
+ * Whether a key from the remote is being handled right now.
+ *
+ * Focus that moves while one is, the owner moved. Focus that moves at any other time was placed
+ * by Orbit putting it back, or by the system, which hands it to whatever comes first on screen
+ * whenever the focused item disappears or the window opens. Only the first kind says where the
+ * owner is.
+ */
+private object Remote {
+    var handling = false
+}
+
+/** What the activity tells the screen that composition cannot see for itself. */
+private enum class HomeEvent {
+    /** Home was pressed while Orbit was already in front. */
+    HOME,
+
+    /** Orbit went out of sight: an app opened over it, the screensaver started, the screen went off. */
+    LEFT,
+}
+
 class HomeActivity : ComponentActivity() {
+    private val events = MutableSharedFlow<HomeEvent>(extraBufferCapacity = 8)
+
+    /** Resumed and not stopped since. Home pressed now is pressed on Orbit itself. */
+    private var inFront = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { HomeScreen() }
+        setContent { SafeAreaScrolling { HomeScreen(events) } }
     }
 
     override fun onResume() {
         super.onResume()
+        inFront = true
         Returns.count++
+    }
+
+    // Home on the home screen pauses Orbit, delivers the intent and resumes it, without ever
+    // stopping it. Coming home from an app stops it first, so that case is told apart here.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (inFront) events.tryEmit(HomeEvent.HOME)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        inFront = false
+        events.tryEmit(HomeEvent.LEFT)
+    }
+
+    // Focus moves as part of handling the key, before this returns. The lint warning is about
+    // AndroidX's own override of this framework method, which is still called through super.
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        Remote.handling = true
+        try {
+            return super.dispatchKeyEvent(event)
+        } finally {
+            Remote.handling = false
+        }
     }
 }
 
 @Composable
-private fun HomeScreen() {
+private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     val context = LocalContext.current
     // Off the main thread, all of it. produceState runs its producer on the composition's
     // context, so reading every launcher activity and decoding its artwork there holds up the
@@ -199,10 +271,15 @@ private fun HomeScreen() {
     val inputs by produceState<List<TvInput>?>(initialValue = null, Returns.count) {
         value = withContext(Dispatchers.IO) { InputRepository.load(context) }
     }
-    val isDefaultHome by produceState(initialValue = true, Returns.count) {
-        value = withContext(Dispatchers.IO) { AppRepository.isDefaultHome(context) }
+    // With the home button service on, Home reaches Orbit without it being the home app, and the
+    // notice would be asking for something already done.
+    val homeOpensOrbit by produceState(initialValue = true, Returns.count) {
+        value = withContext(Dispatchers.IO) {
+            AppRepository.isDefaultHome(context) || isHomeButtonServiceOn(context)
+        }
     }
-    var noticeDismissed by remember { mutableStateOf(false) }
+    // Kept, so a dismissed notice stays dismissed when Orbit is next started.
+    var noticeDismissed by remember { mutableStateOf(HomePrefs.noticeDismissed(context)) }
 
     // Only the favorites, in the owner's order; everything else is one press of + away.
     // Reading the revision here is what updates the rows the moment a favorite changes,
@@ -224,11 +301,21 @@ private fun HomeScreen() {
     var editing by remember { mutableStateOf<String?>(null) }
     var editingKey by remember { mutableStateOf(FavoriteStore.APPS) }
     var editSnapshot by remember { mutableStateOf<List<String>?>(null) }
-    var confirmation by remember { mutableStateOf<String?>(null) }
+    val note = remember { Note() }
+    var confirmation by note
     // Closing the menu has to hand focus back to the tile it belonged to. Without this the
     // focus falls to whatever comes first on screen and the remote walks off somewhere else.
     var refocusApps by remember { mutableIntStateOf(0) }
     var refocusInputs by remember { mutableIntStateOf(0) }
+    var refocusTop by remember { mutableIntStateOf(0) }
+    // Asks the apps row to go back to its first tile, for Home and Back.
+    var toFirst by remember { mutableIntStateOf(0) }
+    // Saved with the activity, so focus comes back to the same place after it is recreated.
+    var zone by rememberSaveable { mutableStateOf(Zone.APPS) }
+    var lastTop by rememberSaveable { mutableStateOf<String?>(null) }
+    fun moveTo(where: Zone) {
+        if (Remote.handling) zone = where
+    }
     var known by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     // An app can be removed from anywhere, so notice it by comparing successive reads rather
@@ -240,7 +327,7 @@ private fun HomeScreen() {
         FavoriteStore.prune(context, FavoriteStore.APPS, present)
         known = present
     }
-    LaunchedEffect(confirmation) {
+    LaunchedEffect(note.shown) {
         if (confirmation != null) {
             delay(2600)
             confirmation = null
@@ -264,20 +351,90 @@ private fun HomeScreen() {
         editSnapshot = null
     }
 
+    fun refocus(where: Zone) {
+        when (where) {
+            Zone.APPS -> refocusApps++
+            Zone.INPUTS -> refocusInputs++
+            Zone.TOP -> refocusTop++
+        }
+    }
+
+    // Back from an app, or from anything else that took the screen: focus goes back where it
+    // was. An open menu takes its own focus back, and a move keeps the tile being moved.
+    LaunchedEffect(Returns.count) {
+        if (menu != null) return@LaunchedEffect
+        refocus(
+            when {
+                editing == null -> zone
+                editingKey == FavoriteStore.APPS -> Zone.APPS
+                else -> Zone.INPUTS
+            }
+        )
+    }
+
+    // Leaving puts away the menu and any move not yet kept, so coming back finds the rows as
+    // they were. Home on the home screen does the same and then goes back to the start, as the
+    // stock launcher does.
+    LaunchedEffect(events) {
+        events.collect { event ->
+            menu = null
+            if (editing != null) endEdit(revert = true)
+            if (event == HomeEvent.HOME) {
+                zone = Zone.APPS
+                toFirst++
+            }
+        }
+    }
+
+    // There is nothing behind the home screen for Back to go to. Left to the system, Back would
+    // close Orbit, only for it to be started again from scratch with nothing focused. A menu or a
+    // move takes Back for itself before it gets here.
+    BackHandler {
+        zone = Zone.APPS
+        toFirst++
+    }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Column(Modifier.fillMaxSize()) {
-            Column(Modifier.padding(horizontal = SafeH, vertical = SafeV)) {
-                TopBar()
+            // No safe margin below: the space under the hero stretches anyway, and the notice
+            // needs that room to fit above the rows.
+            Column(Modifier.padding(start = SafeH, top = SafeV, end = SafeH)) {
+                TopBar(
+                    refocus = refocusTop,
+                    last = lastTop,
+                    onFocused = { name ->
+                        if (Remote.handling) lastTop = name
+                        moveTo(Zone.TOP)
+                    },
+                    // The button last used can be gone by the time Orbit is back: the Play
+                    // Store, if it was disabled.
+                    onLost = {
+                        zone = Zone.APPS
+                        refocusApps++
+                    },
+                )
                 Spacer(Modifier.height(10.dp))
                 Hero()
             }
             Spacer(Modifier.weight(1f))
-            if (!isDefaultHome && !noticeDismissed) {
+            if (!homeOpensOrbit && !noticeDismissed) {
                 Notice(
                     title = "Orbit is not the home app yet",
                     detail = "Set it as default so the home button opens Orbit",
-                    onDetails = { context.startActivitySafely(Intent(Settings.ACTION_HOME_SETTINGS)) },
-                    onDismiss = { noticeDismissed = true },
+                    // Not every TV has the home app setting. Where it is missing, the
+                    // accessibility settings are where the home button service is turned on.
+                    onDetails = {
+                        context.startActivitySafely(Intent(Settings.ACTION_HOME_SETTINGS)) ||
+                            context.startActivitySafely(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    },
+                    onDismiss = {
+                        noticeDismissed = true
+                        HomePrefs.dismissNotice(context)
+                        // The focused button goes with the notice. Without this, focus falls to
+                        // whatever comes first on screen, which is the top bar.
+                        zone = Zone.APPS
+                        refocusApps++
+                    },
                 )
                 Spacer(Modifier.height(14.dp))
             }
@@ -288,6 +445,9 @@ private fun HomeScreen() {
                 ready = apps.isNotEmpty(),
                 held = menu?.takeIf { it.key == FavoriteStore.APPS }?.id,
                 refocus = refocusApps,
+                toFirst = toFirst,
+                active = zone == Zone.APPS && menu == null,
+                onFocused = { moveTo(Zone.APPS) },
                 editing = editing.takeIf { editingKey == FavoriteStore.APPS },
                 onMenu = { app, anchor ->
                     menu = TileMenu(
@@ -314,6 +474,8 @@ private fun HomeScreen() {
                 ready = inputs != null,
                 held = menu?.takeIf { it.key == FavoriteStore.INPUTS }?.id,
                 refocus = refocusInputs,
+                active = zone == Zone.INPUTS && menu == null,
+                onFocused = { moveTo(Zone.INPUTS) },
                 editing = editing.takeIf { editingKey == FavoriteStore.INPUTS },
                 onMenu = { input, anchor ->
                     menu = TileMenu(key = FavoriteStore.INPUTS, id = input.id, anchor = anchor)
@@ -325,6 +487,9 @@ private fun HomeScreen() {
                 },
                 onEndEdit = { revert -> endEdit(revert) },
             )
+            // The bottom of the safe area. Without it the labels under the inputs row sit in the
+            // strip a TV may crop off.
+            Spacer(Modifier.height(SafeV))
         }
 
         confirmation?.let { Confirmation(it) }
@@ -364,6 +529,24 @@ private fun HomeScreen() {
                 onDismiss = { closeMenu(target) },
             )
         }
+    }
+}
+
+/**
+ * The confirmation in the corner. Every time it is set counts as new, even to the same words, so
+ * that removing two favorites in a row keeps the second one up for its full time.
+ */
+private class Note {
+    private var text by mutableStateOf<String?>(null)
+
+    var shown by mutableIntStateOf(0)
+        private set
+
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): String? = text
+
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: String?) {
+        text = value
+        if (value != null) shown++
     }
 }
 
@@ -412,7 +595,9 @@ private fun TileMenuSheet(
     val requesters = remember(items.size) { List(items.size) { FocusRequester() } }
     var current by remember { mutableIntStateOf(0) }
     var armed by remember(target.id) { mutableStateOf(false) }
-    LaunchedEffect(target.id) { requesters.first().focusWhenReady() }
+    // Again on a return, which leaves nothing focused: the remote would otherwise reach the tiles
+    // under the scrim while the menu is still up.
+    LaunchedEffect(target.id, Returns.count) { requesters[current].focusWhenReady() }
 
     Layout(
         content = {
@@ -553,6 +738,10 @@ private fun AppsRow(
     ready: Boolean,
     held: String?,
     refocus: Int,
+    toFirst: Int,
+    /** Focus belongs in this row: it was last here, and no menu has it. */
+    active: Boolean,
+    onFocused: () -> Unit,
     editing: String?,
     onMenu: (LaunchableApp, Rect) -> Unit,
     onMove: (Int) -> Unit,
@@ -563,9 +752,9 @@ private fun AppsRow(
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     // The tile to come back to, by id and by place. Focus is only ever requested from the effect
     // below, never from a tile's own composition, which is what used to yank focus back while
-    // arrowing left.
-    var lastFocused by remember { mutableStateOf<String?>(null) }
-    var lastIndex by remember { mutableIntStateOf(0) }
+    // arrowing left. Saved with the activity, so a recreated one comes back to the same tile.
+    var lastFocused by rememberSaveable { mutableStateOf<String?>(null) }
+    var lastIndex by rememberSaveable { mutableIntStateOf(0) }
     val ids = remember(apps) { apps.map { it.packageName } + ADD_TILE }
     // A move changes where the focused tile sits. Keep its place current, so that when it leaves
     // the row the focus goes to whatever slid into that place.
@@ -583,28 +772,29 @@ private fun AppsRow(
         }
     }
 
-    // Only when the tile being moved has actually left the screen. Scrolling on every swap
-    // drags it to the left edge, which reads as the row jumping rather than the tile moving.
+    // Only when the tile being moved has left the safe area, and only as far as it takes to bring
+    // it back. Scrolling on every swap drags it to the left edge, which reads as the row jumping
+    // rather than the tile moving.
     LaunchedEffect(editing, apps) {
         val moving = editing ?: return@LaunchedEffect
         val index = apps.indexOfFirst { it.packageName == moving }
         if (index < 0) return@LaunchedEffect
-        if (!listState.isFullyShown(index)) runCatching { listState.animateScrollToItem(index) }
+        runCatching { listState.reveal(index) }
     }
 
     // Keyed on the row's contents, not just its first entry: when the tile that had focus leaves
     // the favorites or the TV, nothing else would re-run and the focus would be left on a tile
-    // that no longer exists. The one that slid into its place takes the focus instead.
-    LaunchedEffect(ids, ready, Returns.count, refocus) {
-        if (!ready) return@LaunchedEffect
+    // that no longer exists. The one that slid into its place takes the focus instead. Only while
+    // focus belongs here, so a list read on a return cannot pull focus out of the inputs row or
+    // the top bar, or out from under an open menu.
+    LaunchedEffect(ids, ready, refocus) {
+        if (!ready || !active) return@LaunchedEffect
         val target = lastFocused?.takeIf { it in ids } ?: ids[lastIndex.coerceAtMost(ids.lastIndex)]
         val index = ids.indexOf(target)
         // The row only composes what is on screen, so the tile has to be scrolled into view
         // before its requester exists at all. Not during a move, which reorders the row on every
         // press and does its own scrolling above.
-        if (editing == null && !listState.isFullyShown(index)) {
-            runCatching { listState.scrollToItem(index) }
-        }
+        if (editing == null) runCatching { listState.reveal(index) }
         // Items are placed during layout, so the requester is not attached on the frame the
         // list arrives. Keep asking until it takes.
         repeat(30) {
@@ -615,8 +805,18 @@ private fun AppsRow(
         }
     }
 
+    LaunchedEffect(toFirst) {
+        if (toFirst == 0 || !ready) return@LaunchedEffect
+        lastFocused = ids.first()
+        lastIndex = 0
+        runCatching { listState.scrollToItem(0) }
+        requesters[ids.first()].focusWhenReady()
+    }
+
     LazyRow(
-        modifier = Modifier.height(RowHeight),
+        modifier = Modifier
+            .height(RowHeight)
+            .rowFocus(listState, { lastFocused }, requesters, onFocused),
         state = listState,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(start = SafeH, top = RowTop, end = SafeH),
@@ -633,7 +833,7 @@ private fun AppsRow(
                 },
                 onClick = { context.launchApp(app.packageName) },
                 onMenu = { anchor -> onMenu(app, anchor) },
-                onMove = onMove,
+                onMove = { delta -> listState.holdStill(); onMove(delta) },
                 onEndEdit = onEndEdit,
                 onEdgeLeft = if (index == 0) {
                     { jumpTo(apps.size, ADD_TILE) }
@@ -661,16 +861,21 @@ private fun InputsRow(
     ready: Boolean,
     held: String?,
     refocus: Int,
+    /** Focus belongs in this row: it was last here, and no menu has it. */
+    active: Boolean,
+    onFocused: () -> Unit,
     editing: String?,
     onMenu: (TvInput, Rect) -> Unit,
     onMove: (Int) -> Unit,
     onEndEdit: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
-    val lastInput = remember(inputs) { InputRepository.lastUsedInput(context) }
+    // Read again on every return too: the TV hands back the same inputs after a switch, so the
+    // list alone would not change, and the input just switched to would not be marked.
+    val lastInput = remember(inputs, Returns.count) { InputRepository.lastUsedInput(context) }
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
-    var lastFocused by remember { mutableStateOf<String?>(null) }
-    var lastIndex by remember { mutableIntStateOf(0) }
+    var lastFocused by rememberSaveable { mutableStateOf<String?>(null) }
+    var lastIndex by rememberSaveable { mutableIntStateOf(0) }
     val ids = remember(inputs) { inputs.map { it.id } + ADD_INPUT_TILE }
     SideEffect {
         val at = lastFocused?.let { ids.indexOf(it) } ?: -1
@@ -686,13 +891,20 @@ private fun InputsRow(
         }
     }
 
+    LaunchedEffect(editing, inputs) {
+        val moving = editing ?: return@LaunchedEffect
+        val index = inputs.indexOfFirst { it.id == moving }
+        if (index < 0) return@LaunchedEffect
+        runCatching { listState.reveal(index) }
+    }
+
     // Only ever on an explicit request, never on composition, so the row cannot steal focus
-    // from the apps above it.
-    LaunchedEffect(refocus) {
-        if (refocus == 0 || lastFocused == null) return@LaunchedEffect
+    // from the apps above it. Also once the inputs have been read, for a request made before.
+    LaunchedEffect(refocus, ready) {
+        if (refocus == 0 || !ready || !active || lastFocused == null) return@LaunchedEffect
         val target = lastFocused?.takeIf { it in ids } ?: ids[lastIndex.coerceAtMost(ids.lastIndex)]
         val index = ids.indexOf(target)
-        if (!listState.isFullyShown(index)) runCatching { listState.scrollToItem(index) }
+        if (editing == null) runCatching { listState.reveal(index) }
         repeat(30) {
             if (runCatching { requesters[target]?.requestFocus() != null }.getOrDefault(false)) {
                 return@LaunchedEffect
@@ -702,7 +914,10 @@ private fun InputsRow(
     }
 
     LazyRow(
-        modifier = Modifier.fillMaxWidth().height(RowHeight),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(RowHeight)
+            .rowFocus(listState, { lastFocused }, requesters, onFocused),
         state = listState,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
         contentPadding = PaddingValues(start = SafeH, top = RowTop, end = SafeH),
@@ -721,7 +936,7 @@ private fun InputsRow(
                     lastIndex = index
                 },
                 onMenu = { anchor -> onMenu(input, anchor) },
-                onMove = onMove,
+                onMove = { delta -> listState.holdStill(); onMove(delta) },
                 onEndEdit = onEndEdit,
                 onEdgeLeft = if (index == 0) {
                     { jumpTo(inputs.size, ADD_INPUT_TILE) }
@@ -745,8 +960,25 @@ private fun InputsRow(
     }
 }
 
+/**
+ * The date, the way out to the TV's own screens, the profile picture and the time.
+ *
+ * [last] is the button last used, for focus to come back to after where it led, and
+ * [onFocused] reports each button by name as it takes focus.
+ */
 @Composable
-private fun TopBar() {
+private fun TopBar(refocus: Int, last: String?, onFocused: (String) -> Unit, onLost: () -> Unit) {
+    val requesters = remember { mutableMapOf<String, FocusRequester>() }
+    val button: (String) -> Modifier = { name ->
+        Modifier
+            .focusRequester(requesters.getOrPut(name) { FocusRequester() })
+            .onFocusChanged { if (it.hasFocus) onFocused(name) }
+    }
+    LaunchedEffect(refocus) {
+        if (refocus == 0) return@LaunchedEffect
+        if (!requesters[last].focusWhenReady()) onLost()
+    }
+
     val now by produceState(initialValue = Date()) {
         while (true) {
             value = Date()
@@ -759,8 +991,8 @@ private fun TopBar() {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(date.format(now), color = Muted, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
-        Shortcuts()
-        Avatar()
+        Shortcuts(button)
+        Avatar(button)
         Spacer(Modifier.width(9.dp))
         Text(time.format(now), color = Muted, fontSize = 12.sp)
     }
@@ -772,7 +1004,7 @@ private fun TopBar() {
  * Each is offered only when the TV has somewhere for it to go.
  */
 @Composable
-private fun Shortcuts() {
+private fun Shortcuts(button: (String) -> Modifier) {
     val context = LocalContext.current
     val inputsIntent = remember { InputRepository.allInputsIntent(context) }
     val storeIntent = remember { InputRepository.storeIntent(context) }
@@ -786,7 +1018,7 @@ private fun Shortcuts() {
     }
 
     if (inputsIntent != null) {
-        TopBarButton(onClick = { context.startActivitySafely(inputsIntent) }) {
+        TopBarButton(button("inputs"), onClick = { context.startActivitySafely(inputsIntent) }) {
             Icon(
                 imageVector = Glyphs.Input,
                 contentDescription = "All inputs",
@@ -797,7 +1029,7 @@ private fun Shortcuts() {
         Spacer(Modifier.width(9.dp))
     }
     if (storeIntent != null) {
-        TopBarButton(onClick = { context.startActivitySafely(storeIntent) }) {
+        TopBarButton(button("store"), onClick = { context.startActivitySafely(storeIntent) }) {
             if (storeIcon != null) {
                 Image(
                     bitmap = storeIcon,
@@ -816,7 +1048,7 @@ private fun Shortcuts() {
         }
         Spacer(Modifier.width(9.dp))
     }
-    TopBarButton(onClick = { context.startActivitySafely(settingsIntent) }) {
+    TopBarButton(button("settings"), onClick = { context.startActivitySafely(settingsIntent) }) {
         Icon(
             imageVector = Icons.Filled.Settings,
             contentDescription = "Settings",
@@ -828,13 +1060,14 @@ private fun Shortcuts() {
 }
 
 @Composable
-private fun Avatar() {
+private fun Avatar(button: (String) -> Modifier) {
     val context = LocalContext.current
     // Keyed on the revision so a picture chosen in the picker shows on return.
     val picture by produceState<android.graphics.Bitmap?>(initialValue = null, Profile.revision) {
         value = withContext(Dispatchers.IO) { Profile.avatar(context) }
     }
     TopBarButton(
+        button("profile"),
         onClick = { context.startActivitySafely(Intent(context, AvatarPickerActivity::class.java)) },
     ) {
         val bitmap = picture
@@ -858,12 +1091,17 @@ private fun Avatar() {
 
 /** A small round button in the top bar. */
 @Composable
-private fun TopBarButton(onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+private fun TopBarButton(
+    modifier: Modifier,
+    onClick: () -> Unit,
+    content: @Composable BoxScope.() -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
             .size(21.dp)
             .scale(if (focused) 1.15f else 1f)
+            .then(modifier)
             // hasFocus, not isFocused: while OK is down, Compose hands focus to the clickable
             // inside, and the button should stay lit through the press.
             .onFocusChanged { focused = it.hasFocus }
@@ -959,12 +1197,82 @@ private suspend fun FocusRequester?.focusWhenReady(): Boolean {
     return false
 }
 
-/** True when the item at [index] is on screen from edge to edge, so focusing it scrolls nothing. */
-private fun LazyListState.isFullyShown(index: Int): Boolean {
+/**
+ * Scrolls just far enough to bring the item at [index] inside the safe area, the same way focus
+ * does. An item not on screen at all is scrolled to the start, which is also what composes it.
+ */
+private suspend fun LazyListState.reveal(index: Int) {
     val layout = layoutInfo
-    return layout.visibleItemsInfo.any {
-        it.index == index && it.offset >= 0 && it.offset + it.size <= layout.viewportEndOffset
+    val item = layout.visibleItemsInfo.firstOrNull { it.index == index }
+        ?: return scrollToItem(index)
+    // Item offsets start where the content padding ends, which is the safe area's edge.
+    val end = layout.viewportEndOffset - layout.afterContentPadding
+    val by = when {
+        item.offset < 0 -> item.offset
+        item.offset + item.size > end -> item.offset + item.size - end
+        else -> return
     }
+    animateScrollBy(by.toFloat())
+}
+
+/**
+ * Keeps the row where it is through the reorder that comes next.
+ *
+ * A row keeps its first tile on screen through a reorder, so moving the first tile on screen
+ * scrolled the whole row along under it instead, and the tile appeared not to move. Holding the
+ * position by place rather than by tile lets the tile itself move.
+ */
+private fun LazyListState.holdStill() {
+    requestScrollToItem(firstVisibleItemIndex, firstVisibleItemScrollOffset)
+}
+
+/**
+ * Makes a row one group for focus, and brings focus coming in from above or below back to the
+ * tile it left, rather than to whichever tile happens to sit nearest. Only while that tile is on
+ * screen: asking for one that is not would cancel the move altogether.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+private fun Modifier.rowFocus(
+    listState: LazyListState,
+    last: () -> String?,
+    requesters: Map<String, FocusRequester>,
+    onFocused: () -> Unit,
+): Modifier = onFocusChanged { if (it.hasFocus) onFocused() }
+    .focusProperties {
+        enter = { direction ->
+            val back = last()?.takeIf { id -> listState.layoutInfo.visibleItemsInfo.any { it.key == id } }
+            val across = direction == FocusDirection.Up || direction == FocusDirection.Down
+            back?.takeIf { across }?.let { requesters[it] } ?: FocusRequester.Default
+        }
+    }
+    .focusGroup()
+
+/**
+ * How far a row scrolls to show the tile that takes focus: only as far as it takes to bring the
+ * tile inside the safe area, [margin] in from either edge of the screen.
+ *
+ * Left to itself, Compose scrolls a focused tile only until it touches the edge of the screen, in
+ * the strip a TV may crop off. On a TV it does something else again: it holds the focused tile 30%
+ * of the way along the row, so the row slides under it on nearly every press.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private class SafeAreaScroll(private val margin: Float) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val beforeStart = offset - margin
+        val pastEnd = offset + size - (containerSize - margin)
+        return when {
+            beforeStart < 0 -> beforeStart
+            pastEnd > 0 -> pastEnd
+            else -> 0f
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SafeAreaScrolling(content: @Composable () -> Unit) {
+    val spec = with(LocalDensity.current) { remember(this) { SafeAreaScroll(SafeH.toPx()) } }
+    CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
 }
 
 /** How long OK must be held for the menu rather than a launch, if no long-press flag arrives. */
@@ -1113,7 +1421,16 @@ private fun AppTile(
                     modifier = Modifier.fillMaxSize().padding(if (app.isBanner) 0.dp else 12.dp),
                 )
             } else {
-                Text(app.label, color = OnSurface, fontSize = 12.sp)
+                // Clear of the focus ring, which is drawn over the tile's edge.
+                Text(
+                    app.label,
+                    color = OnSurface,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(8.dp),
+                )
             }
         }
         Spacer(Modifier.height(LabelGap))
@@ -1297,6 +1614,31 @@ private fun Context.switchToInput(inputId: String) {
     startActivitySafely(InputRepository.switchIntent(inputId))
 }
 
-private fun Context.startActivitySafely(intent: Intent) {
-    runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+/** Starts [intent], and says whether it could. A TV can lack any of the screens Orbit links to. */
+private fun Context.startActivitySafely(intent: Intent): Boolean =
+    runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+
+/** True when the owner has turned on Orbit's home button service in the accessibility settings. */
+private fun isHomeButtonServiceOn(context: Context): Boolean {
+    val ours = ComponentName(context, HomeButtonService::class.java)
+    val enabled = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+    ) ?: return false
+    return enabled.split(':').any { ComponentName.unflattenFromString(it) == ours }
+}
+
+/** The home screen's own settings. */
+private object HomePrefs {
+    private const val KEY_NOTICE_DISMISSED = "notice_dismissed"
+
+    fun noticeDismissed(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_NOTICE_DISMISSED, false)
+
+    fun dismissNotice(context: Context) {
+        prefs(context).edit().putBoolean(KEY_NOTICE_DISMISSED, true).apply()
+    }
+
+    private fun prefs(context: Context) =
+        context.getSharedPreferences("orbit.home", Context.MODE_PRIVATE)
 }

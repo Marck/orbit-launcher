@@ -64,6 +64,16 @@ Hold OK on a tile, or press Menu, to open its menu:
 At either end of a row or grid, left and right wrap around, so the far end is one
 press away rather than a long walk.
 
+## Back, Home and coming back
+
+Up and down between the rows and the top bar land on the tile you left, not on
+whichever one happens to be nearest. Coming back from an app, an input, the TV's
+settings or a picker puts focus back where it was, in the row or the top bar.
+
+Back closes an open menu or puts back a move. Otherwise it goes to the first app,
+rather than closing Orbit. Home pressed while Orbit is showing does the same, and
+also closes the menu and puts back a move that was not kept.
+
 ## Top bar
 
 Left of the profile picture sit three small buttons: the TV's own inputs panel, the
