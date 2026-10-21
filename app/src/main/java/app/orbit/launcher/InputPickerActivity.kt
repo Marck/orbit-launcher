@@ -74,9 +74,9 @@ private fun Screen() {
     val inputs by produceState(initialValue = emptyList<TvInput>()) {
         value = withContext(Dispatchers.IO) { InputRepository.load(context) }
     }
-    val pinRevision = PinStore.revision
-    val pins = remember(pinRevision) { PinStore.pinned(context, PinStore.INPUTS) }
-    val ordered = remember(inputs) { PinStore.arrange(inputs, pins) { it.id } }
+    val revision = FavoriteStore.revision
+    val favorites = remember(revision) { FavoriteStore.favorites(context, FavoriteStore.INPUTS) }
+    val ordered = remember(inputs) { FavoriteStore.arrange(inputs, favorites) { it.id } }
 
     val first = remember { FocusRequester() }
     LaunchedEffect(ordered.firstOrNull()?.id) {
@@ -93,11 +93,11 @@ private fun Screen() {
             .background(Color.Black)
             .padding(horizontal = SafeH, vertical = SafeV)
     ) {
-        Text("Pinned inputs", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
+        Text("Favorite inputs", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (pins.isEmpty()) "Select an input to keep it at the front of the row."
-            else "Select to add or remove. ${pins.size} chosen.",
+            if (favorites.isEmpty()) "Select an input to keep it at the front of the row."
+            else "Select to add or remove. ${favorites.size} chosen.",
             color = Muted,
             fontSize = 14.sp,
         )
@@ -113,10 +113,10 @@ private fun Screen() {
             itemsIndexed(ordered, key = { _, input -> input.id }) { index, input ->
                 Tile(
                     input = input,
-                    pinned = input.id in pins,
+                    favorite = input.id in favorites,
                     requester = if (index == 0) first else null,
                 ) {
-                    PinStore.toggle(context, PinStore.INPUTS, input.id)
+                    FavoriteStore.toggle(context, FavoriteStore.INPUTS, input.id)
                 }
             }
         }
@@ -126,7 +126,7 @@ private fun Screen() {
 @Composable
 private fun Tile(
     input: TvInput,
-    pinned: Boolean,
+    favorite: Boolean,
     requester: FocusRequester?,
     onClick: () -> Unit,
 ) {
@@ -165,7 +165,7 @@ private fun Tile(
                 Text(it, color = Color(0xCCFFFFFF), fontSize = 11.sp, maxLines = 1)
             }
         }
-        if (pinned) {
+        if (favorite) {
             Box(
                 Modifier
                     .align(Alignment.TopEnd)

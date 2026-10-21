@@ -99,7 +99,7 @@ private val Muted = Color(0xFF8B93A4)
 private val LastInput = Color(0xFF1AA3C4)
 private val Editing = Color(0xFFFFC14D)
 
-private const val ADD_TILE = "add-favourite"
+private const val ADD_TILE = "add-favorite"
 private const val SETTINGS_TILE = "settings-tile"
 private const val ADD_INPUT_TILE = "add-input"
 
@@ -108,7 +108,7 @@ private data class TileMenu(
     val key: String,
     val id: String,
     val label: String,
-    val pinned: Boolean,
+    val favorite: Boolean,
     val packageName: String? = null,
 )
 
@@ -153,17 +153,17 @@ private fun HomeScreen() {
     }
     var noticeDismissed by remember { mutableStateOf(false) }
 
-    // Favourites first, in the owner's order. Reading the revision here is what reorders the
-    // rows the moment a pin changes, without touching the device again.
-    val pinRevision = PinStore.revision
-    val appPins = remember(pinRevision) { PinStore.pinned(context, PinStore.APPS) }
-    val inputPins = remember(pinRevision) { PinStore.pinned(context, PinStore.INPUTS) }
-    val orderedApps = remember(apps, appPins) { PinStore.arrange(apps, appPins) { it.packageName } }
-    val orderedInputs = remember(inputs, inputPins) { PinStore.arrange(inputs, inputPins) { it.id } }
+    // Favorites first, in the owner's order. Reading the revision here is what reorders the
+    // rows the moment a favorite changes, without touching the device again.
+    val revision = FavoriteStore.revision
+    val appFavorites = remember(revision) { FavoriteStore.favorites(context, FavoriteStore.APPS) }
+    val inputFavorites = remember(revision) { FavoriteStore.favorites(context, FavoriteStore.INPUTS) }
+    val orderedApps = remember(apps, appFavorites) { FavoriteStore.arrange(apps, appFavorites) { it.packageName } }
+    val orderedInputs = remember(inputs, inputFavorites) { FavoriteStore.arrange(inputs, inputFavorites) { it.id } }
 
     var menu by remember { mutableStateOf<TileMenu?>(null) }
     var editing by remember { mutableStateOf<String?>(null) }
-    var editingKey by remember { mutableStateOf(PinStore.APPS) }
+    var editingKey by remember { mutableStateOf(FavoriteStore.APPS) }
     var editSnapshot by remember { mutableStateOf<List<String>?>(null) }
     var confirmation by remember { mutableStateOf<String?>(null) }
     // Closing the menu has to hand focus back to the tile it belonged to. Without this the
@@ -178,11 +178,11 @@ private fun HomeScreen() {
         if (apps.isEmpty()) return@LaunchedEffect
         val present = apps.map { it.packageName }.toSet()
         if (known.isNotEmpty() && (known - present).isNotEmpty()) confirmation = "It's gone now"
-        PinStore.prune(context, PinStore.APPS, present)
+        FavoriteStore.prune(context, FavoriteStore.APPS, present)
         known = present
     }
     LaunchedEffect(inputs) {
-        if (inputs.isNotEmpty()) PinStore.prune(context, PinStore.INPUTS, inputs.map { it.id }.toSet())
+        if (inputs.isNotEmpty()) FavoriteStore.prune(context, FavoriteStore.INPUTS, inputs.map { it.id }.toSet())
     }
     LaunchedEffect(confirmation) {
         if (confirmation != null) {
@@ -193,19 +193,19 @@ private fun HomeScreen() {
 
     fun closeMenu(target: TileMenu) {
         menu = null
-        if (target.key == PinStore.APPS) refocusApps++ else refocusInputs++
+        if (target.key == FavoriteStore.APPS) refocusApps++ else refocusInputs++
     }
 
     fun beginEdit(key: String, id: String) {
-        editSnapshot = PinStore.pinned(context, key)
+        editSnapshot = FavoriteStore.favorites(context, key)
         editingKey = key
-        // Only a favourite has a place in the order, so moving one pins it first.
-        if (!PinStore.isPinned(context, key, id)) PinStore.toggle(context, key, id)
+        // Only a favorite has a place in the order, so moving one makes it a favorite first.
+        if (!FavoriteStore.isFavorite(context, key, id)) FavoriteStore.toggle(context, key, id)
         editing = id
     }
 
     fun endEdit(revert: Boolean) {
-        if (revert) editSnapshot?.let { PinStore.replace(context, editingKey, it) }
+        if (revert) editSnapshot?.let { FavoriteStore.replace(context, editingKey, it) }
         editing = null
         editSnapshot = null
     }
@@ -227,42 +227,42 @@ private fun HomeScreen() {
                 )
                 Spacer(Modifier.height(14.dp))
             }
-            RowLabel(if (editing != null && editingKey == PinStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
+            RowLabel(if (editing != null && editingKey == FavoriteStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
             AppsRow(
                 apps = orderedApps,
-                pins = appPins,
+                favorites = appFavorites,
                 refocus = refocusApps,
-                editing = editing.takeIf { editingKey == PinStore.APPS },
+                editing = editing.takeIf { editingKey == FavoriteStore.APPS },
                 onMenu = { app ->
                     menu = TileMenu(
-                        key = PinStore.APPS,
+                        key = FavoriteStore.APPS,
                         id = app.packageName,
                         label = app.label,
-                        pinned = app.packageName in appPins,
+                        favorite = app.packageName in appFavorites,
                         // Only set when the system would actually accept an uninstall, which
                         // is what decides whether the entry is offered at all.
                         packageName = app.packageName.takeIf { app.removable },
                     )
                 },
-                onMove = { delta -> editing?.let { PinStore.move(context, PinStore.APPS, it, delta) } },
+                onMove = { delta -> editing?.let { FavoriteStore.move(context, FavoriteStore.APPS, it, delta) } },
                 onEndEdit = { revert -> endEdit(revert) },
             )
             Spacer(Modifier.height(20.dp))
-            RowLabel(if (editing != null && editingKey == PinStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
+            RowLabel(if (editing != null && editingKey == FavoriteStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
             InputsRow(
                 inputs = orderedInputs,
-                pins = inputPins,
+                favorites = inputFavorites,
                 refocus = refocusInputs,
-                editing = editing.takeIf { editingKey == PinStore.INPUTS },
+                editing = editing.takeIf { editingKey == FavoriteStore.INPUTS },
                 onMenu = { input ->
                     menu = TileMenu(
-                        key = PinStore.INPUTS,
+                        key = FavoriteStore.INPUTS,
                         id = input.id,
                         label = input.label,
-                        pinned = input.id in inputPins,
+                        favorite = input.id in inputFavorites,
                     )
                 },
-                onMove = { delta -> editing?.let { PinStore.move(context, PinStore.INPUTS, it, delta) } },
+                onMove = { delta -> editing?.let { FavoriteStore.move(context, FavoriteStore.INPUTS, it, delta) } },
                 onEndEdit = { revert -> endEdit(revert) },
             )
         }
@@ -272,9 +272,9 @@ private fun HomeScreen() {
         menu?.let { target ->
             TileMenuSheet(
                 target = target,
-                onPin = {
-                    PinStore.toggle(context, target.key, target.id)
-                    confirmation = if (target.pinned) "Removed from favourites" else "Added to favourites"
+                onFavorite = {
+                    FavoriteStore.toggle(context, target.key, target.id)
+                    confirmation = if (target.favorite) "Removed from favorites" else "Added to favorites"
                     closeMenu(target)
                 },
                 onMove = {
@@ -320,7 +320,7 @@ private fun Confirmation(text: String) {
 @Composable
 private fun TileMenuSheet(
     target: TileMenu,
-    onPin: () -> Unit,
+    onFavorite: () -> Unit,
     onMove: () -> Unit,
     onUninstall: () -> Unit,
     onDismiss: () -> Unit,
@@ -356,9 +356,9 @@ private fun TileMenuSheet(
             Text(target.label, color = Color.White, fontSize = 16.sp)
             Spacer(Modifier.height(14.dp))
             MenuEntry(
-                label = if (target.pinned) "Remove from favourites" else "Add to favourites",
+                label = if (target.favorite) "Remove from favorites" else "Add to favorites",
                 requester = first,
-                onClick = onPin,
+                onClick = onFavorite,
             )
             Spacer(Modifier.height(8.dp))
             MenuEntry(label = "Move", requester = null, onClick = onMove)
@@ -392,7 +392,7 @@ private fun MenuEntry(label: String, requester: FocusRequester?, onClick: () -> 
 @Composable
 private fun AppsRow(
     apps: List<LaunchableApp>,
-    pins: List<String>,
+    favorites: List<String>,
     refocus: Int,
     editing: String?,
     onMenu: (LaunchableApp) -> Unit,
@@ -460,7 +460,7 @@ private fun AppsRow(
         itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
             AppTile(
                 app = app,
-                pinned = app.packageName in pins,
+                favorite = app.packageName in favorites,
                 editing = editing == app.packageName,
                 requester = requesters.getOrPut(app.packageName) { FocusRequester() },
                 onFocused = { lastFocused = app.packageName },
@@ -490,7 +490,7 @@ private fun AppsRow(
 @Composable
 private fun InputsRow(
     inputs: List<TvInput>,
-    pins: List<String>,
+    favorites: List<String>,
     refocus: Int,
     editing: String?,
     onMenu: (TvInput) -> Unit,
@@ -537,7 +537,7 @@ private fun InputsRow(
                     sub = input.sub,
                     highlighted = input.id == lastInput,
                     dimmed = !input.connected,
-                    pinned = input.id in pins,
+                    favorite = input.id in favorites,
                     editing = editing == input.id,
                     requester = requesters.getOrPut(input.id) { FocusRequester() },
                     onFocused = { lastFocused = input.id },
@@ -559,12 +559,12 @@ private fun InputsRow(
                     requester = requesters.getOrPut(ADD_INPUT_TILE) { FocusRequester() },
                     onEdgeRight = null,
                     width = InputW,
-                    label = "Pin",
+                    label = "Add input to favorites",
                 ) { context.startActivitySafely(Intent(context, InputPickerActivity::class.java)) }
             }
             item(key = "all-inputs") {
                 InputTile(label = "All inputs", sub = null, highlighted = false, dimmed = false,
-                    pinned = false, editing = false, requester = null, onFocused = {},
+                    favorite = false, editing = false, requester = null, onFocused = {},
                     onMenu = {}, onMove = {}, onEndEdit = {}) {
                     InputRepository.allInputsIntent(context)?.let { context.startActivitySafely(it) }
                 }
@@ -815,7 +815,7 @@ private fun Modifier.tileKeys(
 
 
 @Composable
-private fun BoxScope.FavouriteDot() {
+private fun BoxScope.FavoriteDot() {
     Box(
         Modifier
             .align(Alignment.TopEnd)
@@ -829,7 +829,7 @@ private fun BoxScope.FavouriteDot() {
 @Composable
 private fun AppTile(
     app: LaunchableApp,
-    pinned: Boolean,
+    favorite: Boolean,
     editing: Boolean,
     requester: FocusRequester?,
     onFocused: () -> Unit,
@@ -875,7 +875,7 @@ private fun AppTile(
             } else {
                 Text(app.label, color = OnSurface, fontSize = 12.sp)
             }
-            if (pinned) FavouriteDot()
+            if (favorite) FavoriteDot()
         }
         Spacer(Modifier.height(6.dp))
         Text(
@@ -896,7 +896,7 @@ private fun PlusTile(
     requester: FocusRequester,
     onEdgeRight: (() -> Unit)?,
     width: Dp = TileW,
-    label: String = "Add",
+    label: String = "Add app to favorites",
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -928,7 +928,16 @@ private fun PlusTile(
             Text("+", color = Color(0xFF9FC3FF), fontSize = 26.sp, fontWeight = FontWeight.Light)
         }
         Spacer(Modifier.height(6.dp))
-        Text(if (focused) label else "", color = Color.White, fontSize = 12.sp)
+        // Held to the tile's width, so a long label cannot widen the tile and shove the row.
+        Text(
+            if (focused) label else "",
+            color = Color.White,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(width),
+        )
     }
 }
 
@@ -938,7 +947,7 @@ private fun InputTile(
     sub: String?,
     highlighted: Boolean,
     dimmed: Boolean,
-    pinned: Boolean,
+    favorite: Boolean,
     editing: Boolean,
     requester: FocusRequester?,
     onFocused: () -> Unit,
@@ -994,7 +1003,7 @@ private fun InputTile(
                 )
             }
         }
-        if (pinned) FavouriteDot()
+        if (favorite) FavoriteDot()
     }
 }
 
