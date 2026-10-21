@@ -8,9 +8,12 @@ import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -67,6 +70,7 @@ import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -86,6 +90,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -105,8 +110,23 @@ private val TileH = 66.dp
 // Narrow enough that a typical set's inputs fit the safe area without the row scrolling. A
 // scrolling row slides its first tile out of line with the apps above it.
 private val InputW = 100.dp
-/** Both rows, so the inputs row holds still while its list is still loading too. */
-private val RowHeight = 86.dp
+/** How much a focused tile grows, about what the stock launcher's own tiles do. */
+private const val FocusScale = 1.2f
+
+/** How far a focused tile reaches past each of its edges. */
+private val PopOut = TileH * (FocusScale - 1f) / 2
+
+/** Room above the tiles. A row clips at its sides only, so a grown tile can reach past it. */
+private val RowTop = 4.dp
+
+/** Between a tile and its label, far enough that the grown tile does not cover the label. */
+private val LabelGap = PopOut + 4.dp
+
+/**
+ * Both rows: the tiles, the gap and a label line. Fixed, so the rows below hold still while a
+ * list is still loading.
+ */
+private val RowHeight = RowTop + TileH + LabelGap + 16.dp
 
 private val Surface = Color(0xFF14181F)
 private val OnSurface = Color(0xFFDDE5F0)
@@ -283,7 +303,8 @@ private fun HomeScreen() {
                 onMove = { delta -> editing?.let { FavouriteStore.move(context, FavouriteStore.APPS, it, delta) } },
                 onEndEdit = { revert -> endEdit(revert) },
             )
-            Spacer(Modifier.height(20.dp))
+            // Smaller than it looks: the apps row already ends in room for its tile labels.
+            Spacer(Modifier.height(12.dp))
             RowLabel(if (editing != null && editingKey == FavouriteStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
             InputsRow(
                 inputs = favouriteInputs,
@@ -568,12 +589,10 @@ private fun AppsRow(
     }
 
     LazyRow(
-        // Fixed so the rows below hold still while the list is still loading.
         modifier = Modifier.height(RowHeight),
         state = listState,
-        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(horizontal = SafeH),
+        contentPadding = PaddingValues(start = SafeH, top = RowTop, end = SafeH),
     ) {
         itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
             AppTile(
@@ -655,7 +674,7 @@ private fun InputsRow(
         modifier = Modifier.fillMaxWidth().height(RowHeight),
         state = listState,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
-        contentPadding = PaddingValues(horizontal = SafeH),
+        contentPadding = PaddingValues(start = SafeH, top = RowTop, end = SafeH),
     ) {
         itemsIndexed(inputs, key = { _, input -> input.id }) { index, input ->
             InputTile(
@@ -1018,13 +1037,15 @@ private fun AppTile(
     val lit = focused || held
     val spot = remember { Spot() }
     Column(
-        Modifier.onGloballyPositioned { spot.whole = it.rootBounds() },
+        Modifier
+            .zIndex(if (lit) 1f else 0f)
+            .onGloballyPositioned { spot.whole = it.rootBounds() },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             Modifier
                 .size(TileW, TileH)
-                .scale(if (lit) 1.06f else 1f)
+                .popOut(lit)
                 .onGloballyPositioned { spot.tile = it.rootBounds() }
                 .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
                 .onFocusChanged {
@@ -1057,16 +1078,15 @@ private fun AppTile(
                 Text(app.label, color = OnSurface, fontSize = 12.sp)
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
+        Spacer(Modifier.height(LabelGap))
+        TileLabel(
             text = when {
                 editing -> "Left or right to move"
                 lit -> app.label
                 else -> ""
             },
+            width = TileW,
             color = if (editing) Editing else Color.White,
-            fontSize = 12.sp,
-            maxLines = 1,
         )
     }
 }
@@ -1081,11 +1101,14 @@ private fun PlusTile(
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.zIndex(if (focused) 1f else 0f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Box(
             Modifier
                 .size(width, TileH)
-                .scale(if (focused) 1.06f else 1f)
+                .popOut(focused)
                 .focusRequester(requester)
                 .onFocusChanged {
                     focused = it.isFocused
@@ -1111,17 +1134,41 @@ private fun PlusTile(
         ) {
             Text("+", color = Color(0xFF9FC3FF), fontSize = 26.sp, fontWeight = FontWeight.Light)
         }
-        Spacer(Modifier.height(6.dp))
-        // Held to the tile's width, so a long label cannot widen the tile and shove the row.
+        Spacer(Modifier.height(LabelGap))
+        TileLabel(if (focused) label else "", width = width)
+    }
+}
+
+/**
+ * One line under a tile, held to the tile's width so a long label cannot widen the tile and
+ * shove the row. A label that does not fit scrolls through, as the stock launcher's do, rather
+ * than being cut short.
+ */
+@Composable
+private fun TileLabel(text: String, width: Dp, color: Color = Color.White) {
+    Box(Modifier.width(width), contentAlignment = Alignment.Center) {
         Text(
-            if (focused) label else "",
-            color = Color.White,
+            text,
+            color = color,
             fontSize = 12.sp,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(width),
+            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
         )
+    }
+}
+
+/**
+ * Grows a lit tile, quickly but not instantly, so focus reads as the tile lifting towards you.
+ *
+ * A layer scale rather than a size change, so its neighbours stay where they are and the grown
+ * tile overlaps the gap, as on the stock launcher.
+ */
+@Composable
+private fun Modifier.popOut(lit: Boolean): Modifier {
+    val scale by animateFloatAsState(if (lit) FocusScale else 1f, tween(150), label = "pop-out")
+    return graphicsLayer {
+        scaleX = scale
+        scaleY = scale
     }
 }
 
@@ -1146,8 +1193,9 @@ private fun InputTile(
     val spot = remember { Spot() }
     Box(
         Modifier
+            .zIndex(if (lit) 1f else 0f)
             .size(InputW, TileH)
-            .scale(if (lit) 1.06f else 1f)
+            .popOut(lit)
             .onGloballyPositioned { spot.tile = it.rootBounds() }
             .alpha(if (dimmed) 0.45f else 1f)
             .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
@@ -1171,14 +1219,18 @@ private fun InputTile(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 6.dp),
         ) {
+            // Lit, a name too long for the tile goes to one line and scrolls through, the same
+            // as the labels under the app tiles. Unlit, it wraps and is cut short.
+            val scroll = if (lit) Modifier.basicMarquee(iterations = Int.MAX_VALUE) else Modifier
             Text(
                 label,
                 color = Color.White,
                 fontSize = 13.sp,
                 lineHeight = 15.sp,
-                maxLines = if (sub == null) 2 else 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = if (sub == null && !lit) 2 else 1,
+                overflow = if (lit) TextOverflow.Clip else TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
+                modifier = scroll,
             )
             sub?.let {
                 Text(
@@ -1186,7 +1238,8 @@ private fun InputTile(
                     color = Color(0xCCFFFFFF),
                     fontSize = 11.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    overflow = if (lit) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = scroll,
                 )
             }
         }
