@@ -96,7 +96,7 @@ private fun Screen() {
         Text("Favourite inputs", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (favourites.isEmpty()) "Select an input to keep it at the front of the row."
+            if (favourites.isEmpty()) "Select an input to add it to the row."
             else "Select to add or remove. ${favourites.size} chosen.",
             color = Muted,
             fontSize = 14.sp,

@@ -127,7 +127,7 @@ private fun PickerScreen() {
         Text("Favourite apps", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (favourites.isEmpty()) "Select an app to keep it at the front of the row."
+            if (favourites.isEmpty()) "Select an app to add it to the row."
             else "Select to add or remove. ${favourites.size} chosen.",
             color = Muted,
             fontSize = 14.sp,

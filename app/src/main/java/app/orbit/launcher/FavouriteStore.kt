@@ -32,9 +32,6 @@ object FavouriteStore {
             ?.filter { it.isNotBlank() }
             .orEmpty()
 
-    fun isFavourite(context: Context, key: String, id: String): Boolean =
-        id in favourites(context, key)
-
     fun toggle(context: Context, key: String, id: String) {
         val current = favourites(context, key).toMutableList()
         if (!current.remove(id)) current += id
@@ -67,6 +64,12 @@ object FavouriteStore {
 
     /** Replaces the whole order, used to undo a cancelled move. */
     fun replace(context: Context, key: String, values: List<String>) = write(context, key, values)
+
+    /** Only the favourites, in the owner's order. A favourite that is not in [items] is skipped. */
+    fun <T> pick(items: List<T>, favourites: List<String>, id: (T) -> String): List<T> {
+        val byId = items.associateBy(id)
+        return favourites.mapNotNull { byId[it] }
+    }
 
     /** Favourites in the owner's order, then everything else in its existing order. */
     fun <T> arrange(items: List<T>, favourites: List<String>, id: (T) -> String): List<T> {
