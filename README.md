@@ -43,7 +43,9 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-CI builds the same artifact, but only on manual `workflow_dispatch`.
+CI builds the same artifact, runs Android lint and the unit tests on every pull request
+and every push to `main`; it can also be started by hand. New lint errors fail the build;
+the ones already there are listed in `app/lint-baseline.xml`.
 
 ## Favorites and order
 

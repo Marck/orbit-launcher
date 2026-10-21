@@ -34,6 +34,14 @@ android {
     buildFeatures {
         compose = true
     }
+
+    lint {
+        // Warnings that were already there when lint was switched on. New ones fail the build.
+        baseline = file("lint-baseline.xml")
+        // Missing package visibility hides the owner's apps on Android 11 and later, and the
+        // favorites prune would then delete them. Never let that through again.
+        error += "QueryPermissionsNeeded"
+    }
 }
 
 dependencies {
@@ -41,9 +49,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
-    implementation("androidx.tv:tv-material:1.0.0")
-    debugImplementation("androidx.compose.ui:ui-tooling")
 }
