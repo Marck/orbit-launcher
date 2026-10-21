@@ -2,7 +2,6 @@ package app.orbit.launcher
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
@@ -34,6 +33,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -83,14 +84,9 @@ private val SafeH = 48.dp
 private val SafeV = 27.dp
 private val TileW = 111.dp
 private val TileH = 66.dp
-// Narrow enough that a typical set's inputs, plus the two fixed tiles, fit the safe area
-// without the row scrolling. A scrolling row slides its first tile out of line with the apps
-// above it, and slides its last tile up against the fixed tiles.
+// Narrow enough that a typical set's inputs fit the safe area without the row scrolling. A
+// scrolling row slides its first tile out of line with the apps above it.
 private val InputW = 100.dp
-private val SquareW = 75.dp
-
-/** Keeps a focused input tile clear of the fixed tiles even when the row does scroll. */
-private val RowGap = 24.dp
 private val AppsRowHeight = 86.dp
 
 private val Surface = Color(0xFF14181F)
@@ -98,9 +94,9 @@ private val OnSurface = Color(0xFFDDE5F0)
 private val Muted = Color(0xFF8B93A4)
 private val LastInput = Color(0xFF1AA3C4)
 private val Editing = Color(0xFFFFC14D)
+private val Glyph = Color(0xFFBFC9DA)
 
 private const val ADD_TILE = "add-favorite"
-private const val SETTINGS_TILE = "settings-tile"
 private const val ADD_INPUT_TILE = "add-input"
 
 /** What the long-press menu is acting on. */
@@ -504,9 +500,9 @@ private fun InputsRow(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    fun jumpTo(id: String, index: Int? = null) {
+    fun jumpTo(index: Int, id: String) {
         scope.launch {
-            if (index != null) runCatching { listState.scrollToItem(index) }
+            runCatching { listState.scrollToItem(index) }
             requesters[id].focusWhenReady()
         }
     }
@@ -524,67 +520,43 @@ private fun InputsRow(
         }
     }
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        LazyRow(
-            modifier = Modifier.weight(1f),
-            state = listState,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
-            contentPadding = PaddingValues(start = SafeH),
-        ) {
-            itemsIndexed(inputs, key = { _, input -> input.id }) { index, input ->
-                InputTile(
-                    label = input.label,
-                    sub = input.sub,
-                    highlighted = input.id == lastInput,
-                    dimmed = !input.connected,
-                    favorite = input.id in favorites,
-                    editing = editing == input.id,
-                    requester = requesters.getOrPut(input.id) { FocusRequester() },
-                    onFocused = { lastFocused = input.id },
-                    onMenu = { onMenu(input) },
-                    onMove = onMove,
-                    onEndEdit = onEndEdit,
-                    onEdgeLeft = if (index == 0) {
-                        { jumpTo(SETTINGS_TILE) }
-                    } else {
-                        null
-                    },
-                ) {
-                    InputRepository.rememberUse(context, input.id)
-                    context.startActivitySafely(InputRepository.switchIntent(input.id))
-                }
-            }
-            if (inputs.isNotEmpty()) item(key = ADD_INPUT_TILE) {
-                PlusTile(
-                    requester = requesters.getOrPut(ADD_INPUT_TILE) { FocusRequester() },
-                    onEdgeRight = null,
-                    width = InputW,
-                    label = "Add input to favorites",
-                ) { context.startActivitySafely(Intent(context, InputPickerActivity::class.java)) }
-            }
-            item(key = "all-inputs") {
-                InputTile(label = "All inputs", sub = null, highlighted = false, dimmed = false,
-                    favorite = false, editing = false, requester = null, onFocused = {},
-                    onMenu = {}, onMove = {}, onEndEdit = {}) {
-                    InputRepository.allInputsIntent(context)?.let { context.startActivitySafely(it) }
-                }
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        contentPadding = PaddingValues(horizontal = SafeH),
+    ) {
+        itemsIndexed(inputs, key = { _, input -> input.id }) { index, input ->
+            InputTile(
+                label = input.label,
+                sub = input.sub,
+                highlighted = input.id == lastInput,
+                dimmed = !input.connected,
+                favorite = input.id in favorites,
+                editing = editing == input.id,
+                requester = requesters.getOrPut(input.id) { FocusRequester() },
+                onFocused = { lastFocused = input.id },
+                onMenu = { onMenu(input) },
+                onMove = onMove,
+                onEndEdit = onEndEdit,
+                onEdgeLeft = if (index == 0) {
+                    { jumpTo(inputs.size, ADD_INPUT_TILE) }
+                } else {
+                    null
+                },
+            ) {
+                InputRepository.rememberUse(context, input.id)
+                context.startActivitySafely(InputRepository.switchIntent(input.id))
             }
         }
-        Spacer(Modifier.width(RowGap))
-        val storeIntent = remember { InputRepository.storeIntent(context) }
-        val settingsIntent = remember { InputRepository.settingsIntent() }
-        SquareTile(
-            icon = remember { InputRepository.iconFor(context, storeIntent) },
-            fallback = "Store",
-        ) { storeIntent?.let { context.startActivitySafely(it) } }
-        Spacer(Modifier.width(9.dp))
-        SquareTile(
-            icon = remember { InputRepository.iconFor(context, settingsIntent) },
-            fallback = "Settings",
-            requester = requesters.getOrPut(SETTINGS_TILE) { FocusRequester() },
-            onEdgeRight = { inputs.firstOrNull()?.let { jumpTo(it.id, 0) } },
-        ) { context.startActivitySafely(settingsIntent) }
-        Spacer(Modifier.width(SafeH))
+        if (inputs.isNotEmpty()) item(key = ADD_INPUT_TILE) {
+            PlusTile(
+                requester = requesters.getOrPut(ADD_INPUT_TILE) { FocusRequester() },
+                onEdgeRight = { inputs.firstOrNull()?.let { jumpTo(0, it.id) } },
+                width = InputW,
+                label = "Add input to favorites",
+            ) { context.startActivitySafely(Intent(context, InputPickerActivity::class.java)) }
+        }
     }
 }
 
@@ -602,36 +574,83 @@ private fun TopBar() {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(date.format(now), color = Muted, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
+        Shortcuts()
         Avatar()
         Spacer(Modifier.width(9.dp))
         Text(time.format(now), color = Muted, fontSize = 12.sp)
     }
 }
 
+/**
+ * The way out to the TV's own screens, left of the profile picture as on the stock launcher.
+ *
+ * Each is offered only when the TV has somewhere for it to go.
+ */
+@Composable
+private fun Shortcuts() {
+    val context = LocalContext.current
+    val inputsIntent = remember { InputRepository.allInputsIntent(context) }
+    val storeIntent = remember { InputRepository.storeIntent(context) }
+    val settingsIntent = remember { InputRepository.settingsIntent() }
+    // The store's own icon, so it reads as the store at a glance. Inputs and settings have no
+    // icon worth borrowing, so they get the same glyphs the stock top bar uses.
+    val storeIcon = remember(storeIntent) {
+        runCatching {
+            InputRepository.iconFor(context, storeIntent)?.toBitmap()?.asImageBitmap()
+        }.getOrNull()
+    }
+
+    if (inputsIntent != null) {
+        TopBarButton(onClick = { context.startActivitySafely(inputsIntent) }) {
+            Icon(
+                imageVector = Glyphs.Input,
+                contentDescription = "All inputs",
+                tint = Glyph,
+                modifier = Modifier.padding(4.dp),
+            )
+        }
+        Spacer(Modifier.width(9.dp))
+    }
+    if (storeIntent != null) {
+        TopBarButton(onClick = { context.startActivitySafely(storeIntent) }) {
+            if (storeIcon != null) {
+                Image(
+                    bitmap = storeIcon,
+                    contentDescription = "Play Store",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(2.dp),
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.ShoppingCart,
+                    contentDescription = "Play Store",
+                    tint = Glyph,
+                    modifier = Modifier.padding(4.dp),
+                )
+            }
+        }
+        Spacer(Modifier.width(9.dp))
+    }
+    TopBarButton(onClick = { context.startActivitySafely(settingsIntent) }) {
+        Icon(
+            imageVector = Icons.Filled.Settings,
+            contentDescription = "Settings",
+            tint = Glyph,
+            modifier = Modifier.padding(3.dp),
+        )
+    }
+    Spacer(Modifier.width(9.dp))
+}
+
 @Composable
 private fun Avatar() {
     val context = LocalContext.current
-    var focused by remember { mutableStateOf(false) }
     // Keyed on the revision so a picture chosen in the picker shows on return.
     val picture by produceState<android.graphics.Bitmap?>(initialValue = null, Profile.revision) {
         value = withContext(Dispatchers.IO) { Profile.avatar(context) }
     }
-    Box(
-        Modifier
-            .size(21.dp)
-            .scale(if (focused) 1.15f else 1f)
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable { context.startActivitySafely(Intent(context, AvatarPickerActivity::class.java)) }
-            .clip(CircleShape)
-            .background(Color(0xFF2B3242))
-            // A faint ring always, so a dark picture still reads as a disc rather than a hole.
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Color.White else Color(0x3DFFFFFF),
-                shape = CircleShape,
-            ),
-        contentAlignment = Alignment.Center,
+    TopBarButton(
+        onClick = { context.startActivitySafely(Intent(context, AvatarPickerActivity::class.java)) },
     ) {
         val bitmap = picture
         if (bitmap != null) {
@@ -645,11 +664,37 @@ private fun Avatar() {
             Icon(
                 imageVector = Icons.Filled.AccountCircle,
                 contentDescription = "Profile",
-                tint = Color(0xFFBFC9DA),
+                tint = Glyph,
                 modifier = Modifier.fillMaxSize(),
             )
         }
     }
+}
+
+/** A small round button in the top bar. */
+@Composable
+private fun TopBarButton(onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .size(21.dp)
+            .scale(if (focused) 1.15f else 1f)
+            // hasFocus, not isFocused: while OK is down, Compose hands focus to the clickable
+            // inside, and the button should stay lit through the press.
+            .onFocusChanged { focused = it.hasFocus }
+            .focusable()
+            .clickable(onClick = onClick)
+            .clip(CircleShape)
+            .background(Color(0xFF2B3242))
+            // A faint ring always, so a dark picture still reads as a disc rather than a hole.
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Color.White else Color(0x3DFFFFFF),
+                shape = CircleShape,
+            ),
+        contentAlignment = Alignment.Center,
+        content = content,
+    )
 }
 
 @Composable
@@ -1004,53 +1049,6 @@ private fun InputTile(
             }
         }
         if (favorite) FavoriteDot()
-    }
-}
-
-@Composable
-private fun SquareTile(
-    icon: Drawable?,
-    fallback: String,
-    requester: FocusRequester? = null,
-    onEdgeRight: (() -> Unit)? = null,
-    onClick: () -> Unit,
-) {
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .size(SquareW, TileH)
-            .scale(if (focused) 1.06f else 1f)
-            .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .onFocusChanged { focused = it.isFocused }
-            .tileKeys(
-                editing = false,
-                onMenu = {},
-                onMove = {},
-                onEndEdit = {},
-                onEdgeRight = onEdgeRight,
-            )
-            .focusable()
-            .clickable(onClick = onClick)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF2A3444))
-            .border(
-                width = if (focused) 3.dp else 0.dp,
-                color = if (focused) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(10.dp),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        val bitmap = remember(icon) { runCatching { icon?.toBitmap()?.asImageBitmap() }.getOrNull() }
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap,
-                contentDescription = fallback,
-                contentScale = ContentScale.Inside,
-                modifier = Modifier.fillMaxSize().padding(14.dp),
-            )
-        } else {
-            Text(fallback, color = Color.White, fontSize = 12.sp)
-        }
     }
 }
 
