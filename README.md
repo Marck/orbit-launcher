@@ -62,6 +62,12 @@ ticked.
 At either end of a row or grid, left and right wrap around, so the far end is one
 press away rather than a long walk.
 
+## Top bar
+
+Left of the profile picture sit three small buttons: the TV's own inputs panel, the
+Play Store and Settings. Press up from the rows to reach them. A button is left out
+when the TV has nothing for it to open.
+
 ## Setting the profile picture
 
 Select the avatar in the top bar. The picker offers Orbit's own set, which is drawn
