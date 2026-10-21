@@ -494,8 +494,8 @@ private fun MenuEntry(item: MenuItem, requester: FocusRequester, onFocused: () -
             .height(46.dp)
             .focusRequester(requester)
             .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) onFocused()
+                focused = it.hasFocus
+                if (it.hasFocus) onFocused()
             }
             .focusable()
             .clickable(onClick = item.onClick)
@@ -1049,6 +1049,8 @@ private fun AppTile(
     onEndEdit: (Boolean) -> Unit,
     onEdgeLeft: (() -> Unit)? = null,
 ) {
+    // Read with hasFocus: while OK is down, Compose hands focus to the clickable inside the tile,
+    // and the tile should stay lit through the press, and through a hold that opens its menu.
     var focused by remember { mutableStateOf(false) }
     // Stays lit while its menu is open, the way the stock launcher keeps the tile up behind it.
     val lit = focused || held
@@ -1064,8 +1066,8 @@ private fun AppTile(
                 .onGloballyPositioned { spot.tile = it.rootBounds() }
                 .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
                 .onFocusChanged {
-                    focused = it.isFocused
-                    if (it.isFocused) onFocused()
+                    focused = it.hasFocus
+                    if (it.hasFocus) onFocused()
                 }
                 .tileKeys(editing, { onMenu(spot.rect()) }, onMove, onEndEdit, onEdgeLeft = onEdgeLeft)
                 .focusable()
@@ -1124,8 +1126,8 @@ private fun PlusTile(
                 .scale(if (focused) 1.06f else 1f)
                 .focusRequester(requester)
                 .onFocusChanged {
-                    focused = it.isFocused
-                    if (it.isFocused) onFocused()
+                    focused = it.hasFocus
+                    if (it.hasFocus) onFocused()
                 }
                 .tileKeys(
                     editing = false,
@@ -1188,8 +1190,8 @@ private fun InputTile(
             .alpha(if (dimmed) 0.45f else 1f)
             .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
             .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) onFocused()
+                focused = it.hasFocus
+                if (it.hasFocus) onFocused()
             }
             .tileKeys(editing, { onMenu(spot.rect()) }, onMove, onEndEdit, onEdgeLeft = onEdgeLeft)
             .focusable()
