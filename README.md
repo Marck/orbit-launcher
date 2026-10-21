@@ -47,17 +47,19 @@ CI builds the same artifact, but only on manual `workflow_dispatch`.
 
 ## Favorites and order
 
-Hold OK on an app or input tile, or press Menu, to open its menu:
+Each row holds only your favorites, in your order, then a `+` tile. With no
+favorites chosen, the row holds only the `+`. It opens a grid of everything
+available, with favorites ticked; select one to add or remove it. Favorites are
+stored as package names, so they survive an update or a reinstall.
 
-- **Add to favorites** keeps it at the front of the row. Favorites are stored
-  as package names, so they survive an update or a reinstall.
+Hold OK on a tile, or press Menu, to open its menu:
+
+- **Open** does what OK does.
 - **Move** starts a move: left and right change its place, OK keeps it, Back puts
   the order back.
-- **Uninstall** hands over to the system, which does the confirming. An app
-  removed anywhere drops out of favorites by itself.
-
-The `+` tile in each row opens a grid of everything available, with favorites
-ticked.
+- **Remove from favorites** takes it out of the row. It stays installed.
+- **Uninstall**, for apps the system allows it on, hands over to the system, which
+  does the confirming. An app removed anywhere drops out of favorites by itself.
 
 At either end of a row or grid, left and right wrap around, so the far end is one
 press away rather than a long walk.

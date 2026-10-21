@@ -77,6 +77,7 @@ private fun Screen() {
     val revision = FavoriteStore.revision
     val favorites = remember(revision) { FavoriteStore.favorites(context, FavoriteStore.INPUTS) }
     val ordered = remember(inputs) { FavoriteStore.arrange(inputs, favorites) { it.id } }
+    val chosen = ordered.count { it.id in favorites }
 
     val first = remember { FocusRequester() }
     LaunchedEffect(ordered.firstOrNull()?.id) {
@@ -96,8 +97,10 @@ private fun Screen() {
         Text("Favorite inputs", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (favorites.isEmpty()) "Select an input to keep it at the front of the row."
-            else "Select to add or remove. ${favorites.size} chosen.",
+            // Counted from the inputs on the list: a favorite that is switched off is kept, but
+            // there is nothing here to untick.
+            if (chosen == 0) "Select an input to add it to the row."
+            else "Select to add or remove. $chosen chosen.",
             color = Muted,
             fontSize = 14.sp,
         )

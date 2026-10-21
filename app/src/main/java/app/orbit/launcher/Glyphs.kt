@@ -14,21 +14,47 @@ import androidx.compose.ui.unit.dp
  */
 object Glyphs {
 
-    /** A frame with an arrow going in. The stock launcher uses it for inputs. */
+    /** A frame with an arrow going in. The stock launcher uses it for inputs and for open. */
     val Input: ImageVector = glyph(
         "Input",
         "M21 3.01H3c-1.1 0-2 .9-2 2V9h2V4.99h18v14.03H3V15H1v4.01c0 1.1.9 1.98 2 1.98h18" +
             "c1.1 0 2-.88 2-1.98v-14c0-1.11-.9-2-2-2zM11 16l4-4-4-4v3H1v2h10v3z",
     )
 
-    private fun glyph(name: String, path: String): ImageVector =
-        ImageVector.Builder(
-            name = name,
-            defaultWidth = 24.dp,
-            defaultHeight = 24.dp,
-            viewportWidth = 24f,
-            viewportHeight = 24f,
+    /** Two arrows passing each other, for moving a tile. */
+    val Swap: ImageVector = glyph(
+        "Swap",
+        "M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z",
+    )
+
+    /** An outlined heart with a minus beside it, for leaving the favorites. */
+    val HeartMinus: ImageVector = builder("HeartMinus")
+        // The heart shrunk into the top left, to leave the corner free for the minus.
+        .addGroup(scaleX = 0.82f, scaleY = 0.82f, translationY = 0.5f)
+        .addPath(
+            pathData = addPathNodes(
+                "M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5" +
+                    "c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5" +
+                    " 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5" +
+                    " 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5" +
+                    "c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"
+            ),
+            fill = SolidColor(Color.Black),
         )
+        .clearGroup()
+        .addPath(pathData = addPathNodes("M15 18h8v2h-8z"), fill = SolidColor(Color.Black))
+        .build()
+
+    private fun glyph(name: String, path: String): ImageVector =
+        builder(name)
             .addPath(pathData = addPathNodes(path), fill = SolidColor(Color.Black))
             .build()
+
+    private fun builder(name: String) = ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    )
 }
