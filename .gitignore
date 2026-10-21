@@ -9,3 +9,8 @@ local.properties
 *.apk
 *.keystore
 .idea/
+
+# Any key other than the one committed on purpose, and the file that points at it.
+keystore.properties
+*.jks
+!app/debug.jks
