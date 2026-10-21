@@ -679,7 +679,9 @@ private fun TopBarButton(onClick: () -> Unit, content: @Composable BoxScope.() -
         Modifier
             .size(21.dp)
             .scale(if (focused) 1.15f else 1f)
-            .onFocusChanged { focused = it.isFocused }
+            // hasFocus, not isFocused: while OK is down, Compose hands focus to the clickable
+            // inside, and the button should stay lit through the press.
+            .onFocusChanged { focused = it.hasFocus }
             .focusable()
             .clickable(onClick = onClick)
             .clip(CircleShape)
