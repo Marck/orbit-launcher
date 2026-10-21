@@ -72,6 +72,19 @@ object AppRepository {
     private fun query(pm: PackageManager, category: String): List<ResolveInfo> =
         pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0)
 
+    /**
+     * Whether the system still knows the package at all, enabled or not.
+     *
+     * An app can drop out of the launcher list without being gone: disabled in Settings, in the
+     * middle of an update, or on USB storage that has not mounted yet. Only this says it is gone.
+     */
+    fun isInstalled(context: Context, packageName: String): Boolean = runCatching {
+        context.packageManager.getApplicationInfo(
+            packageName,
+            PackageManager.MATCH_DISABLED_COMPONENTS or PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS,
+        )
+    }.isSuccess
+
     /** True when Orbit is already the system's preferred home app. */
     fun isDefaultHome(context: Context): Boolean {
         val resolved = context.packageManager.resolveActivity(

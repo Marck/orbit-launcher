@@ -90,6 +90,7 @@ private fun PickerScreen() {
     // Deliberately keyed on the apps alone, so toggling a favorite does not reshuffle the grid
     // under the owner's hand while they are still choosing.
     val ordered = remember(apps) { FavoriteStore.arrange(apps, favorites) { it.packageName } }
+    val chosen = ordered.count { it.packageName in favorites }
 
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val gridState = rememberLazyGridState()
@@ -127,8 +128,10 @@ private fun PickerScreen() {
         Text("Favorite apps", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (favorites.isEmpty()) "Select an app to add it to the row."
-            else "Select to add or remove. ${favorites.size} chosen.",
+            // Counted from the apps on the grid: a favorite that is disabled for now is kept, but
+            // there is nothing here to untick.
+            if (chosen == 0) "Select an app to add it to the row."
+            else "Select to add or remove. $chosen chosen.",
             color = Muted,
             fontSize = 14.sp,
         )

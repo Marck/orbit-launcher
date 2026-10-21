@@ -233,11 +233,17 @@ private fun HomeScreen() {
 
     // An app can be removed from anywhere, so notice it by comparing successive reads rather
     // than by watching the uninstall we started.
+    // A favorite is dropped only once the system confirms the app is uninstalled. One that is
+    // merely missing from this read keeps its place and comes back when the app does.
     LaunchedEffect(apps) {
         if (apps.isEmpty()) return@LaunchedEffect
         val present = apps.map { it.packageName }.toSet()
-        if (known.isNotEmpty() && (known - present).isNotEmpty()) confirmation = "It's gone now"
-        FavoriteStore.prune(context, FavoriteStore.APPS, present)
+        val missing = (known - present) + FavoriteStore.favorites(context, FavoriteStore.APPS).filter { it !in present }
+        val gone = withContext(Dispatchers.IO) {
+            missing.filterTo(mutableSetOf()) { !AppRepository.isInstalled(context, it) }
+        }
+        if (known.isNotEmpty() && (known - present).any { it in gone }) confirmation = "It's gone now"
+        if (gone.isNotEmpty()) FavoriteStore.prune(context, FavoriteStore.APPS, present + (missing - gone))
         known = present
     }
     LaunchedEffect(confirmation) {
