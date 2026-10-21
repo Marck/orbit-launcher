@@ -124,7 +124,10 @@ private fun PickerScreen(onDone: () -> Unit) {
         }
     }
 
-    val images by produceState(initialValue = emptyList<PickerImage>(), granted, rescan) {
+    // Null while the scan is still running, so the screen does not claim there are no pictures
+    // before it has finished looking.
+    val images by produceState<List<PickerImage>?>(initialValue = null, granted, rescan) {
+        value = null
         value = if (granted) withContext(Dispatchers.IO) { AvatarPicker.scan(context) } else emptyList()
     }
     val hasAvatar by produceState(initialValue = false, Profile.revision) {
@@ -206,9 +209,13 @@ private fun PickerScreen(onDone: () -> Unit) {
                     }
                 }
 
-                images.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { NoPicturesHelp() }
+                images == null -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("Looking for pictures…", color = Muted, fontSize = 13.sp)
+                }
 
-                else -> items(images, key = { "file-${it.name}" }) { image ->
+                images.orEmpty().isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { NoPicturesHelp() }
+
+                else -> items(images.orEmpty(), key = { "file-${it.key}" }) { image ->
                     Tile(label = image.name, requester = null, image = image) {
                         choose { Profile.save(context, image.uri, SavedPixels) }
                     }

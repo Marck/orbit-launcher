@@ -103,6 +103,12 @@ object Profile {
         }.getOrDefault(bitmap)
     }
 
+    /** Every file Orbit keeps its picture in, including one half written, so a scan can skip them. */
+    fun ownFiles(context: Context): Set<File> {
+        val dir = context.getExternalFilesDir(null) ?: return emptySet()
+        return FILE_NAMES.flatMap { listOf(File(dir, it), File(dir, "$it.part")) }.toSet()
+    }
+
     private fun file(context: Context): File? {
         val dir = context.getExternalFilesDir(null) ?: return null
         return FILE_NAMES.asSequence()

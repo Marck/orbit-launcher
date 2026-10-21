@@ -12,7 +12,11 @@ import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
 
-data class PickerImage(val uri: Uri, val name: String)
+/**
+ * A picture that can be chosen. [key] tells apart files that share a name in different folders,
+ * and is the same whether the file was found through the media index or by walking the folders.
+ */
+data class PickerImage(val uri: Uri, val name: String, val key: String = name)
 
 /**
  * Finds pictures on the TV so one can be chosen with the remote.
@@ -64,7 +68,11 @@ object AvatarPicker {
     ).map { Environment.getExternalStoragePublicDirectory(it) }
 
     private fun scanMediaStore(context: Context, into: MutableMap<String, PickerImage>) {
-        val columns = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME)
+        val columns = arrayOf(
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DISPLAY_NAME,
+            MediaStore.Images.Media.RELATIVE_PATH,
+        )
         runCatching {
             context.contentResolver.query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -75,13 +83,16 @@ object AvatarPicker {
             )?.use { cursor ->
                 val idColumn = cursor.getColumnIndexOrThrow(columns[0])
                 val nameColumn = cursor.getColumnIndexOrThrow(columns[1])
+                val folderColumn = cursor.getColumnIndex(columns[2])
                 while (cursor.moveToNext() && into.size < MAX_RESULTS) {
                     val name = cursor.getString(nameColumn) ?: continue
                     val uri = ContentUris.withAppendedId(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                         cursor.getLong(idColumn),
                     )
-                    into.putIfAbsent(name, PickerImage(uri, name))
+                    val folder = if (folderColumn >= 0) cursor.getString(folderColumn).orEmpty() else ""
+                    val key = folder + name
+                    into.putIfAbsent(key, PickerImage(uri, name, key))
                 }
             }
         }
@@ -96,10 +107,27 @@ object AvatarPicker {
         context.getExternalFilesDir(null)?.let { roots += it }
 
         val deadline = android.os.SystemClock.elapsedRealtime() + WALK_MILLIS
-        roots.forEach { root -> collect(root, 0, into, deadline) }
+        val own = Profile.ownFiles(context)
+        roots.forEach { root -> collect(root, 0, into, deadline, own) }
     }
 
-    private fun collect(dir: File, depth: Int, into: MutableMap<String, PickerImage>, deadline: Long) {
+    /**
+     * The same key the media index gives a file: its folder below the storage root, then its
+     * name. A file elsewhere, on a USB stick, is keyed by its full path.
+     */
+    private fun keyOf(file: File): String {
+        val storage = runCatching { Environment.getExternalStorageDirectory().absolutePath }.getOrNull()
+        val path = file.absolutePath
+        return if (storage != null && path.startsWith("$storage/")) path.removePrefix("$storage/") else path
+    }
+
+    private fun collect(
+        dir: File,
+        depth: Int,
+        into: MutableMap<String, PickerImage>,
+        deadline: Long,
+        own: Set<File>,
+    ) {
         if (depth > MAX_DEPTH || into.size >= MAX_RESULTS) return
         if (android.os.SystemClock.elapsedRealtime() > deadline) return
         val entries = runCatching { dir.listFiles() }.getOrNull() ?: return
@@ -109,9 +137,11 @@ object AvatarPicker {
                 // Hidden folders and other apps' data hold thumbnails and caches, not pictures
                 // anyone would pick, and can be very large.
                 entry.isDirectory && (entry.name.startsWith(".") || entry.name == "Android") -> Unit
-                entry.isDirectory -> collect(entry, depth + 1, into, deadline)
+                entry.isDirectory -> collect(entry, depth + 1, into, deadline, own)
+                // Orbit's own stored picture is not one of the owner's pictures.
+                entry in own -> Unit
                 entry.extension.lowercase() in EXTENSIONS && entry.length() > 0 ->
-                    into.putIfAbsent(entry.name, PickerImage(Uri.fromFile(entry), entry.name))
+                    keyOf(entry).let { key -> into.putIfAbsent(key, PickerImage(Uri.fromFile(entry), entry.name, key)) }
             }
         }
     }
