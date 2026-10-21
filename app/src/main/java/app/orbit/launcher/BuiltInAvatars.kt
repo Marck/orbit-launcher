@@ -35,7 +35,9 @@ object BuiltInAvatars {
         BuiltInAvatar("slate", "Slate", 0xFF607D8B.toInt(), 0xFF263238.toInt(), Motif.CHEVRON),
         BuiltInAvatar("tide", "Tide", 0xFF26C6DA.toInt(), 0xFF00566B.toInt(), Motif.WAVE),
         BuiltInAvatar("bloom", "Bloom", 0xFFEC407A.toInt(), 0xFF7B1B3F.toInt(), Motif.TRIANGLE),
-        BuiltInAvatar("ink", "Ink", 0xFF37474F.toInt(), 0xFF11171A.toInt(), Motif.PLAIN),
+        // Light enough to read as a disc against the dark top bar; the darker pairing above
+        // vanished into the background entirely.
+        BuiltInAvatar("ink", "Ink", 0xFF78909C.toInt(), 0xFF2E3C43.toInt(), Motif.PLAIN),
     )
 
     fun render(avatar: BuiltInAvatar, size: Int): Bitmap {

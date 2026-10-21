@@ -71,8 +71,14 @@ private val SafeH = 48.dp
 private val SafeV = 27.dp
 private val TileW = 111.dp
 private val TileH = 66.dp
-private val InputW = 110.dp
+// Narrow enough that a typical set's inputs, plus the two fixed tiles, fit the safe area
+// without the row scrolling. A scrolling row slides its first tile out of line with the apps
+// above it, and slides its last tile up against the fixed tiles.
+private val InputW = 100.dp
 private val SquareW = 75.dp
+
+/** Keeps a focused input tile clear of the fixed tiles even when the row does scroll. */
+private val RowGap = 24.dp
 private val AppsRowHeight = 86.dp
 
 private val Surface = Color(0xFF14181F)
@@ -208,7 +214,7 @@ private fun InputsRow(inputs: List<TvInput>) {
         LazyRow(
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(9.dp),
-            contentPadding = PaddingValues(start = SafeH, end = 9.dp),
+            contentPadding = PaddingValues(start = SafeH),
         ) {
             itemsIndexed(inputs, key = { _, input -> input.id }) { _, input ->
                 InputTile(
@@ -227,6 +233,7 @@ private fun InputsRow(inputs: List<TvInput>) {
                 }
             }
         }
+        Spacer(Modifier.width(RowGap))
         val storeIntent = remember { InputRepository.storeIntent(context) }
         val settingsIntent = remember { InputRepository.settingsIntent() }
         SquareTile(
@@ -279,9 +286,10 @@ private fun Avatar() {
             .clickable { context.startActivitySafely(Intent(context, AvatarPickerActivity::class.java)) }
             .clip(CircleShape)
             .background(Color(0xFF2B3242))
+            // A faint ring always, so a dark picture still reads as a disc rather than a hole.
             .border(
-                width = if (focused) 2.dp else 0.dp,
-                color = if (focused) Color.White else Color.Transparent,
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Color.White else Color(0x3DFFFFFF),
                 shape = CircleShape,
             ),
         contentAlignment = Alignment.Center,
