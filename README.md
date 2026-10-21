@@ -1,7 +1,7 @@
 # Orbit launcher
 
 A replacement home screen for an Android TV set: one screen, no advertising rows,
-a hero for what you were last watching, a scrolling row of pinnable apps, and a row
+a hero for what you were last watching, a scrolling row of favourite apps, and a row
 of TV inputs.
 
 Status: design and requirements only. No application code yet.

@@ -85,11 +85,11 @@ private fun PickerScreen() {
     val apps by produceState(initialValue = AppRepository.cached()) {
         value = withContext(Dispatchers.IO) { AppRepository.load(context) }
     }
-    val pinRevision = PinStore.revision
-    val pins = remember(pinRevision) { PinStore.pinned(context, PinStore.APPS) }
-    // Deliberately keyed on the apps alone, so toggling a pin does not reshuffle the grid
+    val revision = FavouriteStore.revision
+    val favourites = remember(revision) { FavouriteStore.favourites(context, FavouriteStore.APPS) }
+    // Deliberately keyed on the apps alone, so toggling a favourite does not reshuffle the grid
     // under the owner's hand while they are still choosing.
-    val ordered = remember(apps) { PinStore.arrange(apps, pins) { it.packageName } }
+    val ordered = remember(apps) { FavouriteStore.arrange(apps, favourites) { it.packageName } }
 
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val gridState = rememberLazyGridState()
@@ -124,11 +124,11 @@ private fun PickerScreen() {
             .background(Color.Black)
             .padding(horizontal = SafeH, vertical = SafeV)
     ) {
-        Text("Favourites", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
+        Text("Favourite apps", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (pins.isEmpty()) "Select an app to keep it at the front of the row."
-            else "Select to add or remove. ${pins.size} chosen.",
+            if (favourites.isEmpty()) "Select an app to keep it at the front of the row."
+            else "Select to add or remove. ${favourites.size} chosen.",
             color = Muted,
             fontSize = 14.sp,
         )
@@ -145,7 +145,7 @@ private fun PickerScreen() {
             itemsIndexed(ordered, key = { _, app -> app.packageName }) { index, app ->
                 PickerTile(
                     app = app,
-                    pinned = app.packageName in pins,
+                    favourite = app.packageName in favourites,
                     requester = requesters.getOrPut(app.packageName) { FocusRequester() },
                     onEdgeLeft = if (index == 0) {
                         { ordered.lastOrNull()?.let { jumpTo(ordered.lastIndex, it.packageName) } }
@@ -158,7 +158,7 @@ private fun PickerScreen() {
                         null
                     },
                 ) {
-                    PinStore.toggle(context, PinStore.APPS, app.packageName)
+                    FavouriteStore.toggle(context, FavouriteStore.APPS, app.packageName)
                 }
             }
         }
@@ -168,7 +168,7 @@ private fun PickerScreen() {
 @Composable
 private fun PickerTile(
     app: LaunchableApp,
-    pinned: Boolean,
+    favourite: Boolean,
     requester: FocusRequester?,
     onEdgeLeft: (() -> Unit)? = null,
     onEdgeRight: (() -> Unit)? = null,
@@ -219,7 +219,7 @@ private fun PickerTile(
                 Text(app.label, color = Color.White, fontSize = 12.sp)
             }
 
-            if (pinned) {
+            if (favourite) {
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)
