@@ -27,7 +27,7 @@ object Glyphs {
         "M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z",
     )
 
-    /** An outlined heart with a minus beside it, for leaving the favourites. */
+    /** An outlined heart with a minus beside it, for leaving the favorites. */
     val HeartMinus: ImageVector = builder("HeartMinus")
         // The heart shrunk into the top left, to leave the corner free for the minus.
         .addGroup(scaleX = 0.82f, scaleY = 0.82f, translationY = 0.5f)

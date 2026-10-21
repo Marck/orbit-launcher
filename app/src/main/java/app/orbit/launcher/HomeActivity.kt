@@ -119,7 +119,7 @@ private val MenuCard = Color(0xFFDADCE0)
 private val MenuLit = Color.White
 private val MenuInk = Color(0xFF202124)
 
-private const val ADD_TILE = "add-favourite"
+private const val ADD_TILE = "add-favorite"
 private const val ADD_INPUT_TILE = "add-input"
 
 /** What the long-press menu is acting on. */
@@ -183,22 +183,22 @@ private fun HomeScreen() {
     }
     var noticeDismissed by remember { mutableStateOf(false) }
 
-    // Only the favourites, in the owner's order; everything else is one press of + away.
-    // Reading the revision here is what updates the rows the moment a favourite changes,
+    // Only the favorites, in the owner's order; everything else is one press of + away.
+    // Reading the revision here is what updates the rows the moment a favorite changes,
     // without touching the device again.
-    val revision = FavouriteStore.revision
-    val appFavourites = remember(revision) { FavouriteStore.favourites(context, FavouriteStore.APPS) }
-    val inputFavourites = remember(revision) { FavouriteStore.favourites(context, FavouriteStore.INPUTS) }
-    val favouriteApps = remember(apps, appFavourites) {
-        FavouriteStore.pick(apps, appFavourites) { it.packageName }
+    val revision = FavoriteStore.revision
+    val appFavorites = remember(revision) { FavoriteStore.favorites(context, FavoriteStore.APPS) }
+    val inputFavorites = remember(revision) { FavoriteStore.favorites(context, FavoriteStore.INPUTS) }
+    val favoriteApps = remember(apps, appFavorites) {
+        FavoriteStore.pick(apps, appFavorites) { it.packageName }
     }
-    val favouriteInputs = remember(inputs, inputFavourites) {
-        FavouriteStore.pick(inputs.orEmpty(), inputFavourites) { it.id }
+    val favoriteInputs = remember(inputs, inputFavorites) {
+        FavoriteStore.pick(inputs.orEmpty(), inputFavorites) { it.id }
     }
 
     var menu by remember { mutableStateOf<TileMenu?>(null) }
     var editing by remember { mutableStateOf<String?>(null) }
-    var editingKey by remember { mutableStateOf(FavouriteStore.APPS) }
+    var editingKey by remember { mutableStateOf(FavoriteStore.APPS) }
     var editSnapshot by remember { mutableStateOf<List<String>?>(null) }
     var confirmation by remember { mutableStateOf<String?>(null) }
     // Closing the menu has to hand focus back to the tile it belonged to. Without this the
@@ -213,13 +213,13 @@ private fun HomeScreen() {
         if (apps.isEmpty()) return@LaunchedEffect
         val present = apps.map { it.packageName }.toSet()
         if (known.isNotEmpty() && (known - present).isNotEmpty()) confirmation = "It's gone now"
-        FavouriteStore.prune(context, FavouriteStore.APPS, present)
+        FavoriteStore.prune(context, FavoriteStore.APPS, present)
         known = present
     }
     LaunchedEffect(inputs) {
         val all = inputs
         if (all.isNullOrEmpty()) return@LaunchedEffect
-        FavouriteStore.prune(context, FavouriteStore.INPUTS, all.map { it.id }.toSet())
+        FavoriteStore.prune(context, FavoriteStore.INPUTS, all.map { it.id }.toSet())
     }
     LaunchedEffect(confirmation) {
         if (confirmation != null) {
@@ -230,17 +230,17 @@ private fun HomeScreen() {
 
     fun closeMenu(target: TileMenu) {
         menu = null
-        if (target.key == FavouriteStore.APPS) refocusApps++ else refocusInputs++
+        if (target.key == FavoriteStore.APPS) refocusApps++ else refocusInputs++
     }
 
     fun beginEdit(key: String, id: String) {
-        editSnapshot = FavouriteStore.favourites(context, key)
+        editSnapshot = FavoriteStore.favorites(context, key)
         editingKey = key
         editing = id
     }
 
     fun endEdit(revert: Boolean) {
-        if (revert) editSnapshot?.let { FavouriteStore.replace(context, editingKey, it) }
+        if (revert) editSnapshot?.let { FavoriteStore.replace(context, editingKey, it) }
         editing = null
         editSnapshot = null
     }
@@ -262,17 +262,17 @@ private fun HomeScreen() {
                 )
                 Spacer(Modifier.height(14.dp))
             }
-            RowLabel(if (editing != null && editingKey == FavouriteStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
+            RowLabel(if (editing != null && editingKey == FavoriteStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
             AppsRow(
-                apps = favouriteApps,
+                apps = favoriteApps,
                 // A TV always has some app installed, so an empty list means not read yet.
                 ready = apps.isNotEmpty(),
-                held = menu?.takeIf { it.key == FavouriteStore.APPS }?.id,
+                held = menu?.takeIf { it.key == FavoriteStore.APPS }?.id,
                 refocus = refocusApps,
-                editing = editing.takeIf { editingKey == FavouriteStore.APPS },
+                editing = editing.takeIf { editingKey == FavoriteStore.APPS },
                 onMenu = { app, anchor ->
                     menu = TileMenu(
-                        key = FavouriteStore.APPS,
+                        key = FavoriteStore.APPS,
                         id = app.packageName,
                         anchor = anchor,
                         // Only set when the system would actually accept an uninstall, which
@@ -280,21 +280,21 @@ private fun HomeScreen() {
                         packageName = app.packageName.takeIf { app.removable },
                     )
                 },
-                onMove = { delta -> editing?.let { FavouriteStore.move(context, FavouriteStore.APPS, it, delta) } },
+                onMove = { delta -> editing?.let { FavoriteStore.move(context, FavoriteStore.APPS, it, delta) } },
                 onEndEdit = { revert -> endEdit(revert) },
             )
             Spacer(Modifier.height(20.dp))
-            RowLabel(if (editing != null && editingKey == FavouriteStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
+            RowLabel(if (editing != null && editingKey == FavoriteStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
             InputsRow(
-                inputs = favouriteInputs,
+                inputs = favoriteInputs,
                 ready = inputs != null,
-                held = menu?.takeIf { it.key == FavouriteStore.INPUTS }?.id,
+                held = menu?.takeIf { it.key == FavoriteStore.INPUTS }?.id,
                 refocus = refocusInputs,
-                editing = editing.takeIf { editingKey == FavouriteStore.INPUTS },
+                editing = editing.takeIf { editingKey == FavoriteStore.INPUTS },
                 onMenu = { input, anchor ->
-                    menu = TileMenu(key = FavouriteStore.INPUTS, id = input.id, anchor = anchor)
+                    menu = TileMenu(key = FavoriteStore.INPUTS, id = input.id, anchor = anchor)
                 },
-                onMove = { delta -> editing?.let { FavouriteStore.move(context, FavouriteStore.INPUTS, it, delta) } },
+                onMove = { delta -> editing?.let { FavoriteStore.move(context, FavoriteStore.INPUTS, it, delta) } },
                 onEndEdit = { revert -> endEdit(revert) },
             )
         }
@@ -306,15 +306,15 @@ private fun HomeScreen() {
                 target = target,
                 onOpen = {
                     closeMenu(target)
-                    if (target.key == FavouriteStore.APPS) {
+                    if (target.key == FavoriteStore.APPS) {
                         context.launchApp(target.id)
                     } else {
                         context.switchToInput(target.id)
                     }
                 },
                 onRemove = {
-                    FavouriteStore.remove(context, target.key, target.id)
-                    confirmation = "Removed from favourites"
+                    FavoriteStore.remove(context, target.key, target.id)
+                    confirmation = "Removed from favorites"
                     closeMenu(target)
                 },
                 onMove = {
@@ -378,7 +378,7 @@ private fun TileMenuSheet(
     val items = buildList {
         add(MenuItem("Open", Glyphs.Input, onOpen))
         add(MenuItem("Move", Glyphs.Swap, onMove))
-        add(MenuItem("Remove from favourites", Glyphs.HeartMinus, onRemove))
+        add(MenuItem("Remove from favorites", Glyphs.HeartMinus, onRemove))
         if (target.packageName != null) add(MenuItem("Uninstall", Icons.Outlined.Delete, onUninstall))
     }
     val requesters = remember(items.size) { List(items.size) { FocusRequester() } }
@@ -545,7 +545,7 @@ private fun AppsRow(
     }
 
     // Keyed on the row's contents, not just its first entry: when the tile that had focus leaves
-    // the favourites or the TV, nothing else would re-run and the focus would be left on a tile
+    // the favorites or the TV, nothing else would re-run and the focus would be left on a tile
     // that no longer exists. The one that slid into its place takes the focus instead.
     LaunchedEffect(ids, ready, Returns.count, refocus) {
         if (!ready) return@LaunchedEffect
@@ -689,7 +689,7 @@ private fun InputsRow(
                 },
                 onEdgeRight = { inputs.firstOrNull()?.let { jumpTo(0, it.id) } },
                 width = InputW,
-                label = "Add input to favourites",
+                label = "Add input to favorites",
             ) { context.startActivitySafely(Intent(context, InputPickerActivity::class.java)) }
         }
     }
@@ -1077,7 +1077,7 @@ private fun PlusTile(
     onFocused: () -> Unit,
     onEdgeRight: (() -> Unit)?,
     width: Dp = TileW,
-    label: String = "Add app to favourites",
+    label: String = "Add app to favorites",
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }

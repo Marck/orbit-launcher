@@ -71,7 +71,7 @@ private val Surface = Color(0xFF14181F)
 private val Muted = Color(0xFF8B93A4)
 private val Chosen = Color(0xFF2E9E4F)
 
-/** The grid behind the add tile: every app, with the favourites already ticked. */
+/** The grid behind the add tile: every app, with the favorites already ticked. */
 class AppPickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,11 +85,11 @@ private fun PickerScreen() {
     val apps by produceState(initialValue = AppRepository.cached()) {
         value = withContext(Dispatchers.IO) { AppRepository.load(context) }
     }
-    val revision = FavouriteStore.revision
-    val favourites = remember(revision) { FavouriteStore.favourites(context, FavouriteStore.APPS) }
-    // Deliberately keyed on the apps alone, so toggling a favourite does not reshuffle the grid
+    val revision = FavoriteStore.revision
+    val favorites = remember(revision) { FavoriteStore.favorites(context, FavoriteStore.APPS) }
+    // Deliberately keyed on the apps alone, so toggling a favorite does not reshuffle the grid
     // under the owner's hand while they are still choosing.
-    val ordered = remember(apps) { FavouriteStore.arrange(apps, favourites) { it.packageName } }
+    val ordered = remember(apps) { FavoriteStore.arrange(apps, favorites) { it.packageName } }
 
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val gridState = rememberLazyGridState()
@@ -124,11 +124,11 @@ private fun PickerScreen() {
             .background(Color.Black)
             .padding(horizontal = SafeH, vertical = SafeV)
     ) {
-        Text("Favourite apps", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
+        Text("Favorite apps", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (favourites.isEmpty()) "Select an app to add it to the row."
-            else "Select to add or remove. ${favourites.size} chosen.",
+            if (favorites.isEmpty()) "Select an app to add it to the row."
+            else "Select to add or remove. ${favorites.size} chosen.",
             color = Muted,
             fontSize = 14.sp,
         )
@@ -145,7 +145,7 @@ private fun PickerScreen() {
             itemsIndexed(ordered, key = { _, app -> app.packageName }) { index, app ->
                 PickerTile(
                     app = app,
-                    favourite = app.packageName in favourites,
+                    favorite = app.packageName in favorites,
                     requester = requesters.getOrPut(app.packageName) { FocusRequester() },
                     onEdgeLeft = if (index == 0) {
                         { ordered.lastOrNull()?.let { jumpTo(ordered.lastIndex, it.packageName) } }
@@ -158,7 +158,7 @@ private fun PickerScreen() {
                         null
                     },
                 ) {
-                    FavouriteStore.toggle(context, FavouriteStore.APPS, app.packageName)
+                    FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName)
                 }
             }
         }
@@ -168,7 +168,7 @@ private fun PickerScreen() {
 @Composable
 private fun PickerTile(
     app: LaunchableApp,
-    favourite: Boolean,
+    favorite: Boolean,
     requester: FocusRequester?,
     onEdgeLeft: (() -> Unit)? = null,
     onEdgeRight: (() -> Unit)? = null,
@@ -219,7 +219,7 @@ private fun PickerTile(
                 Text(app.label, color = Color.White, fontSize = 12.sp)
             }
 
-            if (favourite) {
+            if (favorite) {
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)

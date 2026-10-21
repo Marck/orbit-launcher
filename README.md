@@ -1,7 +1,7 @@
 # Orbit launcher
 
 A replacement home screen for an Android TV set: one screen, no advertising rows,
-a hero for what you were last watching, a scrolling row of favourite apps, and a row
+a hero for what you were last watching, a scrolling row of favorite apps, and a row
 of TV inputs.
 
 Status: design and requirements only. No application code yet.
@@ -10,7 +10,7 @@ Status: design and requirements only. No application code yet.
 
 | File | What it is |
 |---|---|
-| `index.html` | The chosen design, Orbit, with its live-TV variant, uninstall feedback, guide fallback ladder, scale spec and the add-to-favourites picker |
+| `index.html` | The chosen design, Orbit, with its live-TV variant, uninstall feedback, guide fallback ladder, scale spec and the add-to-favorites picker |
 | `alternatives.html` | Three directions that were considered and rejected |
 | `bg-hero.jpg` | Generated placeholder backdrop for the mockups |
 
@@ -45,11 +45,11 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 CI builds the same artifact, but only on manual `workflow_dispatch`.
 
-## Favourites and order
+## Favorites and order
 
-Each row holds only your favourites, in your order, then a `+` tile. With no
-favourites chosen, the row holds only the `+`. It opens a grid of everything
-available, with favourites ticked; select one to add or remove it. Favourites are
+Each row holds only your favorites, in your order, then a `+` tile. With no
+favorites chosen, the row holds only the `+`. It opens a grid of everything
+available, with favorites ticked; select one to add or remove it. Favorites are
 stored as package names, so they survive an update or a reinstall.
 
 Hold OK on a tile, or press Menu, to open its menu:
@@ -57,9 +57,9 @@ Hold OK on a tile, or press Menu, to open its menu:
 - **Open** does what OK does.
 - **Move** starts a move: left and right change its place, OK keeps it, Back puts
   the order back.
-- **Remove from favourites** takes it out of the row. It stays installed.
+- **Remove from favorites** takes it out of the row. It stays installed.
 - **Uninstall**, for apps the system allows it on, hands over to the system, which
-  does the confirming. An app removed anywhere drops out of favourites by itself.
+  does the confirming. An app removed anywhere drops out of favorites by itself.
 
 At either end of a row or grid, left and right wrap around, so the far end is one
 press away rather than a long walk.
