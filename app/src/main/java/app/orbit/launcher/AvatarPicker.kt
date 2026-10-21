@@ -27,6 +27,9 @@ object AvatarPicker {
     private const val MAX_DEPTH = 3
     private const val MAX_RESULTS = 120
 
+    /** A USB stick can hold tens of thousands of files; the walk gives up rather than hang. */
+    private const val WALK_MILLIS = 3_000L
+
     fun permission(): String =
         if (Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_IMAGES"
         else "android.permission.READ_EXTERNAL_STORAGE"
@@ -92,16 +95,21 @@ object AvatarPicker {
             ?.let { roots += it }
         context.getExternalFilesDir(null)?.let { roots += it }
 
-        roots.forEach { root -> collect(root, 0, into) }
+        val deadline = android.os.SystemClock.elapsedRealtime() + WALK_MILLIS
+        roots.forEach { root -> collect(root, 0, into, deadline) }
     }
 
-    private fun collect(dir: File, depth: Int, into: MutableMap<String, PickerImage>) {
+    private fun collect(dir: File, depth: Int, into: MutableMap<String, PickerImage>, deadline: Long) {
         if (depth > MAX_DEPTH || into.size >= MAX_RESULTS) return
+        if (android.os.SystemClock.elapsedRealtime() > deadline) return
         val entries = runCatching { dir.listFiles() }.getOrNull() ?: return
         entries.forEach { entry ->
             if (into.size >= MAX_RESULTS) return
             when {
-                entry.isDirectory -> collect(entry, depth + 1, into)
+                // Hidden folders and other apps' data hold thumbnails and caches, not pictures
+                // anyone would pick, and can be very large.
+                entry.isDirectory && (entry.name.startsWith(".") || entry.name == "Android") -> Unit
+                entry.isDirectory -> collect(entry, depth + 1, into, deadline)
                 entry.extension.lowercase() in EXTENSIONS && entry.length() > 0 ->
                     into.putIfAbsent(entry.name, PickerImage(Uri.fromFile(entry), entry.name))
             }
