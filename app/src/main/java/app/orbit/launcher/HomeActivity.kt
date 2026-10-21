@@ -64,7 +64,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -882,12 +881,7 @@ private fun AppsRow(
         if (editing == null) runCatching { listState.reveal(index) }
         // Items are placed during layout, so the requester is not attached on the frame the
         // list arrives. Keep asking until it takes.
-        repeat(30) {
-            if (runCatching { requesters[target]?.requestFocus() != null }.getOrDefault(false)) {
-                return@LaunchedEffect
-            }
-            delay(16)
-        }
+        focusWhenReady { requesters[target] }
     }
 
     LaunchedEffect(toFirst) {
@@ -991,12 +985,7 @@ private fun InputsRow(
         val target = lastFocused?.takeIf { it in ids } ?: ids[lastIndex.coerceAtMost(ids.lastIndex)]
         val index = ids.indexOf(target)
         if (editing == null) runCatching { listState.reveal(index) }
-        repeat(30) {
-            if (runCatching { requesters[target]?.requestFocus() != null }.getOrDefault(false)) {
-                return@LaunchedEffect
-            }
-            delay(16)
-        }
+        focusWhenReady { requesters[target] }
     }
 
     LazyRow(
@@ -1600,9 +1589,15 @@ private fun RowLabel(text: String) {
  * A row composes only what is on screen, so after scrolling to the far end the requester there
  * is not attached for another frame or two.
  */
-private suspend fun FocusRequester?.focusWhenReady(): Boolean {
+private suspend fun FocusRequester?.focusWhenReady(): Boolean = focusWhenReady { this }
+
+/**
+ * The same, for a requester that may not exist yet either: [requester] is asked again on every
+ * try, because a row only creates a tile's requester when it composes the tile.
+ */
+private suspend fun focusWhenReady(requester: () -> FocusRequester?): Boolean {
     repeat(30) {
-        if (runCatching { this?.requestFocus() != null }.getOrDefault(false)) return true
+        if (runCatching { requester()?.requestFocus() != null }.getOrDefault(false)) return true
         delay(16)
     }
     return false
@@ -1692,17 +1687,9 @@ private fun SafeAreaScrolling(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
 }
 
-/** How long OK must be held for the menu rather than a launch, if no long-press flag arrives. */
 /**
- * Keys for a tile that can be moved.
- *
- * The hold is measured here rather than left to `combinedClickable`, whose long-press handling
- * for hardware keys is not something to depend on sight unseen. Holding OK opens the menu and
- * swallows the release so the tile does not also activate; a tap falls through untouched. Menu
- * does the same, for remotes that have the key.
- *
- * While moving, every key is swallowed: left and right reorder instead of changing focus, OK
- * keeps the new place, Back puts the order back.
+ * Keys for a tile that can be moved: feeds each one to the tile's [TileKeys] and does what it
+ * says, which is where the rules and their reasons live.
  */
 @Composable
 private fun Modifier.tileKeys(
@@ -1713,60 +1700,41 @@ private fun Modifier.tileKeys(
     onEdgeLeft: (() -> Unit)? = null,
     onEdgeRight: (() -> Unit)? = null,
 ): Modifier {
-    var pressedAt by remember { mutableLongStateOf(0L) }
-    // Identified by the press itself, because opening the menu moves focus away and the tile
-    // never sees the release. A flag cleared on release would stay set and eat the next hold.
-    var handledPress by remember { mutableLongStateOf(0L) }
+    val keys = remember { TileKeys() }
     return onPreviewKeyEvent { event ->
-        val down = event.type == KeyEventType.KeyDown
-        val up = event.type == KeyEventType.KeyUp
-        val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
-        when {
-            editing && event.key == Key.DirectionLeft -> { if (down) onMove(-1); true }
-            editing && event.key == Key.DirectionRight -> { if (down) onMove(1); true }
-            editing && ok -> { if (up) onEndEdit(false); true }
-            editing && event.key == Key.Back -> { if (up) onEndEdit(true); true }
-            editing -> true
-            // At either end, left and right jump to the other end rather than stopping dead.
-            down && event.key == Key.DirectionLeft && onEdgeLeft != null -> { onEdgeLeft(); true }
-            down && event.key == Key.DirectionRight && onEdgeRight != null -> { onEdgeRight(); true }
-            event.key == Key.DirectionLeft && onEdgeLeft != null -> true
-            event.key == Key.DirectionRight && onEdgeRight != null -> true
-            up && event.key == Key.Menu -> { onMenu(); true }
-            ok && down && event.isHeld() -> {
-                // The system has decided this is a hold. Auto-repeat keeps sending downs, so
-                // act once per press.
-                val press = event.nativeKeyEvent.downTime
-                if (handledPress != press) {
-                    handledPress = press
-                    // The menu takes the release, so the tile never clears this itself. Left
-                    // set, it would make the next quick tap read as a hold.
-                    pressedAt = 0L
-                    onMenu()
-                }
-                true
-            }
-            ok && down -> {
-                if (pressedAt == 0L) pressedAt = SystemClock.elapsedRealtime()
-                false
-            }
-            ok && up -> {
-                val press = event.nativeKeyEvent.downTime
-                val duration = SystemClock.elapsedRealtime() - pressedAt
-                val longByTime = pressedAt != 0L && duration >= LongPressMs
-                pressedAt = 0L
-                when {
-                    // The menu is already open for this press; swallow the release so the tile
-                    // does not activate as well.
-                    handledPress == press -> true
-                    // A hold that never produced a flag still counts, so a remote that does not
-                    // send one is not left without the menu.
-                    longByTime -> { onMenu(); true }
-                    else -> false
-                }
-            }
-            else -> false
+        val native = event.nativeKeyEvent
+        val action = keys.onKey(
+            key = when (event.key) {
+                Key.DirectionCenter, Key.Enter -> TileKey.OK
+                Key.DirectionLeft -> TileKey.LEFT
+                Key.DirectionRight -> TileKey.RIGHT
+                Key.Back -> TileKey.BACK
+                Key.Menu -> TileKey.MENU
+                else -> TileKey.OTHER
+            },
+            phase = when (event.type) {
+                KeyEventType.KeyDown -> KeyPhase.DOWN
+                KeyEventType.KeyUp -> KeyPhase.UP
+                else -> KeyPhase.OTHER
+            },
+            repeatCount = native.repeatCount,
+            longPress = (native.flags and android.view.KeyEvent.FLAG_LONG_PRESS) != 0,
+            downTime = native.downTime,
+            now = SystemClock.elapsedRealtime(),
+            editing = editing,
+            edgeLeft = onEdgeLeft != null,
+            edgeRight = onEdgeRight != null,
+        )
+        when (action) {
+            TileAction.Pass -> return@onPreviewKeyEvent false
+            TileAction.Swallow -> Unit
+            TileAction.Menu -> onMenu()
+            is TileAction.Move -> onMove(action.delta)
+            is TileAction.EndEdit -> onEndEdit(action.revert)
+            TileAction.EdgeLeft -> onEdgeLeft?.invoke()
+            TileAction.EdgeRight -> onEdgeRight?.invoke()
         }
+        true
     }
 }
 
