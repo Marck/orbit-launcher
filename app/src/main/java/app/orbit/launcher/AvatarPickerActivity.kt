@@ -1,7 +1,11 @@
 package app.orbit.launcher
 
+import android.app.Activity
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -32,9 +36,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val SafeH = 48.dp
@@ -71,19 +78,56 @@ class AvatarPickerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent { PickerScreen(onDone = { finish() }) }
     }
+
+    override fun onResume() {
+        super.onResume()
+        PickerReturns.count++
+    }
+}
+
+/** Counts returns to the picker, so access granted in Settings is noticed on the way back. */
+private object PickerReturns {
+    var count by mutableIntStateOf(0)
 }
 
 @Composable
 private fun PickerScreen(onDone: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var granted by remember { mutableStateOf(AvatarPicker.hasPermission(context)) }
     var rescan by remember { mutableStateOf(0) }
+    // Set once the system will no longer show its prompt, after "Don't allow" twice. Asking
+    // again then fails silently, so the button sends the owner to the app's settings instead.
+    var refused by remember { mutableStateOf(false) }
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         granted = it
+        refused = !it && (context as? Activity)?.shouldShowRequestPermissionRationale(AvatarPicker.permission()) == false
         rescan++
     }
+    LaunchedEffect(PickerReturns.count) {
+        val now = AvatarPicker.hasPermission(context)
+        if (now != granted) {
+            granted = now
+            rescan++
+        }
+    }
+    // One save at a time: a second press while a large picture is still being read would
+    // otherwise start a second copy.
+    var saving by remember { mutableStateOf(false) }
+    fun choose(save: () -> Boolean) {
+        if (saving) return
+        saving = true
+        scope.launch {
+            val saved = withContext(Dispatchers.IO) { save() }
+            saving = false
+            if (saved) onDone()
+        }
+    }
 
-    val images by produceState(initialValue = emptyList<PickerImage>(), granted, rescan) {
+    // Null while the scan is still running, so the screen does not claim there are no pictures
+    // before it has finished looking.
+    val images by produceState<List<PickerImage>?>(initialValue = null, granted, rescan) {
+        value = null
         value = if (granted) withContext(Dispatchers.IO) { AvatarPicker.scan(context) } else emptyList()
     }
     val hasAvatar by produceState(initialValue = false, Profile.revision) {
@@ -131,7 +175,7 @@ private fun PickerScreen(onDone: () -> Unit) {
                     avatar = avatar,
                     requester = if (index == 0) firstTile else null,
                 ) {
-                    if (Profile.save(context, BuiltInAvatars.render(avatar, SavedPixels))) onDone()
+                    choose { Profile.save(context, BuiltInAvatars.render(avatar, SavedPixels)) }
                 }
             }
 
@@ -146,17 +190,34 @@ private fun PickerScreen(onDone: () -> Unit) {
                             fontSize = 13.sp,
                         )
                         Spacer(Modifier.height(10.dp))
-                        ActionButton("Allow access", autoFocus = false) {
-                            request.launch(AvatarPicker.permission())
+                        if (refused) {
+                            ActionButton("Open app settings", autoFocus = false) {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                            Uri.fromParts("package", context.packageName, null),
+                                        )
+                                    )
+                                }
+                            }
+                        } else {
+                            ActionButton("Allow access", autoFocus = false) {
+                                request.launch(AvatarPicker.permission())
+                            }
                         }
                     }
                 }
 
-                images.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { NoPicturesHelp() }
+                images == null -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("Looking for pictures…", color = Muted, fontSize = 13.sp)
+                }
 
-                else -> items(images, key = { "file-${it.name}" }) { image ->
+                images.orEmpty().isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { NoPicturesHelp() }
+
+                else -> items(images.orEmpty(), key = { "file-${it.key}" }) { image ->
                     Tile(label = image.name, requester = null, image = image) {
-                        if (Profile.save(context, image.uri)) onDone()
+                        choose { Profile.save(context, image.uri, SavedPixels) }
                     }
                 }
             }
