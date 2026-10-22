@@ -191,7 +191,7 @@ private fun Tile(
     Box(
         Modifier
             .size(TileW, TileH)
-            .scale(if (focused) 1.06f else 1f)
+            .scale(if (focused) 1.12f else 1f)
             .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
             .onFocusChanged { focused = it.hasFocus }
             .onPreviewKeyEvent { event ->
@@ -211,13 +211,6 @@ private fun Tile(
             // which tile it is.
             .clickable(interactionSource = null, indication = null, onClick = onClick)
             .clip(RoundedCornerShape(10.dp))
-            .border(
-                width = if (focused) 3.dp else 0.dp,
-                color = if (focused) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(10.dp),
-            )
-            // A disconnected input is dimmed, but its ring is not: the ring sits outside the
-            // dimming, so the tile in focus is just as plain to see as any other.
             .alpha(if (input.connected) 1f else 0.45f)
             .background(Color(0xFF2A3444)),
         contentAlignment = Alignment.Center,

@@ -306,18 +306,13 @@ private fun TileBody(
         Box(
             Modifier
                 .size(Thumb)
-                .scale(if (focused) 1.06f else 1f)
+                .scale(if (focused) 1.12f else 1f)
                 .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
                 .onFocusChanged { focused = it.isFocused }
                 .focusable()
                 .clickable(onClick = onClick)
                 .clip(CircleShape)
-                .background(Color(0xFF1E2838))
-                .border(
-                    width = if (focused) 3.dp else 0.dp,
-                    color = if (focused) Color.White else Color.Transparent,
-                    shape = CircleShape,
-                ),
+                .background(Color(0xFF1E2838)),
             contentAlignment = Alignment.Center,
         ) {
             val shown = bitmap
