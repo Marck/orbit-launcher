@@ -69,13 +69,14 @@ internal val HeroMinH = 108.dp
 internal const val CycleMs = 10_000L
 
 /**
- * How long the hero waits, on arrival, for a picture it has reason to expect.
+ * The longest the hero will wait, on arrival, for a picture it has reason to expect.
  *
- * Long enough to read the preview rows and decode one picture, short enough that a set with
- * nothing to show is not left with an empty hero. Only arrival: once a picture is up, the one
- * already on the screen stays there while the next is fetched, so there is no gap to cover.
+ * A safety net rather than the usual path: the wait normally ends when the fetch itself comes
+ * back, success or failure, and a fetch is already bounded by its own timeouts. This only
+ * covers one that somehow never returns at all. Only arrival: once a picture is up, the one
+ * on the screen stays there while the next is fetched, so there is no gap to cover.
  */
-internal const val SettleMs = 1_200L
+internal const val SettleMs = 6_000L
 
 /** The hero's words stay left of the artwork, whatever length an app gives them. */
 internal const val HeroTextWidth = 0.52f
@@ -292,9 +293,11 @@ internal fun rememberWatching(focusedApp: String?): Watching {
     val item = mine.getOrNull(index)
 
     // Ambient pictures, for an app that serves nothing of its own.
+    // Null until the rows have been read. An empty list means they were read and there is
+    // nothing to show, which is a different thing: one is worth waiting for, the other is not.
     @Suppress("ProduceStateDoesNotAssignValue")
-    val ambient by produceState(
-        initialValue = emptyList<Picture>(),
+    val ambient by produceState<List<Picture>?>(
+        initialValue = null,
         Backdrops.revision,
         FavoriteStore.revision,
         Returns.count,
@@ -304,30 +307,35 @@ internal fun rememberWatching(focusedApp: String?): Watching {
         val shown = items.mapNotNull { it.title }.toSet()
         value = withContext(Dispatchers.IO) { Backdrops.art(context, except = shown) }
     }
+    val pool = ambient.orEmpty()
     var ambientIndex by remember(ambient) { mutableIntStateOf(0) }
     LaunchedEffect(ambient, item != null) {
-        if (item != null || ambient.size < 2) return@LaunchedEffect
+        if (item != null || pool.size < 2) return@LaunchedEffect
         while (true) {
             delay(CycleMs)
-            ambientIndex = (ambientIndex + 1) % ambient.size
+            ambientIndex = (ambientIndex + 1) % pool.size
         }
     }
 
-    val picture = ambient.getOrNull(ambientIndex)
+    val picture = pool.getOrNull(ambientIndex)
     val uri = item?.posterUri ?: picture?.uri
+    // The link this came back for, so a fetch still running can be told apart from one that
+    // came back with nothing. Only the second is a reason to stop waiting for a picture.
+    var fetched by remember { mutableStateOf<String?>(null) }
     @Suppress("ProduceStateDoesNotAssignValue")
     val art by produceState<ImageBitmap?>(initialValue = null, uri) {
-        value = withContext(Dispatchers.IO) {
+        val decoded = withContext(Dispatchers.IO) {
             uri?.let { ContinueWatching.poster(context, it, maxWidth = 1280)?.asImageBitmap() }
         }
+        fetched = uri
+        value = decoded
     }
     // The row's own position where the app gave one, and what the TV was last seen playing
     // where it did not. A "next episode" row never carries a position.
     val progress = remember(item, Returns.count) {
         item?.let { it.progress ?: PlaybackMemory.progressFor(context, it.packageName, it.title) }
     }
-    // Bounded, and from arriving at the screen rather than from any one picture: a set with
-    // nothing to show must not be left with an empty hero.
+    // The safety net, in case a fetch never comes back at all.
     var waited by remember(Returns.count) { mutableStateOf(false) }
     LaunchedEffect(Returns.count) {
         delay(SettleMs)
@@ -336,9 +344,12 @@ internal fun rememberWatching(focusedApp: String?): Watching {
     // Only once its picture is actually on screen: a title over a black rectangle is worse
     // than no hero at all, and some artwork never loads.
     val shown = picture.takeIf { item == null && art != null }
-    // Rows can only be read with the permission, so without it there is no picture coming and
-    // nothing to wait for.
-    val settling = item == null && granted && shown == null && !waited
+    // Still looking: the rows have not been read yet, or one of them is being fetched. Rows can
+    // only be read with the permission, so without it nothing is coming and nothing is waited
+    // for. On a cold start this runs to a few seconds, which was long enough to watch the hero
+    // offer a way back and then take it away again, the thing it was taken out for.
+    val looking = ambient == null || (picture != null && art == null && fetched != uri)
+    val settling = item == null && granted && shown == null && looking && !waited
     return Watching(item, progress, shown, settling, art, granted, asked) {
         ask.launch(ContinueWatching.PERMISSION)
     }

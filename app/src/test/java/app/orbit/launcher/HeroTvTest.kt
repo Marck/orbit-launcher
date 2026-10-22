@@ -77,8 +77,14 @@ class HeroTvTest : TvTest() {
         rule.onAllNodes(androidx.compose.ui.test.hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().isNotEmpty()
 
-    private fun says(text: String) =
+    /**
+     * Waits for the words, rather than asserting on whatever frame the launch happened to
+     * leave behind. Every one of these comes from a provider read on another thread.
+     */
+    private fun says(text: String) {
+        waitFor("\"$text\" on screen") { onScreen(text) }
         assertTrue("not on screen: $text", onScreen(text))
+    }
 
     private fun silentAbout(text: String) =
         assertFalse("should not be on screen: $text", onScreen(text))
@@ -164,25 +170,29 @@ class HeroTvTest : TvTest() {
     }
 
     @Test
-    fun `nothing is claimed while the hero is still looking for a picture`() {
-        // Artwork that never arrives: nothing opens a pic:// link in a test.
+    fun `a picture that will not load does not hold the hero empty`() {
+        // Artwork that cannot be loaded: nothing opens a pic:// link in a test. The wait ends
+        // when the fetch comes back with nothing, rather than after a guessed number of
+        // seconds, so the way back is offered as soon as it is known there is no picture.
         ShotHooks.artwork = null
-        ShotHooks.pictures = listOf(picture("A Slow One", description = "About."))
+        ShotHooks.pictures = listOf(picture("One That Will Not Load", description = "About."))
         LastOpened.record(context, LastOpened.APP, server)
-        launch(HomeActivity::class.java, settle = 300)
-        silentAbout("CARRY ON")
-        silentAbout("A Slow One")
-        shot("settling")
+        launch(HomeActivity::class.java)
+        // The wait ends when the fetch comes back, and a fetch takes as long as the machine
+        // takes; waiting for the words themselves is the only honest way to time this.
+        says("CARRY ON")
+        says("Back to Jellyfin")
+        silentAbout("One That Will Not Load")
+        shot("no-picture")
     }
 
     @Test
-    fun `a picture that never arrives does not hold the hero empty for good`() {
-        ShotHooks.artwork = null
-        ShotHooks.pictures = listOf(picture("A Slow One", description = "About."))
+    fun `a picture that loads is never pushed aside by the way back`() {
+        ShotHooks.pictures = listOf(picture("A Loaded One", description = "About."))
         LastOpened.record(context, LastOpened.APP, server)
-        launch(HomeActivity::class.java, settle = 2500)
-        says("CARRY ON")
-        says("Back to Jellyfin")
+        launch(HomeActivity::class.java)
+        says("A Loaded One")
+        silentAbout("CARRY ON")
     }
 
     @Test

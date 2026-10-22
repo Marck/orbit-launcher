@@ -40,7 +40,7 @@ class VerifyFixes : TvTest() {
     fun a2_uninstalledIsPrunedAndAnnounced() {
         favorites(myApps, myInputs)
         val s = launch(HomeActivity::class.java)
-        ShotHooks.apps = ShotHooks.apps!!.filter { it.packageName != "nl.uitzendinggemist" }
+        uninstall("nl.uitzendinggemist")
         s.moveToState(Lifecycle.State.CREATED)
         s.moveToState(Lifecycle.State.RESUMED)
         waitFor("NPO to be pruned") { "nl.uitzendinggemist" !in stored(FavoriteStore.APPS) }
