@@ -21,12 +21,17 @@ import androidx.compose.runtime.setValue
  *
  * [seasons] is the app's own item count on a series row, which is the number of seasons. It is
  * left out when the app did not report one, rather than guessed at.
+ *
+ * [description] is the row's own short description, the same field the Continue watching hero
+ * shows, so a picture reads the same whichever of the two put it on the screen. The long one is
+ * empty on every row on this set, so there is nothing to fall back to.
  */
 data class Picture(
     val packageName: String,
     val uri: String,
     val title: String?,
     val seasons: Int?,
+    val description: String?,
 )
 
 object Backdrops {
@@ -78,7 +83,8 @@ object Backdrops {
     /** Every app that publishes a picture, the one with the most first. Call off the main thread. */
     fun publishers(context: Context): List<String> = runCatching {
         val counts = mutableMapOf<String, Int>()
-        read(context) { picture -> counts.merge(picture.packageName, 1, Int::plus) }
+        val tally = { picture: Picture -> counts.merge(picture.packageName, 1, Int::plus); Unit }
+        ShotHooks.pictures?.forEach(tally) ?: read(context, tally)
         counts.toList().sortedByDescending { it.second }.map { it.first }
     }.getOrDefault(emptyList())
 
@@ -88,21 +94,38 @@ object Backdrops {
      * What is in Watch Next belongs to the app that serves it, and the hero shows it there. The
      * same programme turning up as an ambient picture behind another app reads exactly like the
      * picture leaking across, which is what it was supposed to stop doing.
+     *
+     * A picture that says what it is comes first. Of the 1359 rows on this set, 162 carry a
+     * description and 1197 carry nothing but a name, almost all of them from one shop front. Left
+     * shuffled together, seven backdrops in eight would be a title over a picture and no more.
+     * The ones with nothing to say are kept on the end rather than dropped, so an app chosen on
+     * its own still supplies something.
      */
     fun art(context: Context, except: Set<String> = emptySet()): List<Picture> {
         val chosen = sources(context)
         if (chosen.isEmpty()) return emptyList()
-        val skip = except.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        ShotHooks.pictures?.let { return pick(it, chosen, except) }
         return runCatching {
             val found = mutableListOf<Picture>()
-            read(context) { picture ->
-                val named = picture.title?.trim()?.lowercase()
-                if (picture.packageName in chosen && (named == null || named !in skip)) {
-                    found += picture
-                }
-            }
-            found.shuffled().take(MAX)
+            read(context) { picture -> found += picture }
+            pick(found, chosen, except)
         }.getOrDefault(emptyList())
+    }
+
+    /**
+     * The rows that may be shown, in the order they should be: from a chosen app, not already
+     * in Watch Next, the ones that say what they are first.
+     *
+     * Separate from the reading so it can be checked without a TV provider behind it.
+     */
+    fun pick(found: List<Picture>, chosen: Set<String>, except: Set<String>): List<Picture> {
+        val skip = except.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        val mine = found.filter { picture ->
+            val named = picture.title?.trim()?.lowercase()
+            picture.packageName in chosen && (named == null || named !in skip)
+        }
+        val (told, bare) = mine.partition { !it.description.isNullOrBlank() }
+        return (told.shuffled() + bare.shuffled()).take(MAX)
     }
 
     /** Walks the preview rows that are a film or a programme and have a picture. */
@@ -116,6 +139,7 @@ object Backdrops {
                 TvContract.PreviewPrograms.COLUMN_POSTER_ART_ASPECT_RATIO,
                 TvContract.PreviewPrograms.COLUMN_TITLE,
                 TvContract.PreviewPrograms.COLUMN_ITEM_COUNT,
+                TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION,
             ),
             null,
             null,
@@ -146,6 +170,7 @@ object Backdrops {
                         uri = uri,
                         title = cursor.getString(4)?.takeIf { it.isNotBlank() },
                         seasons = seasons,
+                        description = cursor.getString(6)?.takeIf { it.isNotBlank() },
                     )
                 )
             }

@@ -86,11 +86,20 @@ object AppRepository {
     }
 
     /** Opens [packageName], and says whether the TV had anywhere to send it. */
+    /**
+     * Starts the app, and says whether it could.
+     *
+     * Every way of opening an app from Orbit comes through here, so this is where the hero's
+     * record of the last one is written. Only once the start has gone through: an app that
+     * could not be opened is not something to offer going back to.
+     */
     fun launch(context: Context, packageName: String): Boolean {
         val intent = launchIntent(context, packageName) ?: return false
         return runCatching {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }.isSuccess
+        }.isSuccess.also { started ->
+            if (started) LastOpened.record(context, LastOpened.APP, packageName)
+        }
     }
 
     fun launchIntent(context: Context, packageName: String): Intent? {
