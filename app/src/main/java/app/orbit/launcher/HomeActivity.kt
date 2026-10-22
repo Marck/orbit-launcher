@@ -492,6 +492,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 Spacer(Modifier.height(10.dp))
                 Hero(
                     apps = apps,
+                    inputs = inputs,
                     refocus = refocusHero,
                     // Set by hand: the hero sits at the left and the top bar at the right, so
                     // Compose's own search finds nothing above the hero and focus would be
@@ -1343,6 +1344,15 @@ private val HeroMinH = 108.dp
 /** How long each thing to carry on with is shown before the next one. */
 private const val CycleMs = 10_000L
 
+/**
+ * How long the hero waits, on arrival, for a picture it has reason to expect.
+ *
+ * Long enough to read the preview rows and decode one picture, short enough that a set with
+ * nothing to show is not left with an empty hero. Only arrival: once a picture is up, the one
+ * already on the screen stays there while the next is fetched, so there is no gap to cover.
+ */
+private const val SettleMs = 1_200L
+
 /** The hero's words stay left of the artwork, whatever length an app gives them. */
 private const val HeroTextWidth = 0.52f
 
@@ -1366,6 +1376,7 @@ private const val BackdropHeight = 0.78f
 @Composable
 private fun Hero(
     apps: List<LaunchableApp>,
+    inputs: List<TvInput>?,
     refocus: Int,
     self: FocusRequester,
     above: FocusRequester,
@@ -1383,6 +1394,13 @@ private fun Hero(
     val item = watching.item
     val progress = watching.progress
     val ambient = watching.picture?.takeIf { it.title != null }
+    // Orbit's own record of what it opened last, read again on every return so it is the one
+    // just left rather than the one from when the screen was built.
+    val back = remember(Returns.count) { LastOpened.recent(context) }
+    val backApp = back?.takeIf { it.kind == LastOpened.APP }
+        ?.let { entry -> apps.firstOrNull { it.packageName == entry.id } }
+    val backInput = back?.takeIf { it.kind == LastOpened.INPUT }
+        ?.let { entry -> inputs?.firstOrNull { it.id == entry.id } }
     // Named after the app that published it. "From your library" was a claim Orbit cannot
     // make: most of these come from a shop front, not from anything the owner has.
     val ambientSource = ambient?.let { picture ->
@@ -1399,6 +1417,12 @@ private fun Hero(
         // The picture came from an app, so OK opens that app. Holding OK configures which
         // apps supply them, the same gesture a tile uses for its menu.
         ambient != null -> { { context.launchApp(ambient.packageName) } }
+        watching.settling -> null
+        // Last of all, and only when there is neither something to carry on with nor a picture
+        // to show for it. It is a way back rather than something to watch, so anything with a
+        // name of its own goes first.
+        backApp != null -> { { context.launchApp(backApp.packageName) } }
+        backInput != null -> { { context.switchToInput(backInput.id) } }
         else -> null
     }
 
@@ -1474,6 +1498,10 @@ private fun Hero(
                 item != null -> Watching(item, progress, focused)
                 !granted && !asked -> Offer(focused)
                 ambient != null -> Ambient(ambient, ambientSource, focused)
+                // Still looking. Nothing is claimed in the meantime.
+                watching.settling -> Unit
+                backApp != null -> BackTo(backApp.label, focused)
+                backInput != null -> BackTo(backInput.label, focused)
                 else -> Clock()
             }
         }
@@ -1487,6 +1515,14 @@ private class Watching(
     val progress: Progress?,
     /** What the ambient picture is of, when one is being shown instead of a programme. */
     val picture: Picture?,
+    /**
+     * A picture is still being looked for, on arrival at the screen.
+     *
+     * The hero says nothing at all while this is true. What comes after a picture is a way back
+     * to the last app, and offering that for the half second before the picture lands reads as
+     * the hero changing its mind about what it has.
+     */
+    val settling: Boolean,
     val art: ImageBitmap?,
     val granted: Boolean,
     val asked: Boolean,
@@ -1566,9 +1602,20 @@ private fun rememberWatching(focusedApp: String?): Watching {
     val progress = remember(item, Returns.count) {
         item?.let { it.progress ?: PlaybackMemory.progressFor(context, it.packageName, it.title) }
     }
+    // Bounded, and from arriving at the screen rather than from any one picture: a set with
+    // nothing to show must not be left with an empty hero.
+    var waited by remember(Returns.count) { mutableStateOf(false) }
+    LaunchedEffect(Returns.count) {
+        delay(SettleMs)
+        waited = true
+    }
     // Only once its picture is actually on screen: a title over a black rectangle is worse
     // than no hero at all, and some artwork never loads.
-    return Watching(item, progress, picture.takeIf { item == null && art != null }, art, granted, asked) {
+    val shown = picture.takeIf { item == null && art != null }
+    // Rows can only be read with the permission, so without it there is no picture coming and
+    // nothing to wait for.
+    val settling = item == null && granted && shown == null && !waited
+    return Watching(item, progress, shown, settling, art, granted, asked) {
         ask.launch(ContinueWatching.PERMISSION)
     }
 }
@@ -1600,28 +1647,46 @@ private fun Backdrop(art: ImageBitmap?, modifier: Modifier) {
     )
 }
 
+/**
+ * The hero's words, the same shape wherever they come from: what this is, its name, what it is
+ * about, a line of detail and the bar. A Watch Next row and an ambient picture both come through
+ * here, so a description reads the same whichever one is on the screen.
+ */
 @Composable
-private fun Watching(item: Resumable, progress: Progress?, focused: Boolean) {
+private fun HeroText(
+    label: String,
+    title: String,
+    focused: Boolean,
+    description: String? = null,
+    detail: String? = null,
+    progress: Progress? = null,
+) {
     Column {
-        HeroLabel("CONTINUE WATCHING")
+        HeroLabel(label)
         Text(
-            item.title,
+            title,
             color = if (focused) Color.White else OnSurface,
             fontSize = 33.sp,
             fontWeight = FontWeight.Light,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        item.description?.let {
+        description?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(6.dp))
-            Text(it, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Two lines. These run to 300 characters, which left to themselves would fill the
+            // screen and push the rows off it; one line cuts most of them mid-sentence.
+            Text(
+                it,
+                color = Muted,
+                fontSize = 13.sp,
+                lineHeight = 17.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        // One line above the bar: the episode, where there is one, and the two numbers. A film
-        // has no episode line, so it is left out rather than filled with a season.
-        val line = listOfNotNull(item.subtitle?.uppercase(), progress?.summary).joinToString(" - ")
-        if (line.isNotEmpty()) {
+        detail?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(8.dp))
-            Text(line, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(it, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         // Only when a position was actually reported. No bar beats a made-up one.
         progress?.let {
@@ -1646,6 +1711,20 @@ private fun Watching(item: Resumable, progress: Progress?, focused: Boolean) {
 }
 
 @Composable
+private fun Watching(item: Resumable, progress: Progress?, focused: Boolean) {
+    HeroText(
+        label = "CONTINUE WATCHING",
+        title = item.title,
+        focused = focused,
+        description = item.description,
+        // One line above the bar: the episode, where there is one, and the two numbers. A film
+        // has no episode line, so it is left out rather than filled with a season.
+        detail = listOfNotNull(item.subtitle?.uppercase(), progress?.summary).joinToString(" - "),
+        progress = progress,
+    )
+}
+
+@Composable
 private fun Offer(focused: Boolean) {
     Column {
         HeroLabel("CONTINUE WATCHING")
@@ -1664,29 +1743,27 @@ private fun Offer(focused: Boolean) {
     }
 }
 
-/** A picture with nothing behind it but its own name, and the seasons when the app said. */
+/** A picture, named after the app that published it, with whatever that app said about it. */
 @Composable
 private fun Ambient(picture: Picture, source: String?, focused: Boolean) {
-    Column {
-        HeroLabel(source?.uppercase()?.let { "ON $it" } ?: "ALSO ON THIS TV")
-        Text(
-            picture.title.orEmpty(),
-            color = if (focused) Color.White else OnSurface,
-            fontSize = 33.sp,
-            fontWeight = FontWeight.Light,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        picture.seasons?.let {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                if (it == 1) "1 SEASON" else "$it SEASONS",
-                color = Muted,
-                fontSize = 11.sp,
-                maxLines = 1,
-            )
-        }
-    }
+    HeroText(
+        label = source?.uppercase()?.let { "ON $it" } ?: "ALSO ON THIS TV",
+        title = picture.title.orEmpty(),
+        focused = focused,
+        description = picture.description,
+        detail = picture.seasons?.let { if (it == 1) "1 SEASON" else "$it SEASONS" },
+    )
+}
+
+/**
+ * The way back to the last thing opened, when there is nothing to carry on with and no picture.
+ *
+ * A way back rather than something to watch, which is why it comes after both of those. It can
+ * only name what Orbit itself opened: an app reached with the remote's own keys is not in here.
+ */
+@Composable
+private fun BackTo(label: String, focused: Boolean) {
+    HeroText(label = "CARRY ON", title = "Back to $label", focused = focused)
 }
 
 /** Nothing to offer, so the hero says something true and useful instead. */
@@ -2166,10 +2243,16 @@ private fun LayoutCoordinates.rootBounds(): Rect =
 /** Says whether the app could be started. One can lose its launcher entry while installed. */
 private fun Context.launchApp(packageName: String): Boolean = AppRepository.launch(this, packageName)
 
-/** Marks the input as last used only once the switch is under way, so a failed one does not. */
+/**
+ * Marks the input as last used only once the switch is under way, so a failed one does not, and
+ * records it for the hero at the same time.
+ */
 private fun Context.switchToInput(inputId: String): Boolean =
     startActivitySafely(InputRepository.switchIntent(inputId)).also { switched ->
-        if (switched) InputRepository.rememberUse(this, inputId)
+        if (switched) {
+            InputRepository.rememberUse(this, inputId)
+            LastOpened.record(this, LastOpened.INPUT, inputId)
+        }
     }
 
 /** Starts [intent], and says whether it could. A TV can lack any of the screens Orbit links to. */

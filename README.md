@@ -4,8 +4,8 @@ A replacement home screen for an Android TV set: one screen, no advertising rows
 a hero for what you were last watching, a scrolling row of favorite apps, and a row
 of TV inputs.
 
-Status: in use on the owner's set. Favorites, reordering, the input row, the pickers
-and the profile picture all work; the hero is still a placeholder.
+Status: in use on the owner's set. Favorites, reordering, the input row, the pickers,
+the profile picture and the hero all work.
 
 ## Contents
 
@@ -108,6 +108,13 @@ The top of the screen shows the most truthful thing Orbit can say, in this order
    on the hero chooses which apps supply them. Anything already in Watch Next is left out,
    so an ambient picture never repeats what the hero offers elsewhere.
 
+   A picture that says what it is comes first. Of the 1359 rows on one set, 162 carry a
+   description and 1197 carry nothing but a name, almost all of them from a single shop
+   front, so left shuffled together seven backdrops in eight would be a bare title. The
+   ones with nothing to say are kept on the end rather than dropped, so an app chosen on
+   its own still supplies something. Title, description, the detail line and the bar are
+   one block of layout, so a Watch Next row and an ambient picture read the same.
+
    A bar, with how much is watched and how much is left, from the first of two sources
    that has an answer:
 
@@ -122,11 +129,13 @@ The top of the screen shows the most truthful thing Orbit can say, in this order
    for anything that plays; for a kind whose unit is not time the bar says a percentage
    instead, because the API gives no unit. Android TV has no book type at all, so "Page x
    of y" is not something an app can tell Orbit through this list.
-2. **The time and date,** when there is nothing to offer.
-
-   The hero only ever shows something with a name and a picture behind it. It used to
-   offer the last app Orbit opened, as "Back to Apple TV", which reads as a nudge towards
-   an app rather than anything you could watch. That is gone.
+2. **The way back,** when there is neither something to carry on with nor a picture to
+   show for it: "Back to Kodi", and OK opens it again. It is Orbit's own record of what it
+   last opened, kept for twelve hours, so it needs no permission. It can only name what
+   Orbit itself opened: an app reached with the remote's own keys is not in it and is not
+   claimed to be. It comes last of the three because it is a way back rather than
+   something to watch.
+3. **The time and date,** when there is nothing at all.
 
 Reading another app's rows needs `READ_TV_LISTINGS`, a normal permission prompt. Orbit
 asks for it once, from the hero, never as a popup on start, and the hero works without

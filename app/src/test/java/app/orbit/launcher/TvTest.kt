@@ -94,6 +94,11 @@ abstract class TvTest {
         ShotHooks.allInputs = Intent("test.allinputs")
         ShotHooks.search = Intent("test.search")
         ShotHooks.defaultHome = true
+        // The hooks are one global object and the test JVM is shared, so a class that sets
+        // these would otherwise hand them to every class that runs after it.
+        ShotHooks.watchNext = null
+        ShotHooks.pictures = null
+        ShotHooks.artwork = null
         // Infinite marquee animations would make an auto-advancing clock never settle.
         rule.mainClock.autoAdvance = false
     }

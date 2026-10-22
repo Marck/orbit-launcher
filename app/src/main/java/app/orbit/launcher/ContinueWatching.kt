@@ -73,6 +73,7 @@ object ContinueWatching {
     /** Every readable row, most recently engaged first. Call off the main thread. */
     fun all(context: Context): List<Resumable> {
         if (!granted(context)) return emptyList()
+        ShotHooks.watchNext?.let { return it.take(MAX_ROWS) }
         return runCatching {
             // No projection: a column an older TV provider does not have would throw, and every
             // one of these is optional to the apps anyway.
@@ -102,6 +103,7 @@ object ContinueWatching {
      * and never logged: an app's own content URI can carry the owner's server in it.
      */
     fun poster(context: Context, uri: String, maxWidth: Int): Bitmap? = runCatching {
+        ShotHooks.artwork?.let { return@runCatching it }
         val parsed = Uri.parse(uri)
         // Only the media server publishes a content URI its own provider can serve. Every other
         // app on this set publishes an https link to its own artwork, so that is fetched. Only

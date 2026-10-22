@@ -34,16 +34,26 @@ jobs:
         run: ./gradlew --no-daemon assembleRelease lintDebug testDebugUnitTest
 
       # minSdk 29 means the APK carries no v1 JAR signature, so keytool cannot read it.
+      # Traced, because this step once failed with no output at all: every command has to
+      # say what it found, or a red tick here means nothing.
       - name: Check which key signed it
         run: |
-          apk=$(ls app/build/outputs/apk/release/*.apk)
-          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          dn=$("$apksigner" verify --print-certs "$apk" | grep -m1 'Signer #1 certificate DN')
-          echo "$dn"
-          if ! echo "$dn" | grep -q 'CN=Orbit Launcher'; then
-            echo "The APK is not signed with the committed key." >&2
+          set -x
+          apk=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          ls -d "$sdk"/build-tools/*/ || true
+          apksigner=$(find "$sdk/build-tools" -name apksigner -type f | sort -V | tail -1)
+          if [ -z "$apksigner" ]; then
+            echo "No apksigner under $sdk/build-tools." >&2
             exit 1
           fi
+          "$apksigner" verify --print-certs "$apk" | tee "${RUNNER_TEMP:-/tmp}/certs.txt"
+          # The debug key is committed on purpose and its DN is public, so printing it
+          # above costs nothing and says which key actually signed the build.
+          grep -q "CN=Orbit Launcher" "${RUNNER_TEMP:-/tmp}/certs.txt" || {
+            echo "The APK is not signed with the committed key." >&2
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
