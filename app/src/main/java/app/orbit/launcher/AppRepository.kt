@@ -66,9 +66,11 @@ object AppRepository {
     /** Opens [packageName], and says whether the TV had anywhere to send it. */
     fun launch(context: Context, packageName: String): Boolean {
         val intent = launchIntent(context, packageName) ?: return false
-        return runCatching {
+        val started = runCatching {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }.isSuccess
+        if (started) LastOpened.record(context, LastOpened.APP, packageName)
+        return started
     }
 
     fun launchIntent(context: Context, packageName: String): Intent? {
