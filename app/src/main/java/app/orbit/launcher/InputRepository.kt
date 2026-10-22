@@ -37,6 +37,7 @@ object InputRepository {
      * unused ports off the row.
      */
     fun load(context: Context): List<TvInput> {
+        ShotHooks.inputs?.let { return it }
         val manager = context.getSystemService(Context.TV_INPUT_SERVICE) as? TvInputManager
             ?: return emptyList()
         val visible = runCatching { manager.tvInputList }.getOrNull().orEmpty()
@@ -109,6 +110,7 @@ object InputRepository {
      * the stock launcher's.
      */
     fun allInputsIntent(context: Context): Intent? {
+        ShotHooks.allInputs?.let { return it }
         val action = Intent(ACTION_VIEW_INPUTS)
         val handlers = runCatching {
             context.packageManager.queryIntentActivities(action, 0)
@@ -123,6 +125,7 @@ object InputRepository {
 
     /** The icon the system itself shows for a destination, so the tile matches the rest of the TV. */
     fun iconFor(context: Context, intent: Intent?): Drawable? {
+        if (intent != null && intent === ShotHooks.store) ShotHooks.storeIcon?.let { return it }
         val pm = context.packageManager
         return intent?.let {
             runCatching { pm.resolveActivity(it, 0)?.activityInfo?.loadIcon(pm) }.getOrNull()
@@ -147,5 +150,6 @@ object InputRepository {
     private const val KEY_LAST_INPUT = "last_input"
 
     /** The store ships under the same id on every Android TV. */
-    fun storeIntent(context: Context): Intent? = AppRepository.launchIntent(context, "com.android.vending")
+    fun storeIntent(context: Context): Intent? =
+        ShotHooks.store ?: AppRepository.launchIntent(context, "com.android.vending")
 }

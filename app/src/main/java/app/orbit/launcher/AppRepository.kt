@@ -38,6 +38,7 @@ object AppRepository {
     fun cached(): List<LaunchableApp> = cache.orEmpty()
 
     fun load(context: Context): List<LaunchableApp> {
+        ShotHooks.apps?.let { cache = it; return it }
         val pm = context.packageManager
         val leanback = query(pm, Intent.CATEGORY_LEANBACK_LAUNCHER)
         val plain = query(pm, Intent.CATEGORY_LAUNCHER)
@@ -74,6 +75,11 @@ object AppRepository {
     }
 
     fun launchIntent(context: Context, packageName: String): Intent? {
+        ShotHooks.apps?.let { apps ->
+            if (apps.any { it.packageName == packageName }) {
+                return Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER).setPackage(packageName)
+            }
+        }
         val pm = context.packageManager
         return pm.getLeanbackLaunchIntentForPackage(packageName)
             ?: pm.getLaunchIntentForPackage(packageName)
@@ -97,6 +103,7 @@ object AppRepository {
 
     /** True when Orbit is already the system's preferred home app. */
     fun isDefaultHome(context: Context): Boolean {
+        ShotHooks.defaultHome?.let { return it }
         val resolved = context.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
             PackageManager.MATCH_DEFAULT_ONLY,
