@@ -21,6 +21,14 @@ object Glyphs {
             "c1.1 0 2-.88 2-1.98v-14c0-1.11-.9-2-2-2zM11 16l4-4-4-4v3H1v2h10v3z",
     )
 
+    /** A magnifier, for the TV's own search. */
+    val Search: ImageVector = glyph(
+        "Search",
+        "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5" +
+            " 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0" +
+            "C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
+    )
+
     /** A three by three grid, for the screen that lists every app. */
     val Apps: ImageVector = glyph(
         "Apps",

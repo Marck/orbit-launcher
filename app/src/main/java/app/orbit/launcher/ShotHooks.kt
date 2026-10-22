@@ -18,5 +18,6 @@ object ShotHooks {
     var store: Intent? = null
     var storeIcon: Drawable? = null
     var allInputs: Intent? = null
+    var search: Intent? = null
     var defaultHome: Boolean? = null
 }
