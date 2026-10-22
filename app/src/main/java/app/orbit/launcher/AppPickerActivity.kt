@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,19 +61,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private val SafeH = 48.dp
-private val SafeV = 27.dp
-private val TileW = 111.dp
-private val TileH = 66.dp
-
-// The grid clips to its own bounds, so a focused first-row tile needs this much room above it to
-// grow into, ring and all. It comes out of the gap above the grid, so nothing moves.
-private val PopRoom = 6.dp
-
-private val Surface = Color(0xFF14181F)
-private val Muted = Color(0xFF8B93A4)
-private val Chosen = Color(0xFF2E9E4F)
 
 /**
  * The grid behind the add tile: every app, with the favorites already ticked.

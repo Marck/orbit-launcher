@@ -43,7 +43,7 @@ class VerifyFixes : TvTest() {
         ShotHooks.apps = ShotHooks.apps!!.filter { it.packageName != "nl.uitzendinggemist" }
         s.moveToState(Lifecycle.State.CREATED)
         s.moveToState(Lifecycle.State.RESUMED)
-        pump(800)
+        waitFor("NPO to be pruned") { "nl.uitzendinggemist" !in stored(FavoriteStore.APPS) }
         println("TV stored a2: ${stored(FavoriteStore.APPS)}")
         assertFalse("NPO must be pruned", "nl.uitzendinggemist" in stored(FavoriteStore.APPS))
         assertEquals(5, stored(FavoriteStore.APPS).size)

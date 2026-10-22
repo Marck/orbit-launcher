@@ -125,6 +125,25 @@ abstract class TvTest {
         }
     }
 
+    /**
+     * Pumps until [condition] holds, and fails saying what it was waiting for if it never does.
+     *
+     * Anything read on Dispatchers.IO lands on a real thread while the clock here is a fake
+     * one, so how many frames it takes is a property of the machine, not of the code. A fixed
+     * settle that is generous on a laptop is not generous on a build runner. Wait for the thing
+     * itself instead of guessing how long it takes.
+     */
+    fun waitFor(what: String, budgetMs: Long = 12_000, condition: () -> Boolean) {
+        var waited = 0L
+        while (waited < budgetMs) {
+            if (condition()) return
+            Thread.sleep(20)
+            pump(100)
+            waited += 100
+        }
+        check(condition()) { "waited ${budgetMs}ms for $what" }
+    }
+
     /** Launches an activity the way a TV would show it: not in touch mode. */
     fun <A : Activity> launch(cls: Class<A>, intent: Intent? = null, settle: Long = 1500): ActivityScenario<A> {
         InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
