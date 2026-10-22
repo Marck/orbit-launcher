@@ -21,6 +21,11 @@
          the system's own, so nothing is removed without the owner confirming it there. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!-- Lets the hero read the TV's own Continue watching list, which is how an app says where
+         the owner had got to. Granted by the owner from the hero, never asked for on start.
+         Orbit only reads it, and what it reads never leaves the TV. -->
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
+
     <!-- From Android 11 an app only sees the other apps it declares an interest in. Without
          this Orbit would see just a handful of system apps: the owner's own apps would vanish
          from the rows and the picker, and the Play Store and All inputs buttons with them.

@@ -86,6 +86,29 @@ no v1 JAR signature for `keytool` to read:
 "$ANDROID_HOME"/build-tools/35.0.0/apksigner verify --print-certs app-release.apk
 ```
 
+## The hero
+
+The top of the screen shows the most truthful thing Orbit can say, in this order:
+
+1. **Continue watching.** What you were actually watching, read from the TV's own Watch
+   Next list, which apps such as Jellyfin publish to. Title, episode, artwork and OK to
+   resume. A progress bar appears only when the app reported both a position and a
+   length; most rows are "next episode" and carry neither, so most of the time there is
+   no bar rather than an invented one.
+2. **Back to the last app or input** Orbit opened, for up to twelve hours. This needs no
+   permission: it is Orbit's own record, and it covers only what was opened from Orbit.
+3. **The time and date,** when there is nothing to offer.
+
+Reading another app's rows needs `READ_TV_LISTINGS`, a normal permission prompt. Orbit
+asks for it once, from the hero, never as a popup on start, and the hero works without
+it. Nothing read there leaves the TV: the artwork is opened straight from the publishing
+app through the content resolver, and those URIs are never logged, because an app's own
+content URI can carry your server address in it.
+
+A row is data from another app, so the intent on it is not followed blindly. A component
+has to belong to the app that published the row, anything without one is addressed to
+that app by name, and any selector is dropped.
+
 ## Focus
 
 The tile in focus grows a little and its label turns white. There is no ring around it:

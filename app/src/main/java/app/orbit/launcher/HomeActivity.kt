@@ -10,7 +10,9 @@ import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -33,6 +35,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -82,6 +85,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
@@ -190,7 +194,7 @@ private object Returns {
 }
 
 /** The parts of the screen focus can be in, so a return can put it back in the same one. */
-private enum class Zone { APPS, INPUTS, TOP }
+private enum class Zone { APPS, INPUTS, HERO, TOP }
 
 /**
  * Whether a key from the remote is being handled right now.
@@ -307,6 +311,10 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     // focus falls to whatever comes first on screen and the remote walks off somewhere else.
     var refocusApps by remember { mutableIntStateOf(0) }
     var refocusInputs by remember { mutableIntStateOf(0) }
+    var refocusHero by remember { mutableIntStateOf(0) }
+    val noticeFocus = remember { FocusRequester() }
+    val topBarFocus = remember { FocusRequester() }
+    val heroFocus = remember { FocusRequester() }
     var refocusTop by remember { mutableIntStateOf(0) }
     // Asks the apps row to go back to its first tile, for Home and Back.
     var toFirst by remember { mutableIntStateOf(0) }
@@ -361,6 +369,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         when (where) {
             Zone.APPS -> refocusApps++
             Zone.INPUTS -> refocusInputs++
+            Zone.HERO -> refocusHero++
             Zone.TOP -> refocusTop++
         }
     }
@@ -406,6 +415,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             // needs that room to fit above the rows.
             Column(Modifier.padding(start = SafeH, top = SafeV, end = SafeH)) {
                 TopBar(
+                    first = topBarFocus,
                     refocus = refocusTop,
                     last = lastTop,
                     onFocused = { name ->
@@ -420,13 +430,26 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                     },
                 )
                 Spacer(Modifier.height(10.dp))
-                Hero()
+                Hero(
+                    apps = apps,
+                    inputs = inputs,
+                    refocus = refocusHero,
+                    // Set by hand: the hero sits at the left and the top bar at the right, so
+                    // Compose's own search finds nothing above the hero and focus would be
+                    // stuck there. The notice is at the right too, below the hero.
+                    self = heroFocus,
+                    above = topBarFocus,
+                    below = noticeFocus.takeIf { !homeOpensOrbit && !noticeDismissed },
+                    onFocused = { moveTo(Zone.HERO) },
+                )
             }
             Spacer(Modifier.weight(1f))
             if (!homeOpensOrbit && !noticeDismissed) {
                 Notice(
                     title = "Orbit is not the home app yet",
                     detail = "Set it as default so the home button opens Orbit",
+                    requester = noticeFocus,
+                    above = heroFocus,
                     // Not every TV has the home app setting. Where it is missing, the
                     // accessibility settings are where the home button service is turned on.
                     onDetails = {
@@ -446,6 +469,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             }
             RowLabel(if (editing != null && editingKey == FavoriteStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
             AppsRow(
+                noticeFocus = noticeFocus.takeIf { !homeOpensOrbit && !noticeDismissed },
                 apps = favoriteApps,
                 // A TV always has some app installed, so an empty list means not read yet.
                 ready = apps.isNotEmpty(),
@@ -740,6 +764,7 @@ private fun Caret(up: Boolean, color: Color) {
 
 @Composable
 private fun AppsRow(
+    noticeFocus: FocusRequester?,
     apps: List<LaunchableApp>,
     ready: Boolean,
     held: String?,
@@ -822,7 +847,7 @@ private fun AppsRow(
     LazyRow(
         modifier = Modifier
             .height(RowHeight)
-            .rowFocus(listState, { lastFocused }, requesters, onFocused),
+            .rowFocus(listState, { lastFocused }, requesters, onFocused) { noticeFocus },
         state = listState,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(start = SafeH, top = RowTop, end = SafeH),
@@ -973,7 +998,13 @@ private fun InputsRow(
  * [onFocused] reports each button by name as it takes focus.
  */
 @Composable
-private fun TopBar(refocus: Int, last: String?, onFocused: (String) -> Unit, onLost: () -> Unit) {
+private fun TopBar(
+    first: FocusRequester,
+    refocus: Int,
+    last: String?,
+    onFocused: (String) -> Unit,
+    onLost: () -> Unit,
+) {
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val button: (String) -> Modifier = { name ->
         Modifier
@@ -997,7 +1028,7 @@ private fun TopBar(refocus: Int, last: String?, onFocused: (String) -> Unit, onL
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(date.format(now), color = Muted, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
-        Shortcuts(button)
+        Shortcuts(first, button)
         Avatar(button)
         Spacer(Modifier.width(9.dp))
         Text(time.format(now), color = Muted, fontSize = 12.sp)
@@ -1009,8 +1040,9 @@ private fun TopBar(refocus: Int, last: String?, onFocused: (String) -> Unit, onL
  *
  * Each is offered only when the TV has somewhere for it to go.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Shortcuts(button: (String) -> Modifier) {
+private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
     val context = LocalContext.current
     val inputsIntent = remember { InputRepository.allInputsIntent(context) }
     val storeIntent = remember { InputRepository.storeIntent(context) }
@@ -1026,7 +1058,9 @@ private fun Shortcuts(button: (String) -> Modifier) {
     // Favorites are what the rows show, so without this an app that is not a favorite could not
     // be opened from Orbit at all.
     TopBarButton(
-        button("apps"),
+        button("apps")
+            .focusRequester(first)
+            .focusProperties { left = FocusRequester.Cancel },
         onClick = {
             context.openScreen(
                 Intent(context, AppPickerActivity::class.java)
@@ -1146,31 +1180,255 @@ private fun TopBarButton(
     )
 }
 
+private val HeroArtW = 192.dp
+private val HeroArtH = 108.dp
+
+/**
+ * The top of the screen, showing the most truthful thing Orbit can say, in this order:
+ *
+ * 1. what the owner was actually watching, from the TV's own Watch Next list;
+ * 2. the last app or input Orbit opened, which needs no permission;
+ * 3. the time, when there is nothing to offer.
+ *
+ * Nothing is invented. The programme's own fields are shown when its app published them and
+ * left out when it did not, so there is no progress bar for a position nobody reported.
+ */
 @Composable
-private fun Hero() {
-    Column {
-        Text("CONTINUE WATCHING", color = Color(0xFF7FD4FF), fontSize = 12.sp)
-        Spacer(Modifier.height(6.dp))
-        Text("Night Watch", color = Color.White, fontSize = 39.sp, fontWeight = FontWeight.Light)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "A maintenance crew on the late shift finds that the building keeps rearranging its own floors.",
-            color = OnSurface,
-            fontSize = 14.sp,
+private fun Hero(
+    apps: List<LaunchableApp>,
+    inputs: List<TvInput>?,
+    refocus: Int,
+    self: FocusRequester,
+    above: FocusRequester,
+    below: FocusRequester?,
+    onFocused: () -> Unit,
+) {
+    val context = LocalContext.current
+    val requester = self
+    var focused by remember { mutableStateOf(false) }
+
+    var granted by remember { mutableStateOf(ContinueWatching.granted(context)) }
+    var asked by rememberSaveable { mutableStateOf(HomePrefs.listingsAsked(context)) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        granted = it
+        asked = true
+        HomePrefs.rememberListingsAsked(context)
+    }
+
+    // The lint check cannot see the assignment through the withContext call, and reports it on
+    // every produceState in this project; the baseline already carries eight of them. Writing
+    // the result to a local first does not help, so the two new ones say so here instead of
+    // growing the baseline, which is meant for warnings that were already there.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val watching by produceState<Resumable?>(initialValue = null, granted, Returns.count) {
+        value = withContext(Dispatchers.IO) { ContinueWatching.latest(context) }
+    }
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val art by produceState<ImageBitmap?>(initialValue = null, watching?.posterUri) {
+        val uri = watching?.posterUri
+        value = withContext(Dispatchers.IO) {
+            uri?.let { ContinueWatching.poster(context, it, maxWidth = 384)?.asImageBitmap() }
+        }
+    }
+
+    val back = remember(Returns.count) { LastOpened.recent(context) }
+    val backApp = back?.takeIf { it.kind == LastOpened.APP }
+        ?.let { entry -> apps.firstOrNull { it.packageName == entry.id } }
+    val backInput = back?.takeIf { it.kind == LastOpened.INPUT }
+        ?.let { entry -> inputs?.firstOrNull { it.id == entry.id } }
+
+    val item = watching
+    val action: (() -> Unit)? = when {
+        item != null -> {
+            {
+                ContinueWatching.intentFor(item)?.let { intent ->
+                    // Resuming is opening that app, so the hero can offer it again tomorrow.
+                    if (context.startActivitySafely(intent)) {
+                        LastOpened.record(context, LastOpened.APP, item.packageName)
+                    }
+                }
+            }
+        }
+        // Asked for once, in the hero, rather than as a popup on a screen nobody opened yet.
+        !granted && !asked -> {
+            { ask.launch(ContinueWatching.PERMISSION) }
+        }
+        backApp != null -> { { context.launchApp(backApp.packageName) } }
+        backInput != null -> { { context.switchToInput(backInput.id) } }
+        else -> null
+    }
+
+    LaunchedEffect(refocus) {
+        if (refocus == 0 || action == null) return@LaunchedEffect
+        requester.focusWhenReady()
+    }
+
+    Row(
+        // On the row rather than on the focusable inside it, to keep it away from the
+        // clickable's own focus target.
+        Modifier
+            .height(HeroArtH)
+            .focusProperties {
+                up = above
+                down = below ?: FocusRequester.Default
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The focus mark for a block this size is an accent down its side, not a ring.
+        Box(
+            Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(2.dp))
+                .background(if (focused) Color(0xFF7FD4FF) else Color.Transparent)
         )
-        Spacer(Modifier.height(8.dp))
-        Text("S2 E5 - THE SUB-LEVEL - 33 MIN LEFT", color = Muted, fontSize = 12.sp)
-        Spacer(Modifier.height(8.dp))
-        Box(Modifier.width(225.dp).height(2.dp).background(Color(0x33FFFFFF))) {
-            Box(Modifier.width(60.dp).height(2.dp).background(Color.White))
+        Spacer(Modifier.width(13.dp))
+
+        Box(
+            Modifier
+                .focusRequester(requester)
+                .onFocusChanged {
+                    focused = it.hasFocus
+                    if (it.hasFocus) onFocused()
+                }
+                // The clickable is the hero's only focus target. A focusable() in front of it
+                // would make a second one, and the focus properties set above would then not be
+                // read from whichever of the two actually held focus.
+                .then(
+                    action?.let {
+                        Modifier.clickable(interactionSource = null, indication = null, onClick = it)
+                    } ?: Modifier
+                )
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val picture = art
+                if (item != null && picture != null) {
+                    Image(
+                        bitmap = picture,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(HeroArtW, HeroArtH)
+                            .clip(RoundedCornerShape(8.dp)),
+                    )
+                    Spacer(Modifier.width(18.dp))
+                }
+                when {
+                    item != null -> Watching(item, focused)
+                    !granted && !asked -> Offer(focused)
+                    backApp != null -> BackTo(backApp.label, focused)
+                    backInput != null -> BackTo(backInput.label, focused)
+                    else -> Clock()
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun Notice(title: String, detail: String, onDetails: () -> Unit, onDismiss: () -> Unit) {
+private fun Watching(item: Resumable, focused: Boolean) {
+    Column {
+        HeroLabel("CONTINUE WATCHING")
+        Text(
+            item.title,
+            color = if (focused) Color.White else OnSurface,
+            fontSize = 33.sp,
+            fontWeight = FontWeight.Light,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        item.description?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        val line = listOfNotNull(
+            item.subtitle,
+            item.minutesLeft?.let { "$it MIN LEFT" },
+        ).joinToString(" - ")
+        if (line.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(line.uppercase(), color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        // Only when the app reported where it had got to. No bar beats a made-up one.
+        item.progress?.let { fraction ->
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.width(225.dp).height(2.dp).background(Color(0x33FFFFFF))) {
+                Box(Modifier.fillMaxWidth(fraction).height(2.dp).background(Color.White))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Offer(focused: Boolean) {
+    Column {
+        HeroLabel("CONTINUE WATCHING")
+        Text(
+            "Show what you were watching",
+            color = if (focused) Color.White else OnSurface,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Light,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Orbit can read the TV's own Continue watching list. Press OK to allow it.",
+            color = Muted,
+            fontSize = 13.sp,
+        )
+    }
+}
+
+@Composable
+private fun BackTo(label: String, focused: Boolean) {
+    Column {
+        HeroLabel("CARRY ON")
+        Text(
+            "Back to $label",
+            color = if (focused) Color.White else OnSurface,
+            fontSize = 33.sp,
+            fontWeight = FontWeight.Light,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Nothing to offer, so the hero says something true and useful instead. */
+@Composable
+private fun Clock() {
+    val now by produceState(initialValue = Date()) {
+        while (true) {
+            value = Date()
+            delay(10_000)
+        }
+    }
+    val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val day = remember { SimpleDateFormat("EEEE d MMMM", Locale.getDefault()) }
+    Column {
+        Text(time.format(now), color = OnSurface, fontSize = 48.sp, fontWeight = FontWeight.Light)
+        Spacer(Modifier.height(2.dp))
+        Text(day.format(now), color = Muted, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun HeroLabel(text: String) {
+    Text(text, color = Color(0xFF7FD4FF), fontSize = 11.sp)
+    Spacer(Modifier.height(5.dp))
+}
+
+@Composable
+private fun Notice(
+    title: String,
+    detail: String,
+    requester: FocusRequester,
+    above: FocusRequester,
+    onDetails: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     Row(
         Modifier
+            .focusProperties { up = above }
             .fillMaxWidth()
             .background(Color(0xA60B1017))
             .padding(horizontal = SafeH, vertical = 9.dp),
@@ -1180,17 +1438,17 @@ private fun Notice(title: String, detail: String, onDetails: () -> Unit, onDismi
             Text(title, color = Color.White, fontSize = 14.sp)
             Text(detail, color = Muted, fontSize = 12.sp)
         }
-        Pill("Details", onDetails)
+        Pill("Details", onDetails, Modifier.focusRequester(requester))
         Spacer(Modifier.width(9.dp))
         Pill("Dismiss", onDismiss)
     }
 }
 
 @Composable
-private fun Pill(label: String, onClick: () -> Unit) {
+private fun Pill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
     Box(
-        Modifier
+        modifier
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable(onClick = onClick)
@@ -1263,12 +1521,18 @@ private fun Modifier.rowFocus(
     last: () -> String?,
     requesters: Map<String, FocusRequester>,
     onFocused: () -> Unit,
+    // Where up goes when leaving the row. Compose would pick whatever overlaps the tile's own
+    // column, which is the hero, right past the notice sitting between them.
+    exitUp: () -> FocusRequester? = { null },
 ): Modifier = onFocusChanged { if (it.hasFocus) onFocused() }
     .focusProperties {
         enter = { direction ->
             val back = last()?.takeIf { id -> listState.layoutInfo.visibleItemsInfo.any { it.key == id } }
             val across = direction == FocusDirection.Up || direction == FocusDirection.Down
             back?.takeIf { across }?.let { requesters[it] } ?: FocusRequester.Default
+        }
+        exit = { direction ->
+            exitUp().takeIf { direction == FocusDirection.Up } ?: FocusRequester.Default
         }
     }
     .focusGroup()
@@ -1624,6 +1888,7 @@ private fun Context.launchApp(packageName: String) {
 
 private fun Context.switchToInput(inputId: String) {
     InputRepository.rememberUse(this, inputId)
+    LastOpened.record(this, LastOpened.INPUT, inputId)
     startActivitySafely(InputRepository.switchIntent(inputId))
 }
 
@@ -1655,9 +1920,18 @@ private fun isHomeButtonServiceOn(context: Context): Boolean {
 /** The home screen's own settings. */
 private object HomePrefs {
     private const val KEY_NOTICE_DISMISSED = "notice_dismissed"
+    private const val KEY_LISTINGS_ASKED = "listings_asked"
 
     fun noticeDismissed(context: Context): Boolean =
         prefs(context).getBoolean(KEY_NOTICE_DISMISSED, false)
+
+    /** Asked once. A refusal is an answer, and the hero stops asking either way. */
+    fun listingsAsked(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_LISTINGS_ASKED, false)
+
+    fun rememberListingsAsked(context: Context) {
+        prefs(context).edit().putBoolean(KEY_LISTINGS_ASKED, true).apply()
+    }
 
     fun dismissNotice(context: Context) {
         prefs(context).edit().putBoolean(KEY_NOTICE_DISMISSED, true).apply()
