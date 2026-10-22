@@ -4,7 +4,8 @@ A replacement home screen for an Android TV set: one screen, no advertising rows
 a hero for what you were last watching, a scrolling row of favorite apps, and a row
 of TV inputs.
 
-Status: design and requirements only. No application code yet.
+Status: in use on the owner's set. Favorites, reordering, the input row, the pickers
+and the profile picture all work; the hero is still a placeholder.
 
 ## Contents
 
@@ -39,13 +40,51 @@ Needs JDK 17 and the Android SDK (platform 35, build-tools 35).
 export JAVA_HOME=/path/to/jdk-17
 export ANDROID_HOME=/path/to/android-sdk
 echo "sdk.dir=$ANDROID_HOME" > local.properties
-./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-CI builds the same artifact, runs Android lint and the unit tests on every pull request
-and every push to `main`; it can also be started by hand. New lint errors fail the build;
-the ones already there are listed in `app/lint-baseline.xml`.
+`assembleDebug` builds the same app unshrunk. Use that one when you need
+`adb shell run-as`, and the release build for anything judged by feel: Compose on a TV
+chip is noticeably smoother shrunk, which shows in the focus pop-out and the scrolling
+labels.
+
+CI builds the release APK, runs Android lint and the unit tests on every pull request and
+every push to `main`; it can also be started by hand. New lint errors fail the build; the
+ones already there are listed in `app/lint-baseline.xml`. Each run gets its own
+`versionCode` from `ORBIT_VERSION_CODE`, so every CI build installs over the one before
+it. A build here keeps `versionCode` 1, so pass the variable to install over a CI build.
+
+### Signing
+
+`app/debug.jks` is committed, and both build types use it. The point is not secrecy: a debug
+key is worth nothing as proof of origin, and anyone can sign an APK with this one. The point
+is that every build, here and in CI, is signed with the *same* key, so a new APK installs over
+the last instead of forcing an uninstall that wipes the favorites, the avatar and the
+accessibility setting.
+
+To sign with a real key instead, point `keystore.properties` at it:
+
+```bash
+cat > keystore.properties <<EOF
+storeFile=/path/to/your.jks
+storePassword=<the store password>
+keyAlias=<the alias>
+keyPassword=<the key password>
+EOF
+```
+
+Git ignores `keystore.properties` and every `*.jks` but the committed one.
+`ORBIT_KEYSTORE_PROPERTIES` points at the file if it lives elsewhere; CI reads the same four
+values from `ORBIT_STORE_FILE`, `ORBIT_STORE_PASSWORD`, `ORBIT_KEY_ALIAS` and
+`ORBIT_KEY_PASSWORD`. Switching keys needs one uninstall.
+
+Checking which key signed an APK needs `apksigner`, because with `minSdk 29` the APK carries
+no v1 JAR signature for `keytool` to read:
+
+```bash
+"$ANDROID_HOME"/build-tools/35.0.0/apksigner verify --print-certs app-release.apk
+```
 
 ## Favorites and order
 
