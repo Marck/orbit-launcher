@@ -14,6 +14,8 @@ data class LaunchableApp(
     val isBanner: Boolean,
     /** A factory app cannot be uninstalled, so the option is not offered for one. */
     val removable: Boolean,
+    /** When the package was last installed or updated, or 0 when that could not be read. */
+    val updatedAt: Long = 0L,
 )
 
 /**
@@ -37,11 +39,18 @@ object AppRepository {
 
     fun cached(): List<LaunchableApp> = cache.orEmpty()
 
+    /**
+     * Artwork is only read again for a package updated since the last read. Decoding every app's
+     * banner on every return was most of the cost of a refresh, and handing back the same artwork
+     * lets the tiles keep the bitmaps they already made from it. The label is always read again,
+     * since it follows the language the TV is set to.
+     */
     fun load(context: Context): List<LaunchableApp> {
         ShotHooks.apps?.let { cache = it; return it }
         val pm = context.packageManager
         val leanback = query(pm, Intent.CATEGORY_LEANBACK_LAUNCHER)
         val plain = query(pm, Intent.CATEGORY_LAUNCHER)
+        val previous = cache.orEmpty().associateBy { it.packageName }
 
         val seen = mutableSetOf(context.packageName)
         val apps = mutableListOf<LaunchableApp>()
@@ -50,15 +59,27 @@ object AppRepository {
             val pkg = info.activityInfo.packageName
             if (!seen.add(pkg)) continue
 
-            val banner = runCatching { info.activityInfo.loadBanner(pm) }.getOrNull()
-            val art = banner ?: runCatching { info.loadIcon(pm) }.getOrNull()
+            val updatedAt =
+                runCatching { pm.getPackageInfo(pkg, 0).lastUpdateTime }.getOrDefault(0L)
+            val known = previous[pkg]?.takeIf { updatedAt != 0L && it.updatedAt == updatedAt }
+            val art: Drawable?
+            val isBanner: Boolean
+            if (known != null) {
+                art = known.art
+                isBanner = known.isBanner
+            } else {
+                val banner = runCatching { info.activityInfo.loadBanner(pm) }.getOrNull()
+                art = banner ?: runCatching { info.loadIcon(pm) }.getOrNull()
+                isBanner = banner != null
+            }
             apps += LaunchableApp(
                 packageName = pkg,
                 label = info.loadLabel(pm).toString(),
                 art = art,
-                isBanner = banner != null,
+                isBanner = isBanner,
                 removable = (info.activityInfo.applicationInfo.flags and
                     android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0,
+                updatedAt = updatedAt,
             )
         }
         return apps.sortedBy { it.label.lowercase() }.also { cache = it }
@@ -67,11 +88,9 @@ object AppRepository {
     /** Opens [packageName], and says whether the TV had anywhere to send it. */
     fun launch(context: Context, packageName: String): Boolean {
         val intent = launchIntent(context, packageName) ?: return false
-        val started = runCatching {
+        return runCatching {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }.isSuccess
-        if (started) LastOpened.record(context, LastOpened.APP, packageName)
-        return started
     }
 
     fun launchIntent(context: Context, packageName: String): Intent? {

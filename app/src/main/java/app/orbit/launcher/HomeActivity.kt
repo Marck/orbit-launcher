@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.text.format.DateFormat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,14 +40,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,6 +60,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +69,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -74,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -83,10 +88,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -95,7 +102,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -111,18 +117,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.reflect.KProperty
 import kotlinx.coroutines.Dispatchers
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 // Sizes come straight from section B of the requirements.
 private val SafeH = 48.dp
@@ -168,6 +173,7 @@ private const val ADD_INPUT_TILE = "add-input"
 private data class TileMenu(
     val key: String,
     val id: String,
+    val label: String,
     /** The tile and its label on screen, for the menu to point at and to leave undimmed. */
     val anchor: Rect,
     val packageName: String? = null,
@@ -272,8 +278,28 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     }
     // Null until the first read lands. A TV can have no inputs at all, so an empty list cannot
     // stand in for "not read yet" the way it does for apps.
-    val inputs by produceState<List<TvInput>?>(initialValue = null, Returns.count) {
-        value = withContext(Dispatchers.IO) { InputRepository.load(context) }
+    var inputs by remember { mutableStateOf<List<TvInput>?>(null) }
+    LaunchedEffect(Returns.count) {
+        inputs = withContext(Dispatchers.IO) { InputRepository.load(context) }
+    }
+    // The TV also says when an input comes, goes or changes while Orbit is in front, such as a
+    // console being switched on, which would otherwise only show after leaving and coming back.
+    // A device coming up reports several changes in a row, so the read waits for them to stop.
+    var inputsChanged by remember { mutableIntStateOf(0) }
+    DisposableEffect(context) {
+        val stop = InputRepository.watch(context) { inputsChanged++ }
+        onDispose { stop() }
+    }
+    LaunchedEffect(inputsChanged) {
+        if (inputsChanged == 0) return@LaunchedEffect
+        delay(300)
+        inputs = withContext(Dispatchers.IO) { InputRepository.load(context) }
+    }
+    // Read again on every return too, so a store disabled or enabled meanwhile is picked up. The
+    // previous read stays up until then, so the buttons do not blink out and back.
+    var destinations by remember { mutableStateOf(Destinations.last) }
+    LaunchedEffect(Returns.count) {
+        destinations = withContext(Dispatchers.IO) { Destinations.read(context) }
     }
     // With the home button service on, Home reaches Orbit without it being the home app, and the
     // notice would be asking for something already done.
@@ -284,6 +310,13 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     }
     // Kept, so a dismissed notice stays dismissed when Orbit is next started.
     var noticeDismissed by remember { mutableStateOf(HomePrefs.noticeDismissed(context)) }
+    var playbackDismissed by remember { mutableStateOf(HomePrefs.playbackNoticeDismissed(context)) }
+    // Asked for only once the home button is sorted, so there is never more than one bar at a
+    // time, and never at all on a TV where nothing publishes a row without a position.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val playbackSeen by produceState(initialValue = true, Returns.count) {
+        value = withContext(Dispatchers.IO) { PlaybackMemory.granted(context) }
+    }
 
     // Only the favorites, in the owner's order; everything else is one press of + away.
     // Reading the revision here is what updates the rows the moment a favorite changes,
@@ -365,6 +398,19 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         editSnapshot = null
     }
 
+    // OK that opens nothing at all reads as the remote not working, so a failure says so.
+    fun openApp(packageName: String, label: String) {
+        if (!context.launchApp(packageName)) confirmation = "Couldn't open $label"
+    }
+
+    fun switchTo(inputId: String, label: String) {
+        if (!context.switchToInput(inputId)) confirmation = "Couldn't switch to $label"
+    }
+
+    fun open(intent: Intent, label: String) {
+        if (!context.startActivitySafely(intent)) confirmation = "Couldn't open $label"
+    }
+
     fun refocus(where: Zone) {
         when (where) {
             Zone.APPS -> refocusApps++
@@ -385,6 +431,13 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 else -> Zone.INPUTS
             }
         )
+    }
+
+    // A top bar button can go while it has focus: the Play Store, disabled while Orbit was out
+    // of sight, goes when the read on return lands, after focus was already put back on it.
+    // Asking the top bar to put it back again finds the button gone and hands focus to the apps.
+    LaunchedEffect(destinations.inputs != null, destinations.store != null) {
+        if (zone == Zone.TOP && menu == null) refocusTop++
     }
 
     // Leaving puts away the menu and any move not yet kept, so coming back finds the rows as
@@ -409,13 +462,19 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         toFirst++
     }
 
+    // Kept while focus is elsewhere, so stepping up to the top bar does not blank the hero.
+    var focusedApp by rememberSaveable { mutableStateOf<String?>(null) }
+    val watching = rememberWatching(focusedApp)
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Backdrop(watching.art, Modifier.align(Alignment.TopEnd))
         Column(Modifier.fillMaxSize()) {
             // No safe margin below: the space under the hero stretches anyway, and the notice
             // needs that room to fit above the rows.
             Column(Modifier.padding(start = SafeH, top = SafeV, end = SafeH)) {
                 TopBar(
                     first = topBarFocus,
+                    destinations = destinations,
                     refocus = refocusTop,
                     last = lastTop,
                     onFocused = { name ->
@@ -428,17 +487,18 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                         zone = Zone.APPS
                         refocusApps++
                     },
+                    onOpen = ::open,
                 )
                 Spacer(Modifier.height(10.dp))
                 Hero(
                     apps = apps,
-                    inputs = inputs,
                     refocus = refocusHero,
                     // Set by hand: the hero sits at the left and the top bar at the right, so
                     // Compose's own search finds nothing above the hero and focus would be
                     // stuck there. The notice is at the right too, below the hero.
                     self = heroFocus,
                     above = topBarFocus,
+                    watching = watching,
                     below = noticeFocus.takeIf { !homeOpensOrbit && !noticeDismissed },
                     onFocused = { moveTo(Zone.HERO) },
                 )
@@ -466,6 +526,27 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                     },
                 )
                 Spacer(Modifier.height(14.dp))
+            } else if (watching.item != null && watching.progress == null &&
+                !playbackSeen && !playbackDismissed
+            ) {
+                Notice(
+                    title = "Orbit cannot see how far you got",
+                    detail = "Turn Orbit on under notification access to show a progress bar",
+                    requester = noticeFocus,
+                    above = heroFocus,
+                    onDetails = {
+                        context.startActivitySafely(
+                            Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                        )
+                    },
+                    onDismiss = {
+                        playbackDismissed = true
+                        HomePrefs.dismissPlaybackNotice(context)
+                        zone = Zone.APPS
+                        refocusApps++
+                    },
+                )
+                Spacer(Modifier.height(14.dp))
             }
             RowLabel(if (editing != null && editingKey == FavoriteStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
             AppsRow(
@@ -478,11 +559,14 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 toFirst = toFirst,
                 active = zone == Zone.APPS && menu == null,
                 onFocused = { moveTo(Zone.APPS) },
+                onTile = { focusedApp = it },
                 editing = editing.takeIf { editingKey == FavoriteStore.APPS },
+                onOpen = { app -> openApp(app.packageName, app.label) },
                 onMenu = { app, anchor ->
                     menu = TileMenu(
                         key = FavoriteStore.APPS,
                         id = app.packageName,
+                        label = app.label,
                         anchor = anchor,
                         // Only set when the system would actually accept an uninstall, which
                         // is what decides whether the entry is offered at all.
@@ -507,8 +591,14 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 active = zone == Zone.INPUTS && menu == null,
                 onFocused = { moveTo(Zone.INPUTS) },
                 editing = editing.takeIf { editingKey == FavoriteStore.INPUTS },
+                onOpen = { input -> switchTo(input.id, input.label) },
                 onMenu = { input, anchor ->
-                    menu = TileMenu(key = FavoriteStore.INPUTS, id = input.id, anchor = anchor)
+                    menu = TileMenu(
+                        key = FavoriteStore.INPUTS,
+                        id = input.id,
+                        label = input.label,
+                        anchor = anchor,
+                    )
                 },
                 onMove = { delta ->
                     editing?.let {
@@ -530,9 +620,9 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 onOpen = {
                     closeMenu(target)
                     if (target.key == FavoriteStore.APPS) {
-                        context.launchApp(target.id)
+                        openApp(target.id, target.label)
                     } else {
-                        context.switchToInput(target.id)
+                        switchTo(target.id, target.label)
                     }
                 },
                 onRemove = {
@@ -773,7 +863,10 @@ private fun AppsRow(
     /** Focus belongs in this row: it was last here, and no menu has it. */
     active: Boolean,
     onFocused: () -> Unit,
+    /** The app under the cursor, or null on the add tile. The hero follows it. */
+    onTile: (String?) -> Unit,
     editing: String?,
+    onOpen: (LaunchableApp) -> Unit,
     onMenu: (LaunchableApp, Rect) -> Unit,
     onMove: (Int) -> Unit,
     onEndEdit: (Boolean) -> Unit,
@@ -828,12 +921,7 @@ private fun AppsRow(
         if (editing == null) runCatching { listState.reveal(index) }
         // Items are placed during layout, so the requester is not attached on the frame the
         // list arrives. Keep asking until it takes.
-        repeat(30) {
-            if (runCatching { requesters[target]?.requestFocus() != null }.getOrDefault(false)) {
-                return@LaunchedEffect
-            }
-            delay(16)
-        }
+        focusWhenReady { requesters[target] }
     }
 
     LaunchedEffect(toFirst) {
@@ -860,9 +948,10 @@ private fun AppsRow(
                 requester = requesters.getOrPut(app.packageName) { FocusRequester() },
                 onFocused = {
                     lastFocused = app.packageName
+                    onTile(app.packageName)
                     lastIndex = index
                 },
-                onClick = { context.launchApp(app.packageName) },
+                onClick = { onOpen(app) },
                 onMenu = { anchor -> onMenu(app, anchor) },
                 onMove = { delta -> listState.holdStill(); onMove(delta) },
                 onEndEdit = onEndEdit,
@@ -878,6 +967,7 @@ private fun AppsRow(
                 requester = requesters.getOrPut(ADD_TILE) { FocusRequester() },
                 onFocused = {
                     lastFocused = ADD_TILE
+                    onTile(null)
                     lastIndex = apps.size
                 },
                 onEdgeRight = { firstPackage?.let { jumpTo(0, it) } },
@@ -896,6 +986,7 @@ private fun InputsRow(
     active: Boolean,
     onFocused: () -> Unit,
     editing: String?,
+    onOpen: (TvInput) -> Unit,
     onMenu: (TvInput, Rect) -> Unit,
     onMove: (Int) -> Unit,
     onEndEdit: (Boolean) -> Unit,
@@ -936,12 +1027,7 @@ private fun InputsRow(
         val target = lastFocused?.takeIf { it in ids } ?: ids[lastIndex.coerceAtMost(ids.lastIndex)]
         val index = ids.indexOf(target)
         if (editing == null) runCatching { listState.reveal(index) }
-        repeat(30) {
-            if (runCatching { requesters[target]?.requestFocus() != null }.getOrDefault(false)) {
-                return@LaunchedEffect
-            }
-            delay(16)
-        }
+        focusWhenReady { requesters[target] }
     }
 
     LazyRow(
@@ -974,7 +1060,7 @@ private fun InputsRow(
                 } else {
                     null
                 },
-            ) { context.switchToInput(input.id) }
+            ) { onOpen(input) }
         }
         if (ready) item(key = ADD_INPUT_TILE) {
             PlusTile(
@@ -995,16 +1081,20 @@ private fun InputsRow(
  * The date, the way out to the TV's own screens, the profile picture and the time.
  *
  * [last] is the button last used, for focus to come back to after where it led, and
- * [onFocused] reports each button by name as it takes focus.
+ * [onFocused] reports each button by name as it takes focus. [onOpen] starts where a button leads,
+ * given the name to tell the owner if it cannot.
  */
 @Composable
 private fun TopBar(
     first: FocusRequester,
+    destinations: Destinations,
     refocus: Int,
     last: String?,
     onFocused: (String) -> Unit,
     onLost: () -> Unit,
+    onOpen: (Intent, String) -> Unit,
 ) {
+    val context = LocalContext.current
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     val button: (String) -> Modifier = { name ->
         Modifier
@@ -1016,22 +1106,69 @@ private fun TopBar(
         if (!requesters[last].focusWhenReady()) onLost()
     }
 
-    val now by produceState(initialValue = Date()) {
+    // The 12 or 24 hour setting is read again on every tick, so changing it on the TV shows
+    // within the minute. Each tick lands on the minute itself, so the clock turns over with the
+    // others in the room rather than up to a tick behind them.
+    var now by remember { mutableStateOf(Date()) }
+    var twentyFour by remember { mutableStateOf(DateFormat.is24HourFormat(context)) }
+    LaunchedEffect(Unit) {
         while (true) {
-            value = Date()
-            delay(10_000)
+            now = Date()
+            twentyFour = DateFormat.is24HourFormat(context)
+            delay(60_000 - System.currentTimeMillis() % 60_000)
         }
     }
-    val date = remember { SimpleDateFormat("EEEE d MMMM", Locale.getDefault()) }
-    val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    // In the order the language puts them: "Monday 3 March" here, "Monday, March 3" there.
+    val date = remember {
+        val locale = Locale.getDefault()
+        SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale)
+    }
+    // Twelve hour time leaves off AM and PM, the way the stock launcher's clock does.
+    val time = remember(twentyFour) {
+        SimpleDateFormat(if (twentyFour) "HH:mm" else "h:mm", Locale.getDefault())
+    }
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(date.format(now), color = Muted, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
-        Shortcuts(first, button)
+        Shortcuts(first, button, destinations, onOpen)
         Avatar(button)
         Spacer(Modifier.width(9.dp))
         Text(time.format(now), color = Muted, fontSize = 12.sp)
+    }
+}
+
+/**
+ * Where the top bar's buttons lead, and the store's own icon, so it reads as the store at a
+ * glance. Null where the TV has nowhere for a button to go.
+ */
+private class Destinations(
+    val search: Intent? = null,
+    val inputs: Intent? = null,
+    val store: Intent? = null,
+    val storeIcon: ImageBitmap? = null,
+) {
+    companion object {
+        /**
+         * The last read, kept for the lifetime of the process. A screen started again shows its
+         * buttons from the first frame, so focus coming back to one of them finds it there.
+         */
+        @Volatile
+        var last = Destinations()
+            private set
+
+        /** Package manager lookups and an icon decode, so never on the main thread. */
+        fun read(context: Context): Destinations {
+            val store = InputRepository.storeIntent(context)
+            return Destinations(
+                search = InputRepository.searchIntent(context),
+                inputs = InputRepository.allInputsIntent(context),
+                store = store,
+                storeIcon = runCatching {
+                    InputRepository.iconFor(context, store)?.toBitmap()?.asImageBitmap()
+                }.getOrNull(),
+            ).also { last = it }
+        }
     }
 }
 
@@ -1042,19 +1179,20 @@ private fun TopBar(
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
+private fun Shortcuts(
+    first: FocusRequester,
+    button: (String) -> Modifier,
+    destinations: Destinations,
+    onOpen: (Intent, String) -> Unit,
+) {
     val context = LocalContext.current
-    val searchIntent = remember { InputRepository.searchIntent(context) }
-    val inputsIntent = remember { InputRepository.allInputsIntent(context) }
-    val storeIntent = remember { InputRepository.storeIntent(context) }
+    val searchIntent = destinations.search
+    val inputsIntent = destinations.inputs
+    val storeIntent = destinations.store
     val settingsIntent = remember { InputRepository.settingsIntent() }
-    // The store's own icon, so it reads as the store at a glance. Inputs and settings have no
-    // icon worth borrowing, so they get the same glyphs the stock top bar uses.
-    val storeIcon = remember(storeIntent) {
-        runCatching {
-            InputRepository.iconFor(context, storeIntent)?.toBitmap()?.asImageBitmap()
-        }.getOrNull()
-    }
+    // Inputs and settings have no icon worth borrowing, so they get the same glyphs the stock top
+    // bar uses.
+    val storeIcon = destinations.storeIcon
 
     // Leftmost, as on the stock top bar. It carries the shared requester and holds the left
     // edge, which pass to All apps when the TV has no search to offer.
@@ -1098,7 +1236,7 @@ private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
     Spacer(Modifier.width(9.dp))
 
     if (inputsIntent != null) {
-        TopBarButton(button("inputs"), onClick = { context.startActivitySafely(inputsIntent) }) {
+        TopBarButton(button("inputs"), onClick = { onOpen(inputsIntent, "All inputs") }) {
             Icon(
                 imageVector = Glyphs.Input,
                 contentDescription = "All inputs",
@@ -1109,7 +1247,7 @@ private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
         Spacer(Modifier.width(9.dp))
     }
     if (storeIntent != null) {
-        TopBarButton(button("store"), onClick = { context.startActivitySafely(storeIntent) }) {
+        TopBarButton(button("store"), onClick = { onOpen(storeIntent, "Play Store") }) {
             if (storeIcon != null) {
                 Image(
                     bitmap = storeIcon,
@@ -1128,7 +1266,7 @@ private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
         }
         Spacer(Modifier.width(9.dp))
     }
-    TopBarButton(button("settings"), onClick = { context.startActivitySafely(settingsIntent) }) {
+    TopBarButton(button("settings"), onClick = { onOpen(settingsIntent, "Settings") }) {
         Icon(
             imageVector = Icons.Filled.Settings,
             contentDescription = "Settings",
@@ -1200,8 +1338,20 @@ private fun TopBarButton(
     )
 }
 
-private val HeroArtW = 192.dp
-private val HeroArtH = 108.dp
+private val HeroMinH = 108.dp
+
+/** How long each thing to carry on with is shown before the next one. */
+private const val CycleMs = 10_000L
+
+/** The hero's words stay left of the artwork, whatever length an app gives them. */
+private const val HeroTextWidth = 0.52f
+
+/** The notice stays left of where the artwork becomes visible through its fade. */
+private const val NoticeWidth = 0.56f
+
+/** How much of the screen the artwork covers, before it is faded out. */
+private const val BackdropWidth = 0.60f
+private const val BackdropHeight = 0.78f
 
 /**
  * The top of the screen, showing the most truthful thing Orbit can say, in this order:
@@ -1216,65 +1366,39 @@ private val HeroArtH = 108.dp
 @Composable
 private fun Hero(
     apps: List<LaunchableApp>,
-    inputs: List<TvInput>?,
     refocus: Int,
     self: FocusRequester,
     above: FocusRequester,
     below: FocusRequester?,
+    watching: Watching,
     onFocused: () -> Unit,
 ) {
     val context = LocalContext.current
     val requester = self
     var focused by remember { mutableStateOf(false) }
+    var heldPress by remember { mutableLongStateOf(0L) }
+    val granted = watching.granted
+    val asked = watching.asked
 
-    var granted by remember { mutableStateOf(ContinueWatching.granted(context)) }
-    var asked by rememberSaveable { mutableStateOf(HomePrefs.listingsAsked(context)) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        granted = it
-        asked = true
-        HomePrefs.rememberListingsAsked(context)
+    val item = watching.item
+    val progress = watching.progress
+    val ambient = watching.picture?.takeIf { it.title != null }
+    // Named after the app that published it. "From your library" was a claim Orbit cannot
+    // make: most of these come from a shop front, not from anything the owner has.
+    val ambientSource = ambient?.let { picture ->
+        apps.firstOrNull { it.packageName == picture.packageName }?.label
     }
-
-    // The lint check cannot see the assignment through the withContext call, and reports it on
-    // every produceState in this project; the baseline already carries eight of them. Writing
-    // the result to a local first does not help, so the two new ones say so here instead of
-    // growing the baseline, which is meant for warnings that were already there.
-    @Suppress("ProduceStateDoesNotAssignValue")
-    val watching by produceState<Resumable?>(initialValue = null, granted, Returns.count) {
-        value = withContext(Dispatchers.IO) { ContinueWatching.latest(context) }
-    }
-    @Suppress("ProduceStateDoesNotAssignValue")
-    val art by produceState<ImageBitmap?>(initialValue = null, watching?.posterUri) {
-        val uri = watching?.posterUri
-        value = withContext(Dispatchers.IO) {
-            uri?.let { ContinueWatching.poster(context, it, maxWidth = 384)?.asImageBitmap() }
-        }
-    }
-
-    val back = remember(Returns.count) { LastOpened.recent(context) }
-    val backApp = back?.takeIf { it.kind == LastOpened.APP }
-        ?.let { entry -> apps.firstOrNull { it.packageName == entry.id } }
-    val backInput = back?.takeIf { it.kind == LastOpened.INPUT }
-        ?.let { entry -> inputs?.firstOrNull { it.id == entry.id } }
-
-    val item = watching
     val action: (() -> Unit)? = when {
         item != null -> {
             {
-                ContinueWatching.intentFor(item)?.let { intent ->
-                    // Resuming is opening that app, so the hero can offer it again tomorrow.
-                    if (context.startActivitySafely(intent)) {
-                        LastOpened.record(context, LastOpened.APP, item.packageName)
-                    }
-                }
+                ContinueWatching.intentFor(item)?.let { context.startActivitySafely(it) }
             }
         }
         // Asked for once, in the hero, rather than as a popup on a screen nobody opened yet.
-        !granted && !asked -> {
-            { ask.launch(ContinueWatching.PERMISSION) }
-        }
-        backApp != null -> { { context.launchApp(backApp.packageName) } }
-        backInput != null -> { { context.switchToInput(backInput.id) } }
+        !granted && !asked -> watching.ask
+        // The picture came from an app, so OK opens that app. Holding OK configures which
+        // apps supply them, the same gesture a tile uses for its menu.
+        ambient != null -> { { context.launchApp(ambient.packageName) } }
         else -> null
     }
 
@@ -1287,12 +1411,17 @@ private fun Hero(
         // On the row rather than on the focusable inside it, to keep it away from the
         // clickable's own focus target.
         Modifier
-            .height(HeroArtH)
+            // IntrinsicSize.Min first: the accent beside the text fills the height, and without
+            // a bound to fill it would take the whole screen and push the rows off it.
+            .height(IntrinsicSize.Min)
+            .heightIn(min = HeroMinH)
             .focusProperties {
                 up = above
                 down = below ?: FocusRequester.Default
             },
-        verticalAlignment = Alignment.CenterVertically,
+        // Top aligned, not centred: one thing to carry on with has an episode line and the next
+        // one does not, and centred text would jump up and down as the hero steps through them.
+        verticalAlignment = Alignment.Top,
     ) {
         // The focus mark for a block this size is an accent down its side, not a ring.
         Box(
@@ -1306,10 +1435,31 @@ private fun Hero(
 
         Box(
             Modifier
+                .fillMaxWidth(HeroTextWidth)
                 .focusRequester(requester)
                 .onFocusChanged {
                     focused = it.hasFocus
                     if (it.hasFocus) onFocused()
+                }
+                // Holding OK is how the pictures are configured, the same gesture a tile uses
+                // for its menu. The release is swallowed so the hero does not also resume.
+                .onPreviewKeyEvent { event ->
+                    val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
+                    val press = event.nativeKeyEvent.downTime
+                    when {
+                        ok && event.type == KeyEventType.KeyDown && event.isHeld() -> {
+                            if (heldPress != press) {
+                                heldPress = press
+                                context.openScreen(
+                                    Intent(context, AppPickerActivity::class.java)
+                                        .putExtra(AppPickerActivity.EXTRA_BACKDROPS, true)
+                                )
+                            }
+                            true
+                        }
+                        ok && event.type == KeyEventType.KeyUp && heldPress == press -> true
+                        else -> false
+                    }
                 }
                 // The clickable is the hero's only focus target. A focusable() in front of it
                 // would make a second one, and the focus properties set above would then not be
@@ -1320,33 +1470,138 @@ private fun Hero(
                     } ?: Modifier
                 )
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val picture = art
-                if (item != null && picture != null) {
-                    Image(
-                        bitmap = picture,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(HeroArtW, HeroArtH)
-                            .clip(RoundedCornerShape(8.dp)),
-                    )
-                    Spacer(Modifier.width(18.dp))
-                }
-                when {
-                    item != null -> Watching(item, focused)
-                    !granted && !asked -> Offer(focused)
-                    backApp != null -> BackTo(backApp.label, focused)
-                    backInput != null -> BackTo(backInput.label, focused)
-                    else -> Clock()
-                }
+            when {
+                item != null -> Watching(item, progress, focused)
+                !granted && !asked -> Offer(focused)
+                ambient != null -> Ambient(ambient, ambientSource, focused)
+                else -> Clock()
             }
         }
     }
 }
 
+/** What the hero knows about Continue watching, read once for the whole screen. */
+private class Watching(
+    val item: Resumable?,
+    /** The bar, from the row itself or from what the TV was last seen playing. */
+    val progress: Progress?,
+    /** What the ambient picture is of, when one is being shown instead of a programme. */
+    val picture: Picture?,
+    val art: ImageBitmap?,
+    val granted: Boolean,
+    val asked: Boolean,
+    val ask: () -> Unit,
+)
+
+/**
+ * Reads the TV's Watch Next list and steps through it, so a second thing to carry on with is
+ * not hidden behind the first. Read here rather than in the hero, because the artwork is drawn
+ * behind the whole screen.
+ */
 @Composable
-private fun Watching(item: Resumable, focused: Boolean) {
+private fun rememberWatching(focusedApp: String?): Watching {
+    val context = LocalContext.current
+    var granted by remember { mutableStateOf(ContinueWatching.granted(context)) }
+    var asked by rememberSaveable { mutableStateOf(HomePrefs.listingsAsked(context)) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        granted = it
+        asked = true
+        HomePrefs.rememberListingsAsked(context)
+    }
+
+    // The lint check cannot see the assignment through the withContext call, and reports it on
+    // every produceState in this project; the baseline already carries eight of them. Writing
+    // the result to a local first does not help, so these say so here instead of growing the
+    // baseline, which is meant for warnings that were already there.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val items by produceState(initialValue = emptyList<Resumable>(), granted, Returns.count) {
+        value = withContext(Dispatchers.IO) { ContinueWatching.all(context) }
+    }
+    // Only what the app under the cursor published. Another app's programme behind a tile that
+    // knows nothing about it was the picture claiming something it could not.
+    val mine = remember(items, focusedApp) { items.filter { it.packageName == focusedApp } }
+    // Back to the first whenever the list itself changes, so the step is always within it.
+    var index by remember(mine) { mutableIntStateOf(0) }
+    LaunchedEffect(mine) {
+        if (mine.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(CycleMs)
+            index = (index + 1) % mine.size
+        }
+    }
+    val item = mine.getOrNull(index)
+
+    // Ambient pictures, for an app that serves nothing of its own.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val ambient by produceState(
+        initialValue = emptyList<Picture>(),
+        Backdrops.revision,
+        FavoriteStore.revision,
+        Returns.count,
+        items,
+    ) {
+        // Keyed on the titles so the pool is rebuilt when Watch Next changes.
+        val shown = items.mapNotNull { it.title }.toSet()
+        value = withContext(Dispatchers.IO) { Backdrops.art(context, except = shown) }
+    }
+    var ambientIndex by remember(ambient) { mutableIntStateOf(0) }
+    LaunchedEffect(ambient, item != null) {
+        if (item != null || ambient.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(CycleMs)
+            ambientIndex = (ambientIndex + 1) % ambient.size
+        }
+    }
+
+    val picture = ambient.getOrNull(ambientIndex)
+    val uri = item?.posterUri ?: picture?.uri
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val art by produceState<ImageBitmap?>(initialValue = null, uri) {
+        value = withContext(Dispatchers.IO) {
+            uri?.let { ContinueWatching.poster(context, it, maxWidth = 1280)?.asImageBitmap() }
+        }
+    }
+    // The row's own position where the app gave one, and what the TV was last seen playing
+    // where it did not. A "next episode" row never carries a position.
+    val progress = remember(item, Returns.count) {
+        item?.let { it.progress ?: PlaybackMemory.progressFor(context, it.packageName, it.title) }
+    }
+    // Only once its picture is actually on screen: a title over a black rectangle is worse
+    // than no hero at all, and some artwork never loads.
+    return Watching(item, progress, picture.takeIf { item == null && art != null }, art, granted, asked) {
+        ask.launch(ContinueWatching.PERMISSION)
+    }
+}
+
+/**
+ * The programme's own artwork, bled in from the right and faded out towards the middle and the
+ * bottom so it has no edge, with the rows sitting on top of it. The screen behind is black, so
+ * black is what it fades into.
+ */
+@Composable
+private fun Backdrop(art: ImageBitmap?, modifier: Modifier) {
+    val shown = art ?: return
+    Image(
+        bitmap = shown,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        alignment = Alignment.TopCenter,
+        modifier = modifier
+            .fillMaxWidth(BackdropWidth)
+            .fillMaxHeight(BackdropHeight)
+            .drawWithContent {
+                drawContent()
+                drawRect(Brush.horizontalGradient(0f to Color.Black, 0.55f to Color.Transparent))
+                drawRect(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black))
+                // A touch along the top as well: artwork that starts on a bright sky otherwise
+                // meets the edge of the screen in a hard line, and the top bar sits on it.
+                drawRect(Brush.verticalGradient(0f to Color.Black, 0.10f to Color.Transparent))
+            },
+    )
+}
+
+@Composable
+private fun Watching(item: Resumable, progress: Progress?, focused: Boolean) {
     Column {
         HeroLabel("CONTINUE WATCHING")
         Text(
@@ -1361,19 +1616,30 @@ private fun Watching(item: Resumable, focused: Boolean) {
             Spacer(Modifier.height(6.dp))
             Text(it, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        val line = listOfNotNull(
-            item.subtitle,
-            item.minutesLeft?.let { "$it MIN LEFT" },
-        ).joinToString(" - ")
+        // One line above the bar: the episode, where there is one, and the two numbers. A film
+        // has no episode line, so it is left out rather than filled with a season.
+        val line = listOfNotNull(item.subtitle?.uppercase(), progress?.summary).joinToString(" - ")
         if (line.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            Text(line.uppercase(), color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        // Only when the app reported where it had got to. No bar beats a made-up one.
-        item.progress?.let { fraction ->
             Spacer(Modifier.height(8.dp))
-            Box(Modifier.width(225.dp).height(2.dp).background(Color(0x33FFFFFF))) {
-                Box(Modifier.fillMaxWidth(fraction).height(2.dp).background(Color.White))
+            Text(line, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        // Only when a position was actually reported. No bar beats a made-up one.
+        progress?.let {
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier
+                    .width(300.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0x33FFFFFF))
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(it.fraction)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White)
+                )
             }
         }
     }
@@ -1398,18 +1664,28 @@ private fun Offer(focused: Boolean) {
     }
 }
 
+/** A picture with nothing behind it but its own name, and the seasons when the app said. */
 @Composable
-private fun BackTo(label: String, focused: Boolean) {
+private fun Ambient(picture: Picture, source: String?, focused: Boolean) {
     Column {
-        HeroLabel("CARRY ON")
+        HeroLabel(source?.uppercase()?.let { "ON $it" } ?: "ALSO ON THIS TV")
         Text(
-            "Back to $label",
+            picture.title.orEmpty(),
             color = if (focused) Color.White else OnSurface,
             fontSize = 33.sp,
             fontWeight = FontWeight.Light,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        picture.seasons?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (it == 1) "1 SEASON" else "$it SEASONS",
+                color = Muted,
+                fontSize = 11.sp,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -1449,9 +1725,13 @@ private fun Notice(
     Row(
         Modifier
             .focusProperties { up = above }
-            .fillMaxWidth()
-            .background(Color(0xA60B1017))
-            .padding(horizontal = SafeH, vertical = 9.dp),
+            // Only as wide as the part of the screen the artwork does not reach, so the two
+            // never sit on top of each other.
+            .fillMaxWidth(NoticeWidth)
+            .padding(start = SafeH, end = 18.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF0B1017))
+            .padding(horizontal = 18.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -1493,9 +1773,15 @@ private fun RowLabel(text: String) {
  * A row composes only what is on screen, so after scrolling to the far end the requester there
  * is not attached for another frame or two.
  */
-private suspend fun FocusRequester?.focusWhenReady(): Boolean {
+private suspend fun FocusRequester?.focusWhenReady(): Boolean = focusWhenReady { this }
+
+/**
+ * The same, for a requester that may not exist yet either: [requester] is asked again on every
+ * try, because a row only creates a tile's requester when it composes the tile.
+ */
+private suspend fun focusWhenReady(requester: () -> FocusRequester?): Boolean {
     repeat(30) {
-        if (runCatching { this?.requestFocus() != null }.getOrDefault(false)) return true
+        if (runCatching { requester()?.requestFocus() != null }.getOrDefault(false)) return true
         delay(16)
     }
     return false
@@ -1585,17 +1871,9 @@ private fun SafeAreaScrolling(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
 }
 
-/** How long OK must be held for the menu rather than a launch, if no long-press flag arrives. */
 /**
- * Keys for a tile that can be moved.
- *
- * The hold is measured here rather than left to `combinedClickable`, whose long-press handling
- * for hardware keys is not something to depend on sight unseen. Holding OK opens the menu and
- * swallows the release so the tile does not also activate; a tap falls through untouched. Menu
- * does the same, for remotes that have the key.
- *
- * While moving, every key is swallowed: left and right reorder instead of changing focus, OK
- * keeps the new place, Back puts the order back.
+ * Keys for a tile that can be moved: feeds each one to the tile's [TileKeys] and does what it
+ * says, which is where the rules and their reasons live.
  */
 @Composable
 private fun Modifier.tileKeys(
@@ -1606,60 +1884,41 @@ private fun Modifier.tileKeys(
     onEdgeLeft: (() -> Unit)? = null,
     onEdgeRight: (() -> Unit)? = null,
 ): Modifier {
-    var pressedAt by remember { mutableLongStateOf(0L) }
-    // Identified by the press itself, because opening the menu moves focus away and the tile
-    // never sees the release. A flag cleared on release would stay set and eat the next hold.
-    var handledPress by remember { mutableLongStateOf(0L) }
+    val keys = remember { TileKeys() }
     return onPreviewKeyEvent { event ->
-        val down = event.type == KeyEventType.KeyDown
-        val up = event.type == KeyEventType.KeyUp
-        val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
-        when {
-            editing && event.key == Key.DirectionLeft -> { if (down) onMove(-1); true }
-            editing && event.key == Key.DirectionRight -> { if (down) onMove(1); true }
-            editing && ok -> { if (up) onEndEdit(false); true }
-            editing && event.key == Key.Back -> { if (up) onEndEdit(true); true }
-            editing -> true
-            // At either end, left and right jump to the other end rather than stopping dead.
-            down && event.key == Key.DirectionLeft && onEdgeLeft != null -> { onEdgeLeft(); true }
-            down && event.key == Key.DirectionRight && onEdgeRight != null -> { onEdgeRight(); true }
-            event.key == Key.DirectionLeft && onEdgeLeft != null -> true
-            event.key == Key.DirectionRight && onEdgeRight != null -> true
-            up && event.key == Key.Menu -> { onMenu(); true }
-            ok && down && event.isHeld() -> {
-                // The system has decided this is a hold. Auto-repeat keeps sending downs, so
-                // act once per press.
-                val press = event.nativeKeyEvent.downTime
-                if (handledPress != press) {
-                    handledPress = press
-                    // The menu takes the release, so the tile never clears this itself. Left
-                    // set, it would make the next quick tap read as a hold.
-                    pressedAt = 0L
-                    onMenu()
-                }
-                true
-            }
-            ok && down -> {
-                if (pressedAt == 0L) pressedAt = SystemClock.elapsedRealtime()
-                false
-            }
-            ok && up -> {
-                val press = event.nativeKeyEvent.downTime
-                val duration = SystemClock.elapsedRealtime() - pressedAt
-                val longByTime = pressedAt != 0L && duration >= LongPressMs
-                pressedAt = 0L
-                when {
-                    // The menu is already open for this press; swallow the release so the tile
-                    // does not activate as well.
-                    handledPress == press -> true
-                    // A hold that never produced a flag still counts, so a remote that does not
-                    // send one is not left without the menu.
-                    longByTime -> { onMenu(); true }
-                    else -> false
-                }
-            }
-            else -> false
+        val native = event.nativeKeyEvent
+        val action = keys.onKey(
+            key = when (event.key) {
+                Key.DirectionCenter, Key.Enter -> TileKey.OK
+                Key.DirectionLeft -> TileKey.LEFT
+                Key.DirectionRight -> TileKey.RIGHT
+                Key.Back -> TileKey.BACK
+                Key.Menu -> TileKey.MENU
+                else -> TileKey.OTHER
+            },
+            phase = when (event.type) {
+                KeyEventType.KeyDown -> KeyPhase.DOWN
+                KeyEventType.KeyUp -> KeyPhase.UP
+                else -> KeyPhase.OTHER
+            },
+            repeatCount = native.repeatCount,
+            longPress = (native.flags and android.view.KeyEvent.FLAG_LONG_PRESS) != 0,
+            downTime = native.downTime,
+            now = SystemClock.elapsedRealtime(),
+            editing = editing,
+            edgeLeft = onEdgeLeft != null,
+            edgeRight = onEdgeRight != null,
+        )
+        when (action) {
+            TileAction.Pass -> return@onPreviewKeyEvent false
+            TileAction.Swallow -> Unit
+            TileAction.Menu -> onMenu()
+            is TileAction.Move -> onMove(action.delta)
+            is TileAction.EndEdit -> onEndEdit(action.revert)
+            TileAction.EdgeLeft -> onEdgeLeft?.invoke()
+            TileAction.EdgeRight -> onEdgeRight?.invoke()
         }
+        true
     }
 }
 
@@ -1711,7 +1970,9 @@ private fun AppTile(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            val bitmap = remember(app.packageName) {
+            // Keyed on the artwork itself, which the list hands back unchanged until the app is
+            // updated. A new banner then shows on the next return, and nothing else is redrawn.
+            val bitmap = remember(app.art) {
                 runCatching { app.art?.toBitmap()?.asImageBitmap() }.getOrNull()
             }
             if (bitmap != null) {
@@ -1902,15 +2163,14 @@ private fun InputTile(
 private fun LayoutCoordinates.rootBounds(): Rect =
     findRootCoordinates().localBoundingBoxOf(this, clipBounds = false)
 
-private fun Context.launchApp(packageName: String) {
-    AppRepository.launch(this, packageName)
-}
+/** Says whether the app could be started. One can lose its launcher entry while installed. */
+private fun Context.launchApp(packageName: String): Boolean = AppRepository.launch(this, packageName)
 
-private fun Context.switchToInput(inputId: String) {
-    InputRepository.rememberUse(this, inputId)
-    LastOpened.record(this, LastOpened.INPUT, inputId)
-    startActivitySafely(InputRepository.switchIntent(inputId))
-}
+/** Marks the input as last used only once the switch is under way, so a failed one does not. */
+private fun Context.switchToInput(inputId: String): Boolean =
+    startActivitySafely(InputRepository.switchIntent(inputId)).also { switched ->
+        if (switched) InputRepository.rememberUse(this, inputId)
+    }
 
 /** Starts [intent], and says whether it could. A TV can lack any of the screens Orbit links to. */
 private fun Context.startActivitySafely(intent: Intent): Boolean =
@@ -1941,6 +2201,7 @@ private fun isHomeButtonServiceOn(context: Context): Boolean {
 private object HomePrefs {
     private const val KEY_NOTICE_DISMISSED = "notice_dismissed"
     private const val KEY_LISTINGS_ASKED = "listings_asked"
+    private const val KEY_PLAYBACK_DISMISSED = "playback_notice_dismissed"
 
     fun noticeDismissed(context: Context): Boolean =
         prefs(context).getBoolean(KEY_NOTICE_DISMISSED, false)
@@ -1955,6 +2216,13 @@ private object HomePrefs {
 
     fun dismissNotice(context: Context) {
         prefs(context).edit().putBoolean(KEY_NOTICE_DISMISSED, true).apply()
+    }
+
+    fun playbackNoticeDismissed(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PLAYBACK_DISMISSED, false)
+
+    fun dismissPlaybackNotice(context: Context) {
+        prefs(context).edit().putBoolean(KEY_PLAYBACK_DISMISSED, true).apply()
     }
 
     private fun prefs(context: Context) =

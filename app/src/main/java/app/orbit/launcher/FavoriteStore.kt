@@ -48,25 +48,36 @@ object FavoriteStore {
      * visibly moves the tile.
      */
     fun move(context: Context, key: String, id: String, delta: Int, shown: Collection<String>) {
-        val current = favorites(context, key).toMutableList()
-        val from = current.indexOf(id)
-        if (from < 0 || delta == 0) return
+        val current = favorites(context, key)
+        val moved = reorder(current, id, delta, shown)
+        if (moved !== current) write(context, key, moved)
+    }
+
+    /**
+     * The order [move] stores: [id] moved [delta] places along [stored], counting only the
+     * favorites in [shown]. Gives back [stored] itself when there is nowhere to go, so a press at
+     * the end of the row stores nothing.
+     */
+    fun reorder(stored: List<String>, id: String, delta: Int, shown: Collection<String>): List<String> {
+        val from = stored.indexOf(id)
+        if (from < 0 || delta == 0) return stored
         val step = if (delta > 0) 1 else -1
         var to = from
         var i = from
         var left = abs(delta)
         while (left > 0) {
             i += step
-            if (i !in current.indices) break
-            if (current[i] in shown) {
+            if (i !in stored.indices) break
+            if (stored[i] in shown) {
                 to = i
                 left--
             }
         }
-        if (to == from) return
-        current.removeAt(from)
-        current.add(to, id)
-        write(context, key, current)
+        if (to == from) return stored
+        return stored.toMutableList().apply {
+            removeAt(from)
+            add(to, id)
+        }
     }
 
     /** Drops favorites whose target is gone, so a removed app leaves no hole. */
