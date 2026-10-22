@@ -1044,6 +1044,7 @@ private fun TopBar(
 @Composable
 private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
     val context = LocalContext.current
+    val searchIntent = remember { InputRepository.searchIntent(context) }
     val inputsIntent = remember { InputRepository.allInputsIntent(context) }
     val storeIntent = remember { InputRepository.storeIntent(context) }
     val settingsIntent = remember { InputRepository.settingsIntent() }
@@ -1055,11 +1056,30 @@ private fun Shortcuts(first: FocusRequester, button: (String) -> Modifier) {
         }.getOrNull()
     }
 
+    // Leftmost, as on the stock top bar. It carries the shared requester and holds the left
+    // edge, which pass to All apps when the TV has no search to offer.
+    if (searchIntent != null) {
+        TopBarButton(
+            button("search")
+                .focusRequester(first)
+                .focusProperties { left = FocusRequester.Cancel },
+            onClick = { context.startActivitySafely(searchIntent) },
+        ) {
+            Icon(
+                imageVector = Glyphs.Search,
+                contentDescription = "Search",
+                tint = Glyph,
+                modifier = Modifier.padding(4.dp),
+            )
+        }
+        Spacer(Modifier.width(9.dp))
+    }
+
     // Favorites are what the rows show, so without this an app that is not a favorite could not
     // be opened from Orbit at all.
     TopBarButton(
         button("apps")
-            .focusRequester(first)
+            .then(if (searchIntent == null) Modifier.focusRequester(first) else Modifier)
             .focusProperties { left = FocusRequester.Cancel },
         onClick = {
             context.openScreen(

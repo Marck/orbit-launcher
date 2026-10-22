@@ -283,6 +283,32 @@ class InputsTopBarTest : TvTest() {
     }
 
     @Test
+    fun ok_searchIsLeftmostAndOpens() {
+        tag = "search"
+        favorites(myApps, myInputs)
+        val s = home()
+        toTopBar(s, "Search")
+        assertEquals("Search", focused())
+        // Leftmost: left stays put rather than falling into the hero below it.
+        p(s, L); assertEquals("Search", focused())
+        drain()
+        p(s, OK); assertEquals("test.search", nextStarted()?.action)
+        p(s, R); assertEquals("All apps", focused())
+    }
+
+    @Test
+    fun ok_noSearchLeavesAllAppsHoldingTheEdge() {
+        tag = "nosearch"
+        ShotHooks.search = null
+        favorites(myApps, myInputs)
+        val s = home()
+        assertEquals(0, rule.onAllNodes(hasContentDescription("Search"), true).fetchSemanticsNodes().size)
+        toTopBar(s, "All apps")
+        assertEquals("All apps", focused())
+        p(s, L); assertEquals("All apps", focused())
+    }
+
+    @Test
     fun ok_topBarHiddenButtons() {
         tag = "ok3"
         ShotHooks.allInputs = null

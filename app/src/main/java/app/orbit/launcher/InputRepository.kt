@@ -25,6 +25,7 @@ data class TvInput(
 object InputRepository {
 
     private const val ACTION_VIEW_INPUTS = "com.android.tv.action.VIEW_INPUTS"
+    private const val ACTION_GLOBAL_SEARCH = "android.search.action.GLOBAL_SEARCH"
 
     /** The launcher we are replacing also answers [ACTION_VIEW_INPUTS]; its panel is not the one we want. */
     private const val STOCK_LAUNCHER = "com.google.android.tvlauncher"
@@ -122,6 +123,21 @@ object InputRepository {
     }
 
     fun settingsIntent(): Intent = Intent(Settings.ACTION_SETTINGS)
+
+    /**
+     * The TV's own search, resolved to one activity so the system raises no chooser.
+     *
+     * Null when the set has no search at all, and then the button is simply not offered.
+     */
+    fun searchIntent(context: Context): Intent? {
+        ShotHooks.search?.let { return it }
+        val action = Intent(ACTION_GLOBAL_SEARCH)
+        val handlers = runCatching {
+            context.packageManager.queryIntentActivities(action, 0)
+        }.getOrNull().orEmpty()
+        val chosen = handlers.firstOrNull() ?: return null
+        return Intent(action).setClassName(chosen.activityInfo.packageName, chosen.activityInfo.name)
+    }
 
     /** The icon the system itself shows for a destination, so the tile matches the rest of the TV. */
     fun iconFor(context: Context, intent: Intent?): Drawable? {

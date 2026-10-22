@@ -81,6 +81,8 @@ abstract class TvTest {
             app("com.plexapp.android", "Plex: Stream Movies & TV", banner("plex", 0xFF1F1F1F.toInt(), 0xFFE5A00D.toInt())),
             app("com.netflix.ninja", "Netflix", banner("NETFLIX", 0xFF000000.toInt(), 0xFFE50914.toInt())),
         )
+        // Invented, like the apps above. Nothing here says what is actually attached to any
+        // set: read the device with `adb shell dumpsys tv_input` for that, never this list.
         ShotHooks.inputs = listOf(
             TvInput("hdmi1", "HDMI 1", null, connected = true),
             TvInput("ps5", "PlayStation 5", "HDMI 2", connected = true),
@@ -90,6 +92,7 @@ abstract class TvTest {
         ShotHooks.store = Intent("test.store")
         ShotHooks.storeIcon = banner(">", 0xFFFFFFFF.toInt(), 0xFF01875F.toInt(), 120f)
         ShotHooks.allInputs = Intent("test.allinputs")
+        ShotHooks.search = Intent("test.search")
         ShotHooks.defaultHome = true
         // Infinite marquee animations would make an auto-advancing clock never settle.
         rule.mainClock.autoAdvance = false
@@ -166,7 +169,7 @@ abstract class TvTest {
      * nothing in Compose has focus. Focus may sit on an inner clickable; both are tried.
      */
     /** Every button the top bar can show, left to right. */
-    val topBarButtons = listOf("All apps", "All inputs", "Play Store", "Settings", "Profile")
+    val topBarButtons = listOf("Search", "All apps", "All inputs", "Play Store", "Settings", "Profile")
 
     /**
      * Walks up to the top bar and right to [name].
