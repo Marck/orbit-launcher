@@ -1,0 +1,40 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>marck/renovate-config"],
+  "description": [
+    "The shared base only. The batch preset is for repos where every Renovate commit costs metered Actions minutes; this repo is public, so its Actions minutes are free and each update can have its own branch and its own run.",
+    "The base automerges minor, patch, pin and digest once CI is green on the branch, which is why the build workflow also runs on push to renovate/**. Without that trigger the branch carries no status check, and the base's own notes say such a branch only ever surfaces as a PR after 25 hours."
+  ],
+  "packageRules": [
+    {
+      "description": "Compose and Kotlin are a decision, not a bump. Focus on this launcher depends on Compose internals: which composable keeps focus, how a focus group is entered and left, and whether a tile pops out at all. A release has broken that before without a word in its notes, and the harness cannot see the panel. These go in one branch, get a PR, and are checked by hand on the set before merging.",
+      "matchPackageNames": [
+        "androidx.compose:compose-bom",
+        "androidx.activity:activity-compose",
+        "org.jetbrains.kotlin.android:org.jetbrains.kotlin.android.gradle.plugin",
+        "org.jetbrains.kotlin.plugin.compose:org.jetbrains.kotlin.plugin.compose.gradle.plugin"
+      ],
+      "groupName": "compose and kotlin",
+      "groupSlug": "compose-kotlin",
+      "automerge": false,
+      "addLabels": ["check-on-tv"]
+    },
+    {
+      "description": "The same, matched on the plugin id rather than the plugin marker artifact, because a plugin in a plugins{} block is read under its id.",
+      "matchDepNames": [
+        "org.jetbrains.kotlin.android",
+        "org.jetbrains.kotlin.plugin.compose"
+      ],
+      "groupName": "compose and kotlin",
+      "groupSlug": "compose-kotlin",
+      "automerge": false,
+      "addLabels": ["check-on-tv"]
+    },
+    {
+      "description": "The Android Gradle Plugin is checked by hand too, at every update type. It decides what is packaged, how it is shrunk and what is signed, and a release build that still assembles is not evidence that it still runs on an Android 10 set.",
+      "matchDepNames": ["com.android.application"],
+      "automerge": false,
+      "addLabels": ["check-on-tv"]
+    }
+  ]
+}

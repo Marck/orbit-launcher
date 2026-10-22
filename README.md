@@ -220,3 +220,26 @@ there are no frames to drive it. Check and wake before testing anything visual:
 adb shell dumpsys power | grep "Display Power"   # state=ON or OFF
 adb shell input keyevent 224                     # WAKEUP
 ```
+
+A zero-byte screenshot while `Display Power: state=ON` is not a sleeping panel: it is
+protected content on screen. Check what is in front first:
+
+```bash
+adb shell dumpsys activity | grep -m1 ResumedActivity
+```
+
+## Dependency updates
+
+Renovate, configured in `renovate.json`, which extends a shared preset. It covers
+everything this project declares a version for: the Gradle dependencies and the plugins
+in the `plugins {}` blocks, the Gradle wrapper, and the actions in the workflow.
+
+Minor and patch updates automerge once the build is green, which is why the workflow
+runs on pushes to `renovate/**` as well as to `main`: the shared preset merges the
+branch itself, so the branch has to carry a status check.
+
+Compose, Kotlin and the Android Gradle Plugin never automerge. Focus on this launcher
+depends on Compose internals that a release can change without a word in its notes, and
+the harness renders on a desktop JVM rather than the panel. Those come as one pull
+request labelled `check-on-tv`, to be installed and driven by hand before merging:
+pop-out on focus, the hero, the pickers, and Back and Home.
