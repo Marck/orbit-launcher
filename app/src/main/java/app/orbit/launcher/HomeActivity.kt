@@ -40,14 +40,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -67,6 +68,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,6 +77,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -84,10 +87,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -96,7 +101,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -112,18 +116,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.reflect.KProperty
 import kotlinx.coroutines.Dispatchers
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 // Sizes come straight from section B of the requirements.
 private val SafeH = 48.dp
@@ -451,7 +454,10 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         toFirst++
     }
 
+    val watching = rememberWatching()
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Backdrop(watching.art, Modifier.align(Alignment.TopEnd))
         Column(Modifier.fillMaxSize()) {
             // No safe margin below: the space under the hero stretches anyway, and the notice
             // needs that room to fit above the rows.
@@ -483,6 +489,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                     // stuck there. The notice is at the right too, below the hero.
                     self = heroFocus,
                     above = topBarFocus,
+                    watching = watching,
                     below = noticeFocus.takeIf { !homeOpensOrbit && !noticeDismissed },
                     onFocused = { moveTo(Zone.HERO) },
                 )
@@ -1296,8 +1303,14 @@ private fun TopBarButton(
     )
 }
 
-private val HeroArtW = 192.dp
-private val HeroArtH = 108.dp
+private val HeroMinH = 108.dp
+
+/** How long each thing to carry on with is shown before the next one. */
+private const val CycleMs = 10_000L
+
+/** How much of the screen the artwork covers, before it is faded out. */
+private const val BackdropWidth = 0.60f
+private const val BackdropHeight = 0.78f
 
 /**
  * The top of the screen, showing the most truthful thing Orbit can say, in this order:
@@ -1317,35 +1330,14 @@ private fun Hero(
     self: FocusRequester,
     above: FocusRequester,
     below: FocusRequester?,
+    watching: Watching,
     onFocused: () -> Unit,
 ) {
     val context = LocalContext.current
     val requester = self
     var focused by remember { mutableStateOf(false) }
-
-    var granted by remember { mutableStateOf(ContinueWatching.granted(context)) }
-    var asked by rememberSaveable { mutableStateOf(HomePrefs.listingsAsked(context)) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        granted = it
-        asked = true
-        HomePrefs.rememberListingsAsked(context)
-    }
-
-    // The lint check cannot see the assignment through the withContext call, and reports it on
-    // every produceState in this project; the baseline already carries eight of them. Writing
-    // the result to a local first does not help, so the two new ones say so here instead of
-    // growing the baseline, which is meant for warnings that were already there.
-    @Suppress("ProduceStateDoesNotAssignValue")
-    val watching by produceState<Resumable?>(initialValue = null, granted, Returns.count) {
-        value = withContext(Dispatchers.IO) { ContinueWatching.latest(context) }
-    }
-    @Suppress("ProduceStateDoesNotAssignValue")
-    val art by produceState<ImageBitmap?>(initialValue = null, watching?.posterUri) {
-        val uri = watching?.posterUri
-        value = withContext(Dispatchers.IO) {
-            uri?.let { ContinueWatching.poster(context, it, maxWidth = 384)?.asImageBitmap() }
-        }
-    }
+    val granted = watching.granted
+    val asked = watching.asked
 
     val back = remember(Returns.count) { LastOpened.recent(context) }
     val backApp = back?.takeIf { it.kind == LastOpened.APP }
@@ -1353,7 +1345,7 @@ private fun Hero(
     val backInput = back?.takeIf { it.kind == LastOpened.INPUT }
         ?.let { entry -> inputs?.firstOrNull { it.id == entry.id } }
 
-    val item = watching
+    val item = watching.item
     val action: (() -> Unit)? = when {
         item != null -> {
             {
@@ -1366,9 +1358,7 @@ private fun Hero(
             }
         }
         // Asked for once, in the hero, rather than as a popup on a screen nobody opened yet.
-        !granted && !asked -> {
-            { ask.launch(ContinueWatching.PERMISSION) }
-        }
+        !granted && !asked -> watching.ask
         backApp != null -> { { context.launchApp(backApp.packageName) } }
         backInput != null -> { { context.switchToInput(backInput.id) } }
         else -> null
@@ -1383,12 +1373,17 @@ private fun Hero(
         // On the row rather than on the focusable inside it, to keep it away from the
         // clickable's own focus target.
         Modifier
-            .height(HeroArtH)
+            // IntrinsicSize.Min first: the accent beside the text fills the height, and without
+            // a bound to fill it would take the whole screen and push the rows off it.
+            .height(IntrinsicSize.Min)
+            .heightIn(min = HeroMinH)
             .focusProperties {
                 up = above
                 down = below ?: FocusRequester.Default
             },
-        verticalAlignment = Alignment.CenterVertically,
+        // Top aligned, not centred: one thing to carry on with has an episode line and the next
+        // one does not, and centred text would jump up and down as the hero steps through them.
+        verticalAlignment = Alignment.Top,
     ) {
         // The focus mark for a block this size is an accent down its side, not a ring.
         Box(
@@ -1416,29 +1411,93 @@ private fun Hero(
                     } ?: Modifier
                 )
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val picture = art
-                if (item != null && picture != null) {
-                    Image(
-                        bitmap = picture,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(HeroArtW, HeroArtH)
-                            .clip(RoundedCornerShape(8.dp)),
-                    )
-                    Spacer(Modifier.width(18.dp))
-                }
-                when {
-                    item != null -> Watching(item, focused)
-                    !granted && !asked -> Offer(focused)
-                    backApp != null -> BackTo(backApp.label, focused)
-                    backInput != null -> BackTo(backInput.label, focused)
-                    else -> Clock()
-                }
+            when {
+                item != null -> Watching(item, focused)
+                !granted && !asked -> Offer(focused)
+                backApp != null -> BackTo(backApp.label, focused)
+                backInput != null -> BackTo(backInput.label, focused)
+                else -> Clock()
             }
         }
     }
+}
+
+/** What the hero knows about Continue watching, read once for the whole screen. */
+private class Watching(
+    val item: Resumable?,
+    val art: ImageBitmap?,
+    val granted: Boolean,
+    val asked: Boolean,
+    val ask: () -> Unit,
+)
+
+/**
+ * Reads the TV's Watch Next list and steps through it, so a second thing to carry on with is
+ * not hidden behind the first. Read here rather than in the hero, because the artwork is drawn
+ * behind the whole screen.
+ */
+@Composable
+private fun rememberWatching(): Watching {
+    val context = LocalContext.current
+    var granted by remember { mutableStateOf(ContinueWatching.granted(context)) }
+    var asked by rememberSaveable { mutableStateOf(HomePrefs.listingsAsked(context)) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        granted = it
+        asked = true
+        HomePrefs.rememberListingsAsked(context)
+    }
+
+    // The lint check cannot see the assignment through the withContext call, and reports it on
+    // every produceState in this project; the baseline already carries eight of them. Writing
+    // the result to a local first does not help, so these say so here instead of growing the
+    // baseline, which is meant for warnings that were already there.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val items by produceState(initialValue = emptyList<Resumable>(), granted, Returns.count) {
+        value = withContext(Dispatchers.IO) { ContinueWatching.all(context) }
+    }
+    // Back to the first whenever the list itself changes, so the step is always within it.
+    var index by remember(items) { mutableIntStateOf(0) }
+    LaunchedEffect(items) {
+        if (items.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(CycleMs)
+            index = (index + 1) % items.size
+        }
+    }
+    val item = items.getOrNull(index)
+
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val art by produceState<ImageBitmap?>(initialValue = null, item?.posterUri) {
+        val uri = item?.posterUri
+        value = withContext(Dispatchers.IO) {
+            uri?.let { ContinueWatching.poster(context, it, maxWidth = 1280)?.asImageBitmap() }
+        }
+    }
+    return Watching(item, art, granted, asked) { ask.launch(ContinueWatching.PERMISSION) }
+}
+
+/**
+ * The programme's own artwork, bled in from the right and faded out towards the middle and the
+ * bottom so it has no edge, with the rows sitting on top of it. The screen behind is black, so
+ * black is what it fades into.
+ */
+@Composable
+private fun Backdrop(art: ImageBitmap?, modifier: Modifier) {
+    val shown = art ?: return
+    Image(
+        bitmap = shown,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        alignment = Alignment.TopCenter,
+        modifier = modifier
+            .fillMaxWidth(BackdropWidth)
+            .fillMaxHeight(BackdropHeight)
+            .drawWithContent {
+                drawContent()
+                drawRect(Brush.horizontalGradient(0f to Color.Black, 0.55f to Color.Transparent))
+                drawRect(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black))
+            },
+    )
 }
 
 @Composable
@@ -1457,20 +1516,31 @@ private fun Watching(item: Resumable, focused: Boolean) {
             Spacer(Modifier.height(6.dp))
             Text(it, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        val line = listOfNotNull(
-            item.subtitle,
-            item.minutesLeft?.let { "$it MIN LEFT" },
-        ).joinToString(" - ")
-        if (line.isNotEmpty()) {
+        // A film has no episode line, so this is left out rather than filled with a season.
+        item.subtitle?.let {
             Spacer(Modifier.height(6.dp))
-            Text(line.uppercase(), color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(it.uppercase(), color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         // Only when the app reported where it had got to. No bar beats a made-up one.
-        item.progress?.let { fraction ->
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.width(225.dp).height(2.dp).background(Color(0x33FFFFFF))) {
-                Box(Modifier.fillMaxWidth(fraction).height(2.dp).background(Color.White))
+        item.progress?.let { progress ->
+            Spacer(Modifier.height(10.dp))
+            Box(
+                Modifier
+                    .width(260.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0x33FFFFFF))
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(progress.fraction)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xFF7FD4FF))
+                )
             }
+            Spacer(Modifier.height(6.dp))
+            Text(progress.summary, color = Muted, fontSize = 11.sp, maxLines = 1)
         }
     }
 }

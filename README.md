@@ -52,10 +52,19 @@ the ones already there are listed in `app/lint-baseline.xml`.
 The top of the screen shows the most truthful thing Orbit can say, in this order:
 
 1. **Continue watching.** What you were actually watching, read from the TV's own Watch
-   Next list, which apps such as Jellyfin publish to. Title, episode, artwork and OK to
-   resume. A progress bar appears only when the app reported both a position and a
-   length; most rows are "next episode" and carry neither, so most of the time there is
-   no bar rather than an invented one.
+   Next list, which apps such as Jellyfin publish to. Title, episode and OK to resume,
+   with the programme's own artwork bled in from the right and faded out across the
+   middle and along the bottom, so it carries on behind the rows. Where there is more
+   than one thing to carry on with, the hero steps through them every ten seconds. A film
+   shows no episode line.
+
+   A bar, with how much is watched and how much is left, appears only when the publishing
+   app reported both a position and a length. Most rows are a next episode rather than a
+   part-watched one and carry neither, so most of the time there is no bar rather than an
+   invented one. The two numbers are minutes for anything that plays; for a kind whose
+   unit is not time the bar says a percentage instead, because the API gives no unit.
+   Android TV has no book type at all, so "Page x of y" is not something an app can tell
+   Orbit through this list.
 2. **Back to the last app or input** Orbit opened, for up to twelve hours. This needs no
    permission: it is Orbit's own record, and it covers only what was opened from Orbit.
 3. **The time and date,** when there is nothing to offer.
