@@ -86,23 +86,40 @@ class AppPickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val opening = intent?.getBooleanExtra(EXTRA_OPEN, false) == true
-        setContent { PickerScreen(opening) }
+        val backdrops = intent?.getBooleanExtra(EXTRA_BACKDROPS, false) == true
+        setContent { PickerScreen(opening, backdrops) }
     }
 
     companion object {
         /** Open the chosen app rather than add it to the favorites. */
         const val EXTRA_OPEN = "app.orbit.launcher.extra.OPEN"
+
+        /** Choose which apps supply the hero's ambient pictures, rather than the favorites. */
+        const val EXTRA_BACKDROPS = "app.orbit.launcher.extra.BACKDROPS"
     }
 }
 
 @Composable
-private fun PickerScreen(opening: Boolean) {
+private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
     val context = LocalContext.current
-    val apps by produceState(initialValue = AppRepository.cached()) {
+    val all by produceState(initialValue = AppRepository.cached()) {
         value = withContext(Dispatchers.IO) { AppRepository.load(context) }
     }
-    val revision = FavoriteStore.revision
-    val favorites = remember(revision) { FavoriteStore.favorites(context, FavoriteStore.APPS) }
+    // Only the apps that actually publish a picture are worth offering as a source.
+    // The lint check cannot see the assignment through the withContext call; the baseline
+    // already carries eight of the same false report.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val publishers by produceState(initialValue = emptyList<String>(), backdrops) {
+        value = if (backdrops) withContext(Dispatchers.IO) { Backdrops.publishers(context) } else emptyList()
+    }
+    val apps = remember(all, publishers, backdrops) {
+        if (!backdrops) all else all.filter { it.packageName in publishers }
+    }
+    val revision = FavoriteStore.revision + Backdrops.revision
+    val favorites = remember(revision, backdrops) {
+        if (backdrops) Backdrops.sources(context).toList()
+        else FavoriteStore.favorites(context, FavoriteStore.APPS)
+    }
     // Deliberately keyed on the apps alone, so toggling a favorite does not reshuffle the grid
     // under the owner's hand while they are still choosing. Keyed on their package names rather
     // than the list itself: the fresh read that replaces the cached one is a new list of the same
@@ -155,7 +172,7 @@ private fun PickerScreen(opening: Boolean) {
             .padding(horizontal = SafeH, vertical = SafeV)
     ) {
         Text(
-            if (opening) "All apps" else "Favorite apps",
+            if (backdrops) "Backdrop pictures" else if (opening) "All apps" else "Favorite apps",
             color = Color.White,
             fontSize = 28.sp,
             fontWeight = FontWeight.Light,
@@ -165,6 +182,14 @@ private fun PickerScreen(opening: Boolean) {
             // Counted from the apps on the grid: a favorite that is disabled for now is kept, but
             // there is nothing here to untick.
             when {
+                // The rows these come from carry no genre and no age rating at all, so the app
+                // is the only thing there is to choose by. Said plainly rather than offering a
+                // genre list that would quietly match nothing.
+                backdrops && chosen == 0 ->
+                    "Pick which apps supply the pictures behind the hero. There is nothing to " +
+                        "choose by but the app: the TV's own rows carry no genre and no rating."
+                backdrops -> "Pictures come from $chosen app${if (chosen == 1) "" else "s"}. " +
+                    "Select to add or remove."
                 opening -> "Select to open. Hold OK to add to or remove from favorites."
                 chosen == 0 -> "Select an app to add it to the row."
                 else -> "Select to add or remove. $chosen chosen."
@@ -206,10 +231,10 @@ private fun PickerScreen(opening: Boolean) {
                         null
                     },
                 ) {
-                    if (opening) {
-                        AppRepository.launch(context, app.packageName)
-                    } else {
-                        FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName)
+                    when {
+                        backdrops -> Backdrops.toggle(context, app.packageName)
+                        opening -> AppRepository.launch(context, app.packageName)
+                        else -> FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName)
                     }
                 }
             }

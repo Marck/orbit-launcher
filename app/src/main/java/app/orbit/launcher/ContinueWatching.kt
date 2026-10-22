@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.tv.TvContract
 import android.net.Uri
+import kotlin.math.roundToInt
 
 /**
  * Something the owner could carry on with, exactly as the app that owns it published it.
@@ -18,15 +19,24 @@ import android.net.Uri
 data class Resumable(
     val packageName: String,
     val title: String,
-    /** The episode, when the app named one. */
+    /** The episode, when the app named one. Never set for a film. */
     val subtitle: String?,
     val description: String?,
     val posterUri: String?,
     val intentUri: String,
-    /** 0 to 1, only when the app gave both a position and a length. */
-    val progress: Float?,
-    val minutesLeft: Int?,
+    /** Null unless the app reported both where it had got to and how long the thing is. */
+    val progress: Progress?,
 )
+
+/**
+ * How far in, exactly as the publishing app reported it.
+ *
+ * [summary] is in minutes for anything that plays. For anything else the unit is unknown, so it
+ * says a percentage rather than claiming minutes. Android TV has no book type at all: a reader
+ * publishes its page through the Engage SDK, which is written for Google and cannot be read by
+ * another launcher, so "Page x of y" is not something Orbit can be told.
+ */
+data class Progress(val fraction: Float, val summary: String)
 
 /**
  * The TV's own Watch Next list, which apps publish to and Orbit only reads.
@@ -41,12 +51,28 @@ object ContinueWatching {
      */
     const val PERMISSION = "android.permission.READ_TV_LISTINGS"
 
+    private const val MAX_ROWS = 12
+
+    /** A poster is a few hundred kilobytes. This is the ceiling, not the expectation. */
+    private const val MAX_ARTWORK_BYTES = 8 * 1024 * 1024
+
+    /** The kinds whose position and length are really milliseconds. */
+    private val TIMED = setOf(
+        TvContract.WatchNextPrograms.TYPE_MOVIE,
+        TvContract.WatchNextPrograms.TYPE_TV_SERIES,
+        TvContract.WatchNextPrograms.TYPE_TV_SEASON,
+        TvContract.WatchNextPrograms.TYPE_TV_EPISODE,
+        TvContract.WatchNextPrograms.TYPE_CLIP,
+        TvContract.WatchNextPrograms.TYPE_EVENT,
+        TvContract.WatchNextPrograms.TYPE_CHANNEL,
+    )
+
     fun granted(context: Context): Boolean =
         context.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED
 
-    /** The most recently engaged row, or null. Call off the main thread. */
-    fun latest(context: Context): Resumable? {
-        if (!granted(context)) return null
+    /** Every readable row, most recently engaged first. Call off the main thread. */
+    fun all(context: Context): List<Resumable> {
+        if (!granted(context)) return emptyList()
         return runCatching {
             // No projection: a column an older TV provider does not have would throw, and every
             // one of these is optional to the apps anyway.
@@ -57,14 +83,16 @@ object ContinueWatching {
                 null,
                 "${TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS} DESC",
             ).use { cursor ->
-                if (cursor == null) return@runCatching null
+                if (cursor == null) return@runCatching emptyList()
                 val c = Columns(cursor)
-                while (cursor.moveToNext()) {
-                    build(c)?.let { return@runCatching it }
+                val found = mutableListOf<Resumable>()
+                // The hero cycles through these, so a long list is only ever partly seen.
+                while (cursor.moveToNext() && found.size < MAX_ROWS) {
+                    build(c)?.let { found += it }
                 }
-                null
+                found
             }
-        }.getOrNull()
+        }.getOrNull().orEmpty()
     }
 
     /**
@@ -75,8 +103,13 @@ object ContinueWatching {
      */
     fun poster(context: Context, uri: String, maxWidth: Int): Bitmap? = runCatching {
         val parsed = Uri.parse(uri)
-        val bytes = context.contentResolver.openInputStream(parsed)?.use { it.readBytes() }
-            ?: return@runCatching null
+        // Only the media server publishes a content URI its own provider can serve. Every other
+        // app on this set publishes an https link to its own artwork, so that is fetched. Only
+        // the picture is asked for, nothing is sent, and the link is never logged.
+        val bytes = when (parsed.scheme?.lowercase()) {
+            "http", "https" -> fetch(uri)
+            else -> context.contentResolver.openInputStream(parsed)?.use { it.readBytes() }
+        } ?: return@runCatching null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         var sample = 1
@@ -85,6 +118,32 @@ object ContinueWatching {
             bytes, 0, bytes.size,
             BitmapFactory.Options().apply { inSampleSize = sample },
         )
+    }.getOrNull()
+
+    /** Reads a picture off the network. Call off the main thread. */
+    private fun fetch(url: String): ByteArray? = runCatching {
+        val connection = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 8_000
+            instanceFollowRedirects = true
+        }
+        try {
+            if (connection.responseCode !in 200..299) return@runCatching null
+            // A picture, not a page. Anything bigger is not artwork and is not worth decoding,
+            // and a stream that never ends must not be allowed to fill the heap.
+            connection.inputStream.use { stream ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                while (out.size() < MAX_ARTWORK_BYTES) {
+                    val read = stream.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                }
+                out.toByteArray().takeIf { it.isNotEmpty() }
+            }
+        } finally {
+            connection.disconnect()
+        }
     }.getOrNull()
 
     /**
@@ -112,10 +171,6 @@ object ContinueWatching {
         val title = c.text(TvContract.WatchNextPrograms.COLUMN_TITLE) ?: return null
         val intentUri = c.text(TvContract.WatchNextPrograms.COLUMN_INTENT_URI) ?: return null
 
-        val position = c.long(TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS)
-        val duration = c.long(TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS)
-        val started = position != null && duration != null && duration > 0 && position in 0..duration
-
         return Resumable(
             packageName = packageName,
             title = title,
@@ -123,9 +178,38 @@ object ContinueWatching {
             description = c.text(TvContract.WatchNextPrograms.COLUMN_SHORT_DESCRIPTION),
             posterUri = c.text(TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI),
             intentUri = intentUri,
-            progress = if (started) position!!.toFloat() / duration!! else null,
-            minutesLeft = if (started) ((duration!! - position!!) / 60_000L).toInt() else null,
+            progress = progress(c),
         )
+    }
+
+    /**
+     * The bar and its two numbers from a position and a length in milliseconds.
+     *
+     * Shared with the media session reader, which fills in for an app that publishes a row
+     * without a position on it.
+     */
+    fun timed(position: Long, duration: Long): Progress? {
+        if (duration <= 0 || position < 0 || position > duration) return null
+        val watched = position / 60_000
+        // Rounded up, so a part minute still reads as a minute left rather than none.
+        val left = (duration - position + 59_999) / 60_000
+        return Progress(position.toFloat() / duration, "$watched MIN WATCHED, $left LEFT")
+    }
+
+    /** Only drawn when the app reported both numbers, so there is never an invented bar. */
+    private fun progress(c: Columns): Progress? {
+        val position = c.long(TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS)
+            ?: return null
+        val duration = c.long(TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS) ?: return null
+        if (duration <= 0 || position < 0 || position > duration) return null
+
+        if (c.int(TvContract.WatchNextPrograms.COLUMN_TYPE) in TIMED) {
+            return timed(position, duration)
+        }
+        // Not a timed kind, so the unit is anyone's guess and a percentage says the same thing
+        // without claiming minutes.
+        val fraction = position.toFloat() / duration
+        return Progress(fraction, "${(fraction * 100).roundToInt()}% DONE")
     }
 
     /**
@@ -134,6 +218,10 @@ object ContinueWatching {
      * else again, and the two together read as a contradiction.
      */
     private fun episode(c: Columns): String? {
+        // A film has no episode, and some apps leave a season number on one anyway.
+        if (c.int(TvContract.WatchNextPrograms.COLUMN_TYPE) == TvContract.WatchNextPrograms.TYPE_MOVIE) {
+            return null
+        }
         c.text(TvContract.WatchNextPrograms.COLUMN_EPISODE_TITLE)?.let { return it }
         val season = c.text(TvContract.WatchNextPrograms.COLUMN_SEASON_DISPLAY_NUMBER)
         val number = c.text(TvContract.WatchNextPrograms.COLUMN_EPISODE_DISPLAY_NUMBER)
