@@ -127,11 +127,27 @@ class HomeActivity : ComponentActivity() {
 @Composable
 private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     val context = LocalContext.current
+    // The system says when an app is installed, removed or replaced, which is the only reason
+    // the list can change while Orbit is not looking. Listening for that is what lets the read
+    // below happen once rather than on every return.
+    DisposableEffect(Unit) {
+        val receiver = PackageWatch.watch(context)
+        onDispose { PackageWatch.stop(context, receiver) }
+    }
     // Off the main thread, all of it. produceState runs its producer on the composition's
     // context, so reading every launcher activity and decoding its artwork there holds up the
     // first frame and the screen stays black until it finishes.
-    // Re-read on every return, so an app removed through the system dialog disappears here.
-    val apps by produceState(initialValue = AppRepository.cached(), Returns.count) {
+    val apps by produceState(initialValue = AppRepository.cached(), PackageWatch.revision) {
+        // The favorites first. They are all the rows show, so the screen is finished once they
+        // are in; the whole catalogue takes long enough on a cold start to watch it arrive.
+        if (value.isEmpty()) {
+            val favorites = withContext(Dispatchers.IO) {
+                FavoriteStore.favorites(context, FavoriteStore.APPS).toSet()
+            }
+            if (favorites.isNotEmpty()) {
+                value = withContext(Dispatchers.IO) { AppRepository.load(context, only = favorites) }
+            }
+        }
         value = withContext(Dispatchers.IO) { AppRepository.load(context) }
     }
     // Null until the first read lands. A TV can have no inputs at all, so an empty list cannot
