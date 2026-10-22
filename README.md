@@ -56,18 +56,38 @@ The top of the screen shows the most truthful thing Orbit can say, in this order
    with the programme's own artwork bled in from the right and faded out across the
    middle and along the bottom, so it carries on behind the rows. Where there is more
    than one thing to carry on with, the hero steps through them every ten seconds. A film
-   shows no episode line.
+   shows no episode line. The hero follows the app under the cursor, so a programme never
+   appears behind a tile that knows nothing about it.
 
-   A bar, with how much is watched and how much is left, appears only when the publishing
-   app reported both a position and a length. Most rows are a next episode rather than a
-   part-watched one and carry neither, so most of the time there is no bar rather than an
-   invented one. The two numbers are minutes for anything that plays; for a kind whose
-   unit is not time the bar says a percentage instead, because the API gives no unit.
-   Android TV has no book type at all, so "Page x of y" is not something an app can tell
-   Orbit through this list.
-2. **Back to the last app or input** Orbit opened, for up to twelve hours. This needs no
-   permission: it is Orbit's own record, and it covers only what was opened from Orbit.
-3. **The time and date,** when there is nothing to offer.
+   An app that serves nothing gets an ambient picture instead, named in the hero after the
+   app that published it, taken from the rows apps publish to the TV's own preview list.
+   Only the media server publishes those as content URIs; every other app publishes an
+   https link to its own artwork, which is the one thing Orbit uses the network for. It
+   asks for the picture and sends nothing. A picture that will not load is not offered at
+   all, so a title never appears over a black rectangle. Those rows carry no genre and
+   no age rating on this set, so there is nothing to pick by but the app, and holding OK
+   on the hero chooses which apps supply them. Anything already in Watch Next is left out,
+   so an ambient picture never repeats what the hero offers elsewhere.
+
+   A bar, with how much is watched and how much is left, from the first of two sources
+   that has an answer:
+
+   - the row's own position, when the publishing app put one there. Most rows are a next
+     episode rather than a part-watched one and carry none;
+   - what the TV was last seen playing, read from the playing app's own media session.
+     That needs Orbit turned on under notification access, which the hero offers when a
+     programme is on screen with no bar. Nothing is ever read from a notification: the
+     listener exists only because it is the one door to the media sessions.
+
+   With neither, there is no bar rather than an invented one. The two numbers are minutes
+   for anything that plays; for a kind whose unit is not time the bar says a percentage
+   instead, because the API gives no unit. Android TV has no book type at all, so "Page x
+   of y" is not something an app can tell Orbit through this list.
+2. **The time and date,** when there is nothing to offer.
+
+   The hero only ever shows something with a name and a picture behind it. It used to
+   offer the last app Orbit opened, as "Back to Apple TV", which reads as a nudge towards
+   an app rather than anything you could watch. That is gone.
 
 Reading another app's rows needs `READ_TV_LISTINGS`, a normal permission prompt. Orbit
 asks for it once, from the hero, never as a popup on start, and the hero works without

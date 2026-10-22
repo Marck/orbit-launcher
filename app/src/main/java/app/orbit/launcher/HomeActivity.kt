@@ -65,6 +65,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -309,6 +310,13 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     }
     // Kept, so a dismissed notice stays dismissed when Orbit is next started.
     var noticeDismissed by remember { mutableStateOf(HomePrefs.noticeDismissed(context)) }
+    var playbackDismissed by remember { mutableStateOf(HomePrefs.playbackNoticeDismissed(context)) }
+    // Asked for only once the home button is sorted, so there is never more than one bar at a
+    // time, and never at all on a TV where nothing publishes a row without a position.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val playbackSeen by produceState(initialValue = true, Returns.count) {
+        value = withContext(Dispatchers.IO) { PlaybackMemory.granted(context) }
+    }
 
     // Only the favorites, in the owner's order; everything else is one press of + away.
     // Reading the revision here is what updates the rows the moment a favorite changes,
@@ -454,7 +462,9 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         toFirst++
     }
 
-    val watching = rememberWatching()
+    // Kept while focus is elsewhere, so stepping up to the top bar does not blank the hero.
+    var focusedApp by rememberSaveable { mutableStateOf<String?>(null) }
+    val watching = rememberWatching(focusedApp)
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Backdrop(watching.art, Modifier.align(Alignment.TopEnd))
@@ -482,7 +492,6 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 Spacer(Modifier.height(10.dp))
                 Hero(
                     apps = apps,
-                    inputs = inputs,
                     refocus = refocusHero,
                     // Set by hand: the hero sits at the left and the top bar at the right, so
                     // Compose's own search finds nothing above the hero and focus would be
@@ -517,6 +526,27 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                     },
                 )
                 Spacer(Modifier.height(14.dp))
+            } else if (watching.item != null && watching.progress == null &&
+                !playbackSeen && !playbackDismissed
+            ) {
+                Notice(
+                    title = "Orbit cannot see how far you got",
+                    detail = "Turn Orbit on under notification access to show a progress bar",
+                    requester = noticeFocus,
+                    above = heroFocus,
+                    onDetails = {
+                        context.startActivitySafely(
+                            Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                        )
+                    },
+                    onDismiss = {
+                        playbackDismissed = true
+                        HomePrefs.dismissPlaybackNotice(context)
+                        zone = Zone.APPS
+                        refocusApps++
+                    },
+                )
+                Spacer(Modifier.height(14.dp))
             }
             RowLabel(if (editing != null && editingKey == FavoriteStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
             AppsRow(
@@ -529,6 +559,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 toFirst = toFirst,
                 active = zone == Zone.APPS && menu == null,
                 onFocused = { moveTo(Zone.APPS) },
+                onTile = { focusedApp = it },
                 editing = editing.takeIf { editingKey == FavoriteStore.APPS },
                 onOpen = { app -> openApp(app.packageName, app.label) },
                 onMenu = { app, anchor ->
@@ -832,6 +863,8 @@ private fun AppsRow(
     /** Focus belongs in this row: it was last here, and no menu has it. */
     active: Boolean,
     onFocused: () -> Unit,
+    /** The app under the cursor, or null on the add tile. The hero follows it. */
+    onTile: (String?) -> Unit,
     editing: String?,
     onOpen: (LaunchableApp) -> Unit,
     onMenu: (LaunchableApp, Rect) -> Unit,
@@ -915,6 +948,7 @@ private fun AppsRow(
                 requester = requesters.getOrPut(app.packageName) { FocusRequester() },
                 onFocused = {
                     lastFocused = app.packageName
+                    onTile(app.packageName)
                     lastIndex = index
                 },
                 onClick = { onOpen(app) },
@@ -933,6 +967,7 @@ private fun AppsRow(
                 requester = requesters.getOrPut(ADD_TILE) { FocusRequester() },
                 onFocused = {
                     lastFocused = ADD_TILE
+                    onTile(null)
                     lastIndex = apps.size
                 },
                 onEdgeRight = { firstPackage?.let { jumpTo(0, it) } },
@@ -1308,6 +1343,12 @@ private val HeroMinH = 108.dp
 /** How long each thing to carry on with is shown before the next one. */
 private const val CycleMs = 10_000L
 
+/** The hero's words stay left of the artwork, whatever length an app gives them. */
+private const val HeroTextWidth = 0.52f
+
+/** The notice stays left of where the artwork becomes visible through its fade. */
+private const val NoticeWidth = 0.56f
+
 /** How much of the screen the artwork covers, before it is faded out. */
 private const val BackdropWidth = 0.60f
 private const val BackdropHeight = 0.78f
@@ -1325,7 +1366,6 @@ private const val BackdropHeight = 0.78f
 @Composable
 private fun Hero(
     apps: List<LaunchableApp>,
-    inputs: List<TvInput>?,
     refocus: Int,
     self: FocusRequester,
     above: FocusRequester,
@@ -1336,31 +1376,29 @@ private fun Hero(
     val context = LocalContext.current
     val requester = self
     var focused by remember { mutableStateOf(false) }
+    var heldPress by remember { mutableLongStateOf(0L) }
     val granted = watching.granted
     val asked = watching.asked
 
-    val back = remember(Returns.count) { LastOpened.recent(context) }
-    val backApp = back?.takeIf { it.kind == LastOpened.APP }
-        ?.let { entry -> apps.firstOrNull { it.packageName == entry.id } }
-    val backInput = back?.takeIf { it.kind == LastOpened.INPUT }
-        ?.let { entry -> inputs?.firstOrNull { it.id == entry.id } }
-
     val item = watching.item
+    val progress = watching.progress
+    val ambient = watching.picture?.takeIf { it.title != null }
+    // Named after the app that published it. "From your library" was a claim Orbit cannot
+    // make: most of these come from a shop front, not from anything the owner has.
+    val ambientSource = ambient?.let { picture ->
+        apps.firstOrNull { it.packageName == picture.packageName }?.label
+    }
     val action: (() -> Unit)? = when {
         item != null -> {
             {
-                ContinueWatching.intentFor(item)?.let { intent ->
-                    // Resuming is opening that app, so the hero can offer it again tomorrow.
-                    if (context.startActivitySafely(intent)) {
-                        LastOpened.record(context, LastOpened.APP, item.packageName)
-                    }
-                }
+                ContinueWatching.intentFor(item)?.let { context.startActivitySafely(it) }
             }
         }
         // Asked for once, in the hero, rather than as a popup on a screen nobody opened yet.
         !granted && !asked -> watching.ask
-        backApp != null -> { { context.launchApp(backApp.packageName) } }
-        backInput != null -> { { context.switchToInput(backInput.id) } }
+        // The picture came from an app, so OK opens that app. Holding OK configures which
+        // apps supply them, the same gesture a tile uses for its menu.
+        ambient != null -> { { context.launchApp(ambient.packageName) } }
         else -> null
     }
 
@@ -1397,10 +1435,31 @@ private fun Hero(
 
         Box(
             Modifier
+                .fillMaxWidth(HeroTextWidth)
                 .focusRequester(requester)
                 .onFocusChanged {
                     focused = it.hasFocus
                     if (it.hasFocus) onFocused()
+                }
+                // Holding OK is how the pictures are configured, the same gesture a tile uses
+                // for its menu. The release is swallowed so the hero does not also resume.
+                .onPreviewKeyEvent { event ->
+                    val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
+                    val press = event.nativeKeyEvent.downTime
+                    when {
+                        ok && event.type == KeyEventType.KeyDown && event.isHeld() -> {
+                            if (heldPress != press) {
+                                heldPress = press
+                                context.openScreen(
+                                    Intent(context, AppPickerActivity::class.java)
+                                        .putExtra(AppPickerActivity.EXTRA_BACKDROPS, true)
+                                )
+                            }
+                            true
+                        }
+                        ok && event.type == KeyEventType.KeyUp && heldPress == press -> true
+                        else -> false
+                    }
                 }
                 // The clickable is the hero's only focus target. A focusable() in front of it
                 // would make a second one, and the focus properties set above would then not be
@@ -1412,10 +1471,9 @@ private fun Hero(
                 )
         ) {
             when {
-                item != null -> Watching(item, focused)
+                item != null -> Watching(item, progress, focused)
                 !granted && !asked -> Offer(focused)
-                backApp != null -> BackTo(backApp.label, focused)
-                backInput != null -> BackTo(backInput.label, focused)
+                ambient != null -> Ambient(ambient, ambientSource, focused)
                 else -> Clock()
             }
         }
@@ -1425,6 +1483,10 @@ private fun Hero(
 /** What the hero knows about Continue watching, read once for the whole screen. */
 private class Watching(
     val item: Resumable?,
+    /** The bar, from the row itself or from what the TV was last seen playing. */
+    val progress: Progress?,
+    /** What the ambient picture is of, when one is being shown instead of a programme. */
+    val picture: Picture?,
     val art: ImageBitmap?,
     val granted: Boolean,
     val asked: Boolean,
@@ -1437,7 +1499,7 @@ private class Watching(
  * behind the whole screen.
  */
 @Composable
-private fun rememberWatching(): Watching {
+private fun rememberWatching(focusedApp: String?): Watching {
     val context = LocalContext.current
     var granted by remember { mutableStateOf(ContinueWatching.granted(context)) }
     var asked by rememberSaveable { mutableStateOf(HomePrefs.listingsAsked(context)) }
@@ -1455,25 +1517,60 @@ private fun rememberWatching(): Watching {
     val items by produceState(initialValue = emptyList<Resumable>(), granted, Returns.count) {
         value = withContext(Dispatchers.IO) { ContinueWatching.all(context) }
     }
+    // Only what the app under the cursor published. Another app's programme behind a tile that
+    // knows nothing about it was the picture claiming something it could not.
+    val mine = remember(items, focusedApp) { items.filter { it.packageName == focusedApp } }
     // Back to the first whenever the list itself changes, so the step is always within it.
-    var index by remember(items) { mutableIntStateOf(0) }
-    LaunchedEffect(items) {
-        if (items.size < 2) return@LaunchedEffect
+    var index by remember(mine) { mutableIntStateOf(0) }
+    LaunchedEffect(mine) {
+        if (mine.size < 2) return@LaunchedEffect
         while (true) {
             delay(CycleMs)
-            index = (index + 1) % items.size
+            index = (index + 1) % mine.size
         }
     }
-    val item = items.getOrNull(index)
+    val item = mine.getOrNull(index)
 
+    // Ambient pictures, for an app that serves nothing of its own.
     @Suppress("ProduceStateDoesNotAssignValue")
-    val art by produceState<ImageBitmap?>(initialValue = null, item?.posterUri) {
-        val uri = item?.posterUri
+    val ambient by produceState(
+        initialValue = emptyList<Picture>(),
+        Backdrops.revision,
+        FavoriteStore.revision,
+        Returns.count,
+        items,
+    ) {
+        // Keyed on the titles so the pool is rebuilt when Watch Next changes.
+        val shown = items.mapNotNull { it.title }.toSet()
+        value = withContext(Dispatchers.IO) { Backdrops.art(context, except = shown) }
+    }
+    var ambientIndex by remember(ambient) { mutableIntStateOf(0) }
+    LaunchedEffect(ambient, item != null) {
+        if (item != null || ambient.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(CycleMs)
+            ambientIndex = (ambientIndex + 1) % ambient.size
+        }
+    }
+
+    val picture = ambient.getOrNull(ambientIndex)
+    val uri = item?.posterUri ?: picture?.uri
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val art by produceState<ImageBitmap?>(initialValue = null, uri) {
         value = withContext(Dispatchers.IO) {
             uri?.let { ContinueWatching.poster(context, it, maxWidth = 1280)?.asImageBitmap() }
         }
     }
-    return Watching(item, art, granted, asked) { ask.launch(ContinueWatching.PERMISSION) }
+    // The row's own position where the app gave one, and what the TV was last seen playing
+    // where it did not. A "next episode" row never carries a position.
+    val progress = remember(item, Returns.count) {
+        item?.let { it.progress ?: PlaybackMemory.progressFor(context, it.packageName, it.title) }
+    }
+    // Only once its picture is actually on screen: a title over a black rectangle is worse
+    // than no hero at all, and some artwork never loads.
+    return Watching(item, progress, picture.takeIf { item == null && art != null }, art, granted, asked) {
+        ask.launch(ContinueWatching.PERMISSION)
+    }
 }
 
 /**
@@ -1496,12 +1593,15 @@ private fun Backdrop(art: ImageBitmap?, modifier: Modifier) {
                 drawContent()
                 drawRect(Brush.horizontalGradient(0f to Color.Black, 0.55f to Color.Transparent))
                 drawRect(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black))
+                // A touch along the top as well: artwork that starts on a bright sky otherwise
+                // meets the edge of the screen in a hard line, and the top bar sits on it.
+                drawRect(Brush.verticalGradient(0f to Color.Black, 0.10f to Color.Transparent))
             },
     )
 }
 
 @Composable
-private fun Watching(item: Resumable, focused: Boolean) {
+private fun Watching(item: Resumable, progress: Progress?, focused: Boolean) {
     Column {
         HeroLabel("CONTINUE WATCHING")
         Text(
@@ -1516,31 +1616,31 @@ private fun Watching(item: Resumable, focused: Boolean) {
             Spacer(Modifier.height(6.dp))
             Text(it, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        // A film has no episode line, so this is left out rather than filled with a season.
-        item.subtitle?.let {
-            Spacer(Modifier.height(6.dp))
-            Text(it.uppercase(), color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // One line above the bar: the episode, where there is one, and the two numbers. A film
+        // has no episode line, so it is left out rather than filled with a season.
+        val line = listOfNotNull(item.subtitle?.uppercase(), progress?.summary).joinToString(" - ")
+        if (line.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(line, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        // Only when the app reported where it had got to. No bar beats a made-up one.
-        item.progress?.let { progress ->
-            Spacer(Modifier.height(10.dp))
+        // Only when a position was actually reported. No bar beats a made-up one.
+        progress?.let {
+            Spacer(Modifier.height(8.dp))
             Box(
                 Modifier
-                    .width(260.dp)
+                    .width(300.dp)
                     .height(3.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(Color(0x33FFFFFF))
             ) {
                 Box(
                     Modifier
-                        .fillMaxWidth(progress.fraction)
+                        .fillMaxWidth(it.fraction)
                         .height(3.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0xFF7FD4FF))
+                        .background(Color.White)
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            Text(progress.summary, color = Muted, fontSize = 11.sp, maxLines = 1)
         }
     }
 }
@@ -1564,18 +1664,28 @@ private fun Offer(focused: Boolean) {
     }
 }
 
+/** A picture with nothing behind it but its own name, and the seasons when the app said. */
 @Composable
-private fun BackTo(label: String, focused: Boolean) {
+private fun Ambient(picture: Picture, source: String?, focused: Boolean) {
     Column {
-        HeroLabel("CARRY ON")
+        HeroLabel(source?.uppercase()?.let { "ON $it" } ?: "ALSO ON THIS TV")
         Text(
-            "Back to $label",
+            picture.title.orEmpty(),
             color = if (focused) Color.White else OnSurface,
             fontSize = 33.sp,
             fontWeight = FontWeight.Light,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        picture.seasons?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (it == 1) "1 SEASON" else "$it SEASONS",
+                color = Muted,
+                fontSize = 11.sp,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -1615,9 +1725,13 @@ private fun Notice(
     Row(
         Modifier
             .focusProperties { up = above }
-            .fillMaxWidth()
-            .background(Color(0xA60B1017))
-            .padding(horizontal = SafeH, vertical = 9.dp),
+            // Only as wide as the part of the screen the artwork does not reach, so the two
+            // never sit on top of each other.
+            .fillMaxWidth(NoticeWidth)
+            .padding(start = SafeH, end = 18.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF0B1017))
+            .padding(horizontal = 18.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -2052,16 +2166,10 @@ private fun LayoutCoordinates.rootBounds(): Rect =
 /** Says whether the app could be started. One can lose its launcher entry while installed. */
 private fun Context.launchApp(packageName: String): Boolean = AppRepository.launch(this, packageName)
 
-/**
- * Marks the input as last used only once the switch is under way, so a failed one does not, and
- * records it for the hero at the same time.
- */
+/** Marks the input as last used only once the switch is under way, so a failed one does not. */
 private fun Context.switchToInput(inputId: String): Boolean =
     startActivitySafely(InputRepository.switchIntent(inputId)).also { switched ->
-        if (switched) {
-            InputRepository.rememberUse(this, inputId)
-            LastOpened.record(this, LastOpened.INPUT, inputId)
-        }
+        if (switched) InputRepository.rememberUse(this, inputId)
     }
 
 /** Starts [intent], and says whether it could. A TV can lack any of the screens Orbit links to. */
@@ -2093,6 +2201,7 @@ private fun isHomeButtonServiceOn(context: Context): Boolean {
 private object HomePrefs {
     private const val KEY_NOTICE_DISMISSED = "notice_dismissed"
     private const val KEY_LISTINGS_ASKED = "listings_asked"
+    private const val KEY_PLAYBACK_DISMISSED = "playback_notice_dismissed"
 
     fun noticeDismissed(context: Context): Boolean =
         prefs(context).getBoolean(KEY_NOTICE_DISMISSED, false)
@@ -2107,6 +2216,13 @@ private object HomePrefs {
 
     fun dismissNotice(context: Context) {
         prefs(context).edit().putBoolean(KEY_NOTICE_DISMISSED, true).apply()
+    }
+
+    fun playbackNoticeDismissed(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PLAYBACK_DISMISSED, false)
+
+    fun dismissPlaybackNotice(context: Context) {
+        prefs(context).edit().putBoolean(KEY_PLAYBACK_DISMISSED, true).apply()
     }
 
     private fun prefs(context: Context) =

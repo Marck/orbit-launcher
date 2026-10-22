@@ -53,6 +53,9 @@ object ContinueWatching {
 
     private const val MAX_ROWS = 12
 
+    /** A poster is a few hundred kilobytes. This is the ceiling, not the expectation. */
+    private const val MAX_ARTWORK_BYTES = 8 * 1024 * 1024
+
     /** The kinds whose position and length are really milliseconds. */
     private val TIMED = setOf(
         TvContract.WatchNextPrograms.TYPE_MOVIE,
@@ -100,8 +103,13 @@ object ContinueWatching {
      */
     fun poster(context: Context, uri: String, maxWidth: Int): Bitmap? = runCatching {
         val parsed = Uri.parse(uri)
-        val bytes = context.contentResolver.openInputStream(parsed)?.use { it.readBytes() }
-            ?: return@runCatching null
+        // Only the media server publishes a content URI its own provider can serve. Every other
+        // app on this set publishes an https link to its own artwork, so that is fetched. Only
+        // the picture is asked for, nothing is sent, and the link is never logged.
+        val bytes = when (parsed.scheme?.lowercase()) {
+            "http", "https" -> fetch(uri)
+            else -> context.contentResolver.openInputStream(parsed)?.use { it.readBytes() }
+        } ?: return@runCatching null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         var sample = 1
@@ -110,6 +118,32 @@ object ContinueWatching {
             bytes, 0, bytes.size,
             BitmapFactory.Options().apply { inSampleSize = sample },
         )
+    }.getOrNull()
+
+    /** Reads a picture off the network. Call off the main thread. */
+    private fun fetch(url: String): ByteArray? = runCatching {
+        val connection = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 8_000
+            instanceFollowRedirects = true
+        }
+        try {
+            if (connection.responseCode !in 200..299) return@runCatching null
+            // A picture, not a page. Anything bigger is not artwork and is not worth decoding,
+            // and a stream that never ends must not be allowed to fill the heap.
+            connection.inputStream.use { stream ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                while (out.size() < MAX_ARTWORK_BYTES) {
+                    val read = stream.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                }
+                out.toByteArray().takeIf { it.isNotEmpty() }
+            }
+        } finally {
+            connection.disconnect()
+        }
     }.getOrNull()
 
     /**
@@ -148,6 +182,20 @@ object ContinueWatching {
         )
     }
 
+    /**
+     * The bar and its two numbers from a position and a length in milliseconds.
+     *
+     * Shared with the media session reader, which fills in for an app that publishes a row
+     * without a position on it.
+     */
+    fun timed(position: Long, duration: Long): Progress? {
+        if (duration <= 0 || position < 0 || position > duration) return null
+        val watched = position / 60_000
+        // Rounded up, so a part minute still reads as a minute left rather than none.
+        val left = (duration - position + 59_999) / 60_000
+        return Progress(position.toFloat() / duration, "$watched MIN WATCHED, $left LEFT")
+    }
+
     /** Only drawn when the app reported both numbers, so there is never an invented bar. */
     private fun progress(c: Columns): Progress? {
         val position = c.long(TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS)
@@ -155,16 +203,13 @@ object ContinueWatching {
         val duration = c.long(TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS) ?: return null
         if (duration <= 0 || position < 0 || position > duration) return null
 
-        val fraction = position.toFloat() / duration
-        val summary = if (c.int(TvContract.WatchNextPrograms.COLUMN_TYPE) in TIMED) {
-            val watched = position / 60_000
-            // Rounded up, so a part minute still reads as a minute left rather than none.
-            val left = (duration - position + 59_999) / 60_000
-            "$watched MIN WATCHED, $left LEFT"
-        } else {
-            "${(fraction * 100).roundToInt()}% DONE"
+        if (c.int(TvContract.WatchNextPrograms.COLUMN_TYPE) in TIMED) {
+            return timed(position, duration)
         }
-        return Progress(fraction, summary)
+        // Not a timed kind, so the unit is anyone's guess and a percentage says the same thing
+        // without claiming minutes.
+        val fraction = position.toFloat() / duration
+        return Progress(fraction, "${(fraction * 100).roundToInt()}% DONE")
     }
 
     /**

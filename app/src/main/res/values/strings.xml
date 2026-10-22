@@ -3,4 +3,5 @@
     <string name="app_name">Orbit</string>
     <string name="accessibility_label">Orbit home button</string>
     <string name="accessibility_description">Lets Orbit take over the home button without disabling the stock launcher.</string>
+    <string name="playback_label">Orbit playback progress</string>
 </resources>

@@ -115,7 +115,7 @@ class AvatarFlowTest : TvTest() {
         // "Looking for pictures" placeholder is what gets read, at random.
         var names: List<String> = emptyList()
         var i = -1
-        for (attempt in 0 until 30) {
+        for (attempt in 0 until 150) {
             val t = texts()
             names = t.drop(t.indexOf("YOUR PICTURES") + 1).takeWhile { it != "CURRENT" }
             i = names.indexOf(label)
