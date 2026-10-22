@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The same, on Android 12 and up, where a backup to the cloud and a transfer to another
+  set are configured apart. Both carry the same thing, because what is here is what the
+  owner chose rather than anything about them.
+
+  See backup_rules.xml for what is left out and why.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="orbit.favorites.xml" />
+        <include domain="sharedpref" path="orbit.inputs.xml" />
+        <include domain="sharedpref" path="orbit.backdrops.xml" />
+        <include domain="external" path="avatar.png" />
+        <include domain="external" path="avatar.jpg" />
+        <include domain="external" path="avatar.jpeg" />
+        <include domain="external" path="avatar.webp" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="orbit.favorites.xml" />
+        <include domain="sharedpref" path="orbit.inputs.xml" />
+        <include domain="sharedpref" path="orbit.backdrops.xml" />
+        <include domain="external" path="avatar.png" />
+        <include domain="external" path="avatar.jpg" />
+        <include domain="external" path="avatar.jpeg" />
+        <include domain="external" path="avatar.webp" />
+    </device-transfer>
+</data-extraction-rules>

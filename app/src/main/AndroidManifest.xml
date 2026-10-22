@@ -46,7 +46,9 @@
     </queries>
 
     <application
-        android:allowBackup="false"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:requestLegacyExternalStorage="true"
         android:banner="@android:drawable/ic_menu_view"
         android:icon="@android:drawable/ic_menu_view"
