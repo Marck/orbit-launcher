@@ -63,6 +63,14 @@ object AppRepository {
         return apps.sortedBy { it.label.lowercase() }.also { cache = it }
     }
 
+    /** Opens [packageName], and says whether the TV had anywhere to send it. */
+    fun launch(context: Context, packageName: String): Boolean {
+        val intent = launchIntent(context, packageName) ?: return false
+        return runCatching {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.isSuccess
+    }
+
     fun launchIntent(context: Context, packageName: String): Intent? {
         val pm = context.packageManager
         return pm.getLeanbackLaunchIntentForPackage(packageName)

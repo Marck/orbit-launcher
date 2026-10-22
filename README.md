@@ -47,6 +47,12 @@ CI builds the same artifact, runs Android lint and the unit tests on every pull 
 and every push to `main`; it can also be started by hand. New lint errors fail the build;
 the ones already there are listed in `app/lint-baseline.xml`.
 
+## Focus
+
+The tile in focus grows a little and its label turns white. There is no ring around it:
+the pop-out is the whole signal. A tile being moved is the one exception, and it gets an
+amber ring for as long as the move lasts.
+
 ## Favorites and order
 
 Each row holds only your favorites, in your order, then a `+` tile. With no
@@ -78,9 +84,13 @@ also closes the menu and puts back a move that was not kept.
 
 ## Top bar
 
-Left of the profile picture sit three small buttons: the TV's own inputs panel, the
-Play Store and Settings. Press up from the rows to reach them. A button is left out
+Left of the profile picture sit four small buttons: All apps, the TV's own inputs panel,
+the Play Store and Settings. Press up from the rows to reach them. A button is left out
 when the TV has nothing for it to open.
+
+**All apps** opens the same grid as the add tile, but selecting an app there opens it.
+Holding OK, or pressing Menu, adds it to the favorites or takes it out again. The rows
+show favorites only, so this is how an app that is not a favorite gets opened.
 
 ## Setting the profile picture
 

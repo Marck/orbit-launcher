@@ -856,7 +856,7 @@ private fun AppsRow(
                     lastIndex = apps.size
                 },
                 onEdgeRight = { firstPackage?.let { jumpTo(0, it) } },
-            ) { context.startActivitySafely(Intent(context, AppPickerActivity::class.java)) }
+            ) { context.openScreen(Intent(context, AppPickerActivity::class.java)) }
         }
     }
 }
@@ -961,7 +961,7 @@ private fun InputsRow(
                 onEdgeRight = { inputs.firstOrNull()?.let { jumpTo(0, it.id) } },
                 width = InputW,
                 label = "Add input to favorites",
-            ) { context.startActivitySafely(Intent(context, InputPickerActivity::class.java)) }
+            ) { context.openScreen(Intent(context, InputPickerActivity::class.java)) }
         }
     }
 }
@@ -1023,6 +1023,26 @@ private fun Shortcuts(button: (String) -> Modifier) {
         }.getOrNull()
     }
 
+    // Favorites are what the rows show, so without this an app that is not a favorite could not
+    // be opened from Orbit at all.
+    TopBarButton(
+        button("apps"),
+        onClick = {
+            context.openScreen(
+                Intent(context, AppPickerActivity::class.java)
+                    .putExtra(AppPickerActivity.EXTRA_OPEN, true)
+            )
+        },
+    ) {
+        Icon(
+            imageVector = Glyphs.Apps,
+            contentDescription = "All apps",
+            tint = Glyph,
+            modifier = Modifier.padding(4.dp),
+        )
+    }
+    Spacer(Modifier.width(9.dp))
+
     if (inputsIntent != null) {
         TopBarButton(button("inputs"), onClick = { context.startActivitySafely(inputsIntent) }) {
             Icon(
@@ -1074,7 +1094,7 @@ private fun Avatar(button: (String) -> Modifier) {
     }
     TopBarButton(
         button("profile"),
-        onClick = { context.startActivitySafely(Intent(context, AvatarPickerActivity::class.java)) },
+        onClick = { context.openScreen(Intent(context, AvatarPickerActivity::class.java)) },
     ) {
         val bitmap = picture
         if (bitmap != null) {
@@ -1282,15 +1302,6 @@ private fun SafeAreaScrolling(content: @Composable () -> Unit) {
 }
 
 /** How long OK must be held for the menu rather than a launch, if no long-press flag arrives. */
-private const val LongPressMs = 500L
-
-/** Android marks a held key with a flag and a repeat, which is the signal to trust. */
-private fun androidx.compose.ui.input.key.KeyEvent.isHeld(): Boolean {
-    val native = nativeKeyEvent
-    return native.repeatCount > 0 ||
-        (native.flags and android.view.KeyEvent.FLAG_LONG_PRESS) != 0
-}
-
 /**
  * Keys for a tile that can be moved.
  *
@@ -1410,8 +1421,8 @@ private fun AppTile(
                 .clip(RoundedCornerShape(10.dp))
                 .background(Surface)
                 .border(
-                    width = if (editing || lit) 3.dp else 0.dp,
-                    color = if (editing) Editing else if (lit) Color.White else Color.Transparent,
+                    width = if (editing) 3.dp else 0.dp,
+                    color = if (editing) Editing else Color.Transparent,
                     shape = RoundedCornerShape(10.dp),
                 ),
             contentAlignment = Alignment.Center,
@@ -1486,11 +1497,7 @@ private fun PlusTile(
                 .clickable(onClick = onClick)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF1E2838))
-                .border(
-                    width = if (focused) 3.dp else 0.dp,
-                    color = if (focused) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(10.dp),
-                ),
+                .clip(RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Text("+", color = Color(0xFF9FC3FF), fontSize = 26.sp, fontWeight = FontWeight.Light)
@@ -1570,8 +1577,8 @@ private fun InputTile(
             .clip(RoundedCornerShape(10.dp))
             .background(if (highlighted) LastInput else Color(0xFF2A3444))
             .border(
-                width = if (editing || lit) 3.dp else 0.dp,
-                color = if (editing) Editing else if (lit) Color.White else Color.Transparent,
+                width = if (editing) 3.dp else 0.dp,
+                color = if (editing) Editing else Color.Transparent,
                 shape = RoundedCornerShape(10.dp),
             ),
         contentAlignment = Alignment.Center,
@@ -1612,7 +1619,7 @@ private fun LayoutCoordinates.rootBounds(): Rect =
     findRootCoordinates().localBoundingBoxOf(this, clipBounds = false)
 
 private fun Context.launchApp(packageName: String) {
-    AppRepository.launchIntent(this, packageName)?.let { startActivitySafely(it) }
+    AppRepository.launch(this, packageName)
 }
 
 private fun Context.switchToInput(inputId: String) {
@@ -1623,6 +1630,17 @@ private fun Context.switchToInput(inputId: String) {
 /** Starts [intent], and says whether it could. A TV can lack any of the screens Orbit links to. */
 private fun Context.startActivitySafely(intent: Intent): Boolean =
     runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+
+/**
+ * Opens one of Orbit's own screens, in Orbit's task.
+ *
+ * Deliberately without FLAG_ACTIVITY_NEW_TASK: with it, a second open finds the screen's task
+ * already there and brings it forward as it was, dropping the intent and every extra on it. The
+ * picker then reopens in whichever mode it was in last. In Orbit's own task it also means Back
+ * comes straight home.
+ */
+private fun Context.openScreen(intent: Intent): Boolean =
+    runCatching { startActivity(intent) }.isSuccess
 
 /** True when the owner has turned on Orbit's home button service in the accessibility settings. */
 private fun isHomeButtonServiceOn(context: Context): Boolean {

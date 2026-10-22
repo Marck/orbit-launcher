@@ -21,6 +21,13 @@ object Glyphs {
             "c1.1 0 2-.88 2-1.98v-14c0-1.11-.9-2-2-2zM11 16l4-4-4-4v3H1v2h10v3z",
     )
 
+    /** A three by three grid, for the screen that lists every app. */
+    val Apps: ImageVector = glyph(
+        "Apps",
+        "M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4" +
+            "h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z",
+    )
+
     /** Two arrows passing each other, for moving a tile. */
     val Swap: ImageVector = glyph(
         "Swap",

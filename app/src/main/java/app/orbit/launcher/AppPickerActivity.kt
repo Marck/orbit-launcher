@@ -1,6 +1,7 @@
 package app.orbit.launcher
 
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -30,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -74,16 +76,27 @@ private val Surface = Color(0xFF14181F)
 private val Muted = Color(0xFF8B93A4)
 private val Chosen = Color(0xFF2E9E4F)
 
-/** The grid behind the add tile: every app, with the favorites already ticked. */
+/**
+ * The grid behind the add tile: every app, with the favorites already ticked.
+ *
+ * The same grid is also the All apps screen. The rows show favorites only, so without that an
+ * app that is not a favorite could not be opened from Orbit at all.
+ */
 class AppPickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { PickerScreen() }
+        val opening = intent?.getBooleanExtra(EXTRA_OPEN, false) == true
+        setContent { PickerScreen(opening) }
+    }
+
+    companion object {
+        /** Open the chosen app rather than add it to the favorites. */
+        const val EXTRA_OPEN = "app.orbit.launcher.extra.OPEN"
     }
 }
 
 @Composable
-private fun PickerScreen() {
+private fun PickerScreen(opening: Boolean) {
     val context = LocalContext.current
     val apps by produceState(initialValue = AppRepository.cached()) {
         value = withContext(Dispatchers.IO) { AppRepository.load(context) }
@@ -141,13 +154,21 @@ private fun PickerScreen() {
             .background(Color.Black)
             .padding(horizontal = SafeH, vertical = SafeV)
     ) {
-        Text("Favorite apps", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
+        Text(
+            if (opening) "All apps" else "Favorite apps",
+            color = Color.White,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Light,
+        )
         Spacer(Modifier.height(6.dp))
         Text(
             // Counted from the apps on the grid: a favorite that is disabled for now is kept, but
             // there is nothing here to untick.
-            if (chosen == 0) "Select an app to add it to the row."
-            else "Select to add or remove. $chosen chosen.",
+            when {
+                opening -> "Select to open. Hold OK to add to or remove from favorites."
+                chosen == 0 -> "Select an app to add it to the row."
+                else -> "Select to add or remove. $chosen chosen."
+            },
             color = Muted,
             fontSize = 14.sp,
         )
@@ -177,8 +198,19 @@ private fun PickerScreen() {
                     } else {
                         null
                     },
+                    // Holding OK favorites an app from here too, so All apps is also the way to
+                    // build the row up. In the add tile's own grid a tap already does that.
+                    onHold = if (opening) {
+                        { FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName) }
+                    } else {
+                        null
+                    },
                 ) {
-                    FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName)
+                    if (opening) {
+                        AppRepository.launch(context, app.packageName)
+                    } else {
+                        FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName)
+                    }
                 }
             }
         }
@@ -193,6 +225,7 @@ private fun PickerTile(
     onFocused: () -> Unit,
     onEdgeLeft: (() -> Unit)? = null,
     onEdgeRight: (() -> Unit)? = null,
+    onHold: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     // The clickable is the tile's only focus target. A focusable() in front of it would make a
@@ -200,11 +233,13 @@ private fun PickerTile(
     // again instead of leaving the picker. Read with hasFocus all the same, so the highlight does
     // not depend on which node inside the tile holds focus.
     var focused by remember { mutableStateOf(false) }
+    var pressedAt by remember { mutableLongStateOf(0L) }
+    var handledPress by remember { mutableLongStateOf(0L) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
                 .size(TileW, TileH)
-                .scale(if (focused) 1.06f else 1f)
+                .scale(if (focused) 1.12f else 1f)
                 .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
                 .onFocusChanged {
                     focused = it.hasFocus
@@ -212,6 +247,8 @@ private fun PickerTile(
                 }
                 .onPreviewKeyEvent { event ->
                     val down = event.type == KeyEventType.KeyDown
+                    val up = event.type == KeyEventType.KeyUp
+                    val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
                     when {
                         event.key == Key.DirectionLeft && onEdgeLeft != null -> {
                             if (down) onEdgeLeft(); true
@@ -219,20 +256,45 @@ private fun PickerTile(
                         event.key == Key.DirectionRight && onEdgeRight != null -> {
                             if (down) onEdgeRight(); true
                         }
+                        onHold == null -> false
+                        up && event.key == Key.Menu -> { onHold(); true }
+                        ok && down && event.isHeld() -> {
+                            // Auto-repeat keeps sending downs, so act once per press. Identified
+                            // by the press, because the tile may never see the release.
+                            val press = event.nativeKeyEvent.downTime
+                            if (handledPress != press) {
+                                handledPress = press
+                                pressedAt = 0L
+                                onHold()
+                            }
+                            true
+                        }
+                        ok && down -> {
+                            if (pressedAt == 0L) pressedAt = SystemClock.elapsedRealtime()
+                            false
+                        }
+                        ok && up -> {
+                            val press = event.nativeKeyEvent.downTime
+                            val longByTime = pressedAt != 0L &&
+                                SystemClock.elapsedRealtime() - pressedAt >= LongPressMs
+                            pressedAt = 0L
+                            when {
+                                // Already handled as a hold; swallow the release so the tile does
+                                // not open the app as well.
+                                handledPress == press -> true
+                                // A remote that sends no long-press flag still gets the hold.
+                                longByTime -> { onHold(); true }
+                                else -> false
+                            }
+                        }
                         else -> false
                     }
                 }
-                // No indication: now that the clickable holds focus itself, its focus layer would
-                // draw a dark wash over the tile and its ring. The ring and the pop-out already say
-                // which tile it is.
+                // No indication: now that the clickable holds focus itself, its focus layer
+                // would draw a dark wash over the tile. The pop-out already says which tile it is.
                 .clickable(interactionSource = null, indication = null, onClick = onClick)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Surface)
-                .border(
-                    width = if (focused) 3.dp else 0.dp,
-                    color = if (focused) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(10.dp),
-                ),
+                .background(Surface),
             contentAlignment = Alignment.Center,
         ) {
             val bitmap = remember(app.packageName) {
