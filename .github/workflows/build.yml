@@ -2,7 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    # renovate/** as well as main: the shared Renovate config automerges a green branch
+    # straight to main without a PR, so the branch itself has to carry a status check.
+    branches: [main, 'renovate/**']
   pull_request:
   workflow_dispatch:
 
