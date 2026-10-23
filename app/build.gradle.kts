@@ -4,7 +4,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -41,7 +40,7 @@ kotlin {
 
 android {
     namespace = "app.orbit.launcher"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "app.orbit.launcher"
