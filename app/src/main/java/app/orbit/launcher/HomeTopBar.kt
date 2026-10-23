@@ -198,12 +198,41 @@ internal fun Shortcuts(
         Spacer(Modifier.width(9.dp))
     }
 
+    // Beside search, because the only other way in was holding OK on the artwork, which says
+    // nowhere that it exists. Always offered: with nothing ticked there are no backdrops, and
+    // with no backdrops the hero has nothing to hold OK on, which made it a one-way door.
+    TopBarButton(
+        button("backdrops")
+            .then(if (searchIntent == null) Modifier.focusRequester(first) else Modifier)
+            .then(
+                if (searchIntent == null) {
+                    Modifier.focusProperties { left = FocusRequester.Cancel }
+                } else {
+                    Modifier
+                }
+            ),
+        onClick = {
+            context.openScreen(
+                Intent(context, AppPickerActivity::class.java)
+                    .putExtra(AppPickerActivity.EXTRA_BACKDROPS, true)
+            )
+        },
+    ) {
+        Icon(
+            imageVector = Glyphs.Picture,
+            contentDescription = "Backdrops",
+            tint = Glyph,
+            modifier = Modifier.padding(4.dp),
+        )
+    }
+    Spacer(Modifier.width(9.dp))
+
     // Favorites are what the rows show, so without this an app that is not a favorite could not
     // be opened from Orbit at all.
+    // No left edge of its own any more: Backdrops always sits to its left, so cancelling left
+    // here would strand focus on it.
     TopBarButton(
-        button("apps")
-            .then(if (searchIntent == null) Modifier.focusRequester(first) else Modifier)
-            .focusProperties { left = FocusRequester.Cancel },
+        button("apps"),
         onClick = {
             context.openScreen(
                 Intent(context, AppPickerActivity::class.java)

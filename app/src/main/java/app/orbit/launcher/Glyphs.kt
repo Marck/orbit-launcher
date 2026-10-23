@@ -36,6 +36,13 @@ object Glyphs {
             "h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z",
     )
 
+    /** A framed picture with a hill in it, for the screen that chooses the backdrops. */
+    val Picture: ImageVector = glyph(
+        "Picture",
+        "M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5" +
+            "l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z",
+    )
+
     /** Two arrows passing each other, for moving a tile. */
     val Swap: ImageVector = glyph(
         "Swap",

@@ -167,7 +167,16 @@ internal fun Hero(
         // name of its own goes first.
         backApp != null -> { { context.launchApp(backApp.packageName) } }
         backInput != null -> { { context.switchToInput(backInput.id) } }
-        else -> null
+        // Nothing to carry on with, nothing to go back to and no picture. Rather than a hero
+        // with no focus target at all, it offers the one thing that would put something there.
+        else -> {
+            {
+                context.openScreen(
+                    Intent(context, AppPickerActivity::class.java)
+                        .putExtra(AppPickerActivity.EXTRA_BACKDROPS, true)
+                )
+            }
+        }
     }
 
     LaunchedEffect(refocus) {
@@ -246,7 +255,7 @@ internal fun Hero(
                 watching.settling -> Unit
                 backApp != null -> BackTo(backApp.label, focused)
                 backInput != null -> BackTo(backInput.label, focused)
-                else -> Clock()
+                else -> Clock(focused)
             }
         }
     }
@@ -587,9 +596,16 @@ internal fun BackTo(label: String, focused: Boolean) {
     HeroText(label = "CARRY ON", title = "Back to $label", focused = focused)
 }
 
-/** Nothing to offer, so the hero says something true and useful instead. */
+/**
+ * Nothing to offer, so the hero says something true and useful instead.
+ *
+ * It still takes focus, because it is the one state where nothing else would: with no picture
+ * and nothing to carry on with there was no focus target here at all, so holding OK could not
+ * reach the screen that chooses the sources, and ticking every source off was a door that only
+ * shut one way.
+ */
 @Composable
-internal fun Clock() {
+internal fun Clock(focused: Boolean) {
     val now by produceState(initialValue = Date()) {
         while (true) {
             value = Date()
@@ -602,6 +618,12 @@ internal fun Clock() {
         Text(time.format(now), color = OnSurface, fontSize = 48.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(2.dp))
         Text(day.format(now), color = Muted, fontSize = 13.sp)
+        // Only once it is in focus, so a hero standing quietly does not nag, and so OK here
+        // never opens a screen the owner was given no reason to expect.
+        if (focused) {
+            Spacer(Modifier.height(8.dp))
+            Text("Press OK to choose backdrops", color = Color(0xFF7FD4FF), fontSize = 12.sp)
+        }
     }
 }
 

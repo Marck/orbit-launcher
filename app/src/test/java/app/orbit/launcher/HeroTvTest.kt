@@ -269,6 +269,25 @@ class HeroTvTest : TvTest() {
     }
 
     @Test
+    fun `with nothing at all the clock takes focus and offers the backdrops`() {
+        // Nothing to carry on with, no pictures, and nothing opened yet, which is the one
+        // state where the hero used to have no focus target and so no way to the picker.
+        val s = launch(HomeActivity::class.java)
+        // The hint is not there until the clock is focused, which is the point of it.
+        silentAbout("Press OK to choose backdrops")
+        press(s, KeyEvent.KEYCODE_DPAD_UP)
+        says("Press OK to choose backdrops")
+        while (nextStarted() != null) Unit
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
+        val started = nextStarted()
+        assertEquals(AppPickerActivity::class.java.name, started?.component?.className)
+        assertTrue(
+            "opens the backdrop sources",
+            started?.getBooleanExtra(AppPickerActivity.EXTRA_BACKDROPS, false) == true,
+        )
+    }
+
+    @Test
     fun `a picture that will not load does not hold the hero empty`() {
         // Artwork that cannot be loaded: nothing opens a pic:// link in a test. The wait ends
         // when the fetch comes back with nothing, rather than after a guessed number of
