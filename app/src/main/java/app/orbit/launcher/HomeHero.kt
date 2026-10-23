@@ -398,12 +398,16 @@ internal fun HeroText(
 ) {
     Column {
         HeroLabel(label)
+        // Two lines, because a title does not deserve to be cut: the hero's column is a little
+        // over half the screen, and plenty of real programmes are longer than that. Tighter
+        // leading than the default, so a second line costs the rows as little height as it can.
         Text(
             title,
             color = if (focused) Color.White else OnSurface,
             fontSize = 33.sp,
+            lineHeight = 36.sp,
             fontWeight = FontWeight.Light,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         description?.takeIf { it.isNotBlank() }?.let {
