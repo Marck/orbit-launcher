@@ -155,13 +155,20 @@ object ContinueWatching {
      * to belong to the app that published the row, and anything without one is addressed to that
      * app by name. Any selector is dropped, because a selector overrides all of that.
      */
-    fun intentFor(item: Resumable): Intent? = runCatching {
-        val intent = Intent.parseUri(item.intentUri, Intent.URI_INTENT_SCHEME)
+    fun intentFor(item: Resumable): Intent? = intentFor(item.intentUri, item.packageName)
+
+    /**
+     * The same rule for any row an app published, not only a Watch Next one. A preview row
+     * carries the same field, pointing at the one thing it shows rather than the app's front
+     * door, which is what makes a picture on the home screen worth pressing OK on.
+     */
+    fun intentFor(intentUri: String?, packageName: String): Intent? = runCatching {
+        val intent = Intent.parseUri(intentUri ?: return@runCatching null, Intent.URI_INTENT_SCHEME)
         intent.selector = null
         val component: ComponentName? = intent.component
         when {
-            component == null -> intent.setPackage(item.packageName)
-            component.packageName == item.packageName -> intent
+            component == null -> intent.setPackage(packageName)
+            component.packageName == packageName -> intent
             else -> return@runCatching null
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

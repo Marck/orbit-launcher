@@ -1,13 +1,17 @@
 package app.orbit.launcher
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.view.KeyEvent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -59,7 +63,21 @@ class HeroTvTest : TvTest() {
         year: Int? = null,
         runtime: Int? = null,
         channel: String? = null,
-    ) = Picture(server, "pic://ambient/$title", title, seasons, description, year, runtime, channel)
+        intentUri: String? = null,
+    ) = Picture(server, "pic://ambient/$title", title, seasons, description, year, runtime, channel, intentUri)
+
+    /** A row's own way in, as an app writes it: its own component, carrying the item's id. */
+    private fun itemIntent(packageName: String, itemId: String): String =
+        Intent().apply {
+            component = ComponentName(packageName, "$packageName.StartupActivity")
+            putExtra("ItemId", itemId)
+        }.toUri(Intent.URI_INTENT_SCHEME)
+
+    /** Focus on the hero, with nothing left over from getting there. */
+    private fun ontoHero(s: androidx.test.core.app.ActivityScenario<HomeActivity>) {
+        press(s, KeyEvent.KEYCODE_DPAD_UP)
+        while (nextStarted() != null) Unit
+    }
 
     /** A decoded poster. No test can fetch one, and the hero only shows with its picture up. */
     private fun poster(): Bitmap =
@@ -154,6 +172,47 @@ class HeroTvTest : TvTest() {
         says("What this one is about.")
         says("3 SEASONS")
         shot("ambient")
+    }
+
+    @Test
+    fun `OK on a picture opens the thing it shows, not the app's front door`() {
+        ShotHooks.pictures = listOf(
+            picture("A Film On The Server", description = "About.", intentUri = itemIntent(server, "item-42"))
+        )
+        val s = launch(HomeActivity::class.java)
+        says("A Film On The Server")
+        ontoHero(s)
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
+        val started = nextStarted()
+        assertEquals(server, started?.component?.packageName)
+        assertEquals("item-42", started?.getStringExtra("ItemId"))
+    }
+
+    @Test
+    fun `a picture with no way in still opens the app that published it`() {
+        ShotHooks.pictures = listOf(picture("No Way In", description = "About."))
+        val s = launch(HomeActivity::class.java)
+        says("No Way In")
+        ontoHero(s)
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
+        val started = nextStarted()
+        assertEquals(server, started?.`package`)
+        assertEquals(Intent.ACTION_MAIN, started?.action)
+    }
+
+    @Test
+    fun `a row pointing somewhere its own app does not own is not followed`() {
+        ShotHooks.pictures = listOf(
+            picture("Points Elsewhere", description = "About.", intentUri = itemIntent("com.somewhere.else", "x"))
+        )
+        val s = launch(HomeActivity::class.java)
+        says("Points Elsewhere")
+        ontoHero(s)
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
+        // The app that published the row, not the one the row pointed at.
+        val started = nextStarted()
+        assertEquals(server, started?.`package`)
+        assertNull("must not follow another app's component", started?.component)
     }
 
     @Test
