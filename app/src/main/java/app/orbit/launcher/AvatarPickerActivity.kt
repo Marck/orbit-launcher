@@ -12,7 +12,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -62,16 +61,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val SafeH = 48.dp
-private val SafeV = 27.dp
 private val Thumb = 96.dp
 
 /** Saved big enough that the top bar stays sharp; drawn small for the grid. */
 private const val SavedPixels = 256
 private const val ThumbPixels = 192
-
-private val OnSurface = Color(0xFFDDE5F0)
-private val Muted = Color(0xFF8B93A4)
 
 class AvatarPickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

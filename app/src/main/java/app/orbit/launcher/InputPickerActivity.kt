@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,17 +58,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val SafeH = 48.dp
-private val SafeV = 27.dp
-private val TileW = 140.dp
-private val TileH = 80.dp
-
-// The grid clips to its own bounds, so a focused first-row tile needs this much room above it to
-// grow into, ring and all. It comes out of the gap above the grid, so nothing moves.
-private val PopRoom = 6.dp
-
-private val Muted = Color(0xFF8B93A4)
-private val Chosen = Color(0xFF2E9E4F)
+private val PickerTileW = 140.dp
+private val PickerTileH = 80.dp
 
 /** The same idea as the app picker, for the inputs row. */
 class InputPickerActivity : ComponentActivity() {
@@ -145,7 +135,7 @@ private fun Screen() {
 
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Adaptive(TileW + 16.dp),
+            columns = GridCells.Adaptive(PickerTileW + 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(top = PopRoom, bottom = SafeV),
@@ -190,7 +180,7 @@ private fun Tile(
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
-            .size(TileW, TileH)
+            .size(PickerTileW, PickerTileH)
             .scale(if (focused) 1.12f else 1f)
             .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
             .onFocusChanged { focused = it.hasFocus }
