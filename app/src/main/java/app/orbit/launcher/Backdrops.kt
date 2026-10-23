@@ -25,6 +25,10 @@ import androidx.compose.runtime.setValue
  * [description] is the row's own short description, the same field the Continue watching hero
  * shows, so a picture reads the same whichever of the two put it on the screen. The long one is
  * empty on every row on this set, so there is nothing to fall back to.
+ *
+ * [year] and [runtime] come from the two fields every row on this set already fills in:
+ * a release date on 113 of 117, and a duration on all 117. Both are left out when the app
+ * reported something that cannot be one, rather than shown as whatever it said.
  */
 data class Picture(
     val packageName: String,
@@ -32,6 +36,9 @@ data class Picture(
     val title: String?,
     val seasons: Int?,
     val description: String?,
+    val year: Int? = null,
+    /** Minutes, and only on something with a single running length. Never on a series row. */
+    val runtime: Int? = null,
 )
 
 object Backdrops {
@@ -128,6 +135,31 @@ object Backdrops {
         return (told.shuffled() + bare.shuffled()).take(MAX)
     }
 
+    /**
+     * The year out of a release date, or nothing.
+     *
+     * The TV contract allows a release date in three shapes, `yyyy`, `yyyy-MM-dd` and
+     * `yyyy-MM-ddTHH:mm:ssZ`, and every one of them starts with the year, so the leading four
+     * digits are all that is needed. Anything else an app writes there, and anything outside
+     * the years a programme could plausibly carry, is left out rather than put on the screen.
+     */
+    fun yearOf(released: String?): Int? {
+        val digits = released?.trim()?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
+        return digits?.toInt()?.takeIf { it in 1880..2200 }
+    }
+
+    /**
+     * A running length in whole minutes, or nothing.
+     *
+     * Rounded to the nearest minute, the way a listing reads it. Anything under a minute or
+     * over half a day is not a running length, whatever the app meant by it, so it is dropped:
+     * a row that says it is three seconds long is worse than a row that says nothing.
+     */
+    fun minutesOf(durationMillis: Long?): Int? {
+        val minutes = durationMillis?.plus(30_000L)?.div(60_000L)?.toInt() ?: return null
+        return minutes.takeIf { it in 1..(12 * 60) }
+    }
+
     /** Walks the preview rows that are a film or a programme and have a picture. */
     private inline fun read(context: Context, onRow: (Picture) -> Unit) {
         context.contentResolver.query(
@@ -140,6 +172,8 @@ object Backdrops {
                 TvContract.PreviewPrograms.COLUMN_TITLE,
                 TvContract.PreviewPrograms.COLUMN_ITEM_COUNT,
                 TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION,
+                TvContract.PreviewPrograms.COLUMN_RELEASE_DATE,
+                TvContract.PreviewPrograms.COLUMN_DURATION_MILLIS,
             ),
             null,
             null,
@@ -171,6 +205,10 @@ object Backdrops {
                         title = cursor.getString(4)?.takeIf { it.isNotBlank() },
                         seasons = seasons,
                         description = cursor.getString(6)?.takeIf { it.isNotBlank() },
+                        year = yearOf(cursor.getString(7)),
+                        // A series row's duration is one episode's, not the series', and under
+                        // a series name that reads as the whole thing being that short.
+                        runtime = if (series || cursor.isNull(8)) null else minutesOf(cursor.getLong(8)),
                     )
                 )
             }
