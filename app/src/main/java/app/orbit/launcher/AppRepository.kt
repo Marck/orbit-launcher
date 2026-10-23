@@ -40,13 +40,24 @@ object AppRepository {
     fun cached(): List<LaunchableApp> = cache.orEmpty()
 
     /**
+     * Every launchable app, or only those named in [only].
+     *
+     * The home screen asks for its favorites first. Reading and decoding a hundred apps takes
+     * long enough to watch on a TV chip, and the rows only show the favorites, so the screen is
+     * finished as soon as those are in; the rest arrives behind them, for the pickers and for
+     * naming the app a picture came from.
+     *
      * Artwork is only read again for a package updated since the last read. Decoding every app's
      * banner on every return was most of the cost of a refresh, and handing back the same artwork
      * lets the tiles keep the bitmaps they already made from it. The label is always read again,
      * since it follows the language the TV is set to.
      */
-    fun load(context: Context): List<LaunchableApp> {
-        ShotHooks.apps?.let { cache = it; return it }
+    fun load(context: Context, only: Set<String>? = null): List<LaunchableApp> {
+        ShotHooks.apps?.let { hooked ->
+            val list = if (only == null) hooked else hooked.filter { it.packageName in only }
+            if (only == null) cache = list
+            return list
+        }
         val pm = context.packageManager
         val leanback = query(pm, Intent.CATEGORY_LEANBACK_LAUNCHER)
         val plain = query(pm, Intent.CATEGORY_LAUNCHER)
@@ -57,6 +68,7 @@ object AppRepository {
 
         for (info in leanback + plain) {
             val pkg = info.activityInfo.packageName
+            if (only != null && pkg !in only) continue
             if (!seen.add(pkg)) continue
 
             val updatedAt =
@@ -82,7 +94,11 @@ object AppRepository {
                 updatedAt = updatedAt,
             )
         }
-        return apps.sortedBy { it.label.lowercase() }.also { cache = it }
+        val sorted = apps.sortedBy { it.label.lowercase() }
+        // A list of only some of the apps is not the catalogue, and must not be handed to the
+        // next screen that asks for one.
+        if (only == null) cache = sorted
+        return sorted
     }
 
     /** Opens [packageName], and says whether the TV had anywhere to send it. */

@@ -103,6 +103,20 @@ abstract class TvTest {
         rule.mainClock.autoAdvance = false
     }
 
+    /**
+     * Takes an app off the TV, the way the TV does it: the entry goes, and the system says so.
+     *
+     * The home screen listens for that broadcast rather than reading every launcher activity
+     * again on every return, so a test that only swaps the fixture is not an uninstall.
+     */
+    fun uninstall(packageName: String) {
+        ShotHooks.apps = ShotHooks.apps?.filter { it.packageName != packageName }
+        context.sendBroadcast(
+            Intent(Intent.ACTION_PACKAGE_REMOVED, android.net.Uri.parse("package:$packageName"))
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
     fun favorites(apps: List<String>, inputs: List<String>) {
         context.getSharedPreferences("orbit.favorites", Context.MODE_PRIVATE).edit()
             .putString(FavoriteStore.APPS, apps.joinToString("\n"))

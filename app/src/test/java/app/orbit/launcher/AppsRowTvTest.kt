@@ -231,7 +231,7 @@ class AppsRowTvTest : TvTest() {
         val s = home()
         press(s, R); press(s, MENU); repeat(3) { press(s, D) }; drain(); press(s, OK)
         assertEquals(Intent.ACTION_DELETE, nextStarted()?.action)
-        ShotHooks.apps = ShotHooks.apps!!.filter { it.packageName != "nl.uitzendinggemist" }
+        uninstall("nl.uitzendinggemist")
         leaveAndReturn(s, settle = 600)
         log("back from the uninstaller")
         for (i in 1..10) { if (has("It's gone now")) break; pump(200); log("waiting ${i * 200}ms more, cached=${AppRepository.cached().size}") }
