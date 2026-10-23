@@ -84,9 +84,27 @@ internal const val HeroTextWidth = 0.52f
 /** The notice stays left of where the artwork becomes visible through its fade. */
 internal const val NoticeWidth = 0.56f
 
-/** How much of the screen the artwork covers, before it is faded out. */
-internal const val BackdropWidth = 0.60f
+/**
+ * How much of the screen the artwork covers, before it is faded out.
+ *
+ * The same fraction of both, which on a 16:9 screen makes a 16:9 box, which is the shape the
+ * artwork itself is: these rows are kept only when the app says they are 16:9. A box of any
+ * other shape has to be filled by scaling the picture up and cutting the overhang off both
+ * sides, and at 60 by 78 that cut was an eighth of the picture off each edge, enough to take
+ * the first word off a title printed on the artwork.
+ */
+internal const val BackdropWidth = 0.78f
 internal const val BackdropHeight = 0.78f
+
+/**
+ * Where the artwork has finished fading in, as a fraction of the artwork's own width.
+ *
+ * Measured in screen widths it is the same place it has always been, a little under three
+ * quarters across, which is what keeps the words in front of it as readable as they were. The
+ * artwork reaching further left is the whole point of the wider box, so the fade covers more
+ * of it and has to start no darker than before.
+ */
+private const val BackdropFade = 0.65f
 
 /**
  * The top of the screen, showing the most truthful thing Orbit can say, in this order:
@@ -373,7 +391,12 @@ internal fun Backdrop(art: ImageBitmap?, modifier: Modifier) {
             .fillMaxHeight(BackdropHeight)
             .drawWithContent {
                 drawContent()
-                drawRect(Brush.horizontalGradient(0f to Color.Black, 0.55f to Color.Transparent))
+                drawRect(
+                    Brush.horizontalGradient(
+                        0f to Color.Black,
+                        BackdropFade to Color.Transparent,
+                    )
+                )
                 drawRect(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black))
                 // A touch along the top as well: artwork that starts on a bright sky otherwise
                 // meets the edge of the screen in a hard line, and the top bar sits on it.
