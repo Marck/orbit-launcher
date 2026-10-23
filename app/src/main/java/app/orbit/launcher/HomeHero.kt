@@ -1,5 +1,6 @@
 package app.orbit.launcher
 
+import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -157,9 +158,9 @@ internal fun Hero(
         }
         // Asked for once, in the hero, rather than as a popup on a screen nobody opened yet.
         !granted && !asked -> watching.ask
-        // The picture came from an app, so OK opens that app. Holding OK configures which
-        // apps supply them, the same gesture a tile uses for its menu.
-        ambient != null -> { { context.launchApp(ambient.packageName) } }
+        // OK opens the thing on the screen, not the app's front door. Holding OK configures
+        // which apps supply the pictures, the same gesture a tile uses for its menu.
+        ambient != null -> { { context.openPicture(ambient) } }
         watching.settling -> null
         // Last of all, and only when there is neither something to carry on with nor a picture
         // to show for it. It is a way back rather than something to watch, so anything with a
@@ -515,6 +516,25 @@ internal fun Ambient(picture: Picture, source: String?, focused: Boolean) {
         description = picture.description,
         detail = detailOf(picture),
     )
+}
+
+/**
+ * Opens what an ambient picture actually shows.
+ *
+ * Every row carries its own way in, pointing at the one thing on the screen rather than at the
+ * app's front door, and that is the difference between a picture worth pressing OK on and a
+ * decoration. It is the same field, under the same rule, that the Continue watching hero uses
+ * to carry on with an episode.
+ *
+ * A row that carries no way in, or one that points somewhere the publishing app does not own
+ * and so is not followed, opens that app instead, which is what used to happen every time.
+ */
+internal fun Context.openPicture(picture: Picture): Boolean {
+    val intent = ContinueWatching.intentFor(picture.intentUri, picture.packageName)
+    val opened = intent != null && startActivitySafely(intent)
+    // The same record a tile leaves, so "Back to ..." still names the app it went to.
+    if (opened) LastOpened.record(this, LastOpened.APP, picture.packageName)
+    return opened || launchApp(picture.packageName)
 }
 
 /**

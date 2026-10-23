@@ -44,6 +44,13 @@ data class Picture(
     /** Minutes, and only on something with a single running length. Never on a series row. */
     val runtime: Int? = null,
     val channel: String? = null,
+    /**
+     * The row's own way in, pointing at this one thing rather than the app's front door.
+     *
+     * Never logged. An app's intent carries its own addressing, and a media server's carries
+     * the id of something in the owner's library.
+     */
+    val intentUri: String? = null,
 )
 
 object Backdrops {
@@ -211,6 +218,7 @@ object Backdrops {
                 TvContract.PreviewPrograms.COLUMN_RELEASE_DATE,
                 TvContract.PreviewPrograms.COLUMN_DURATION_MILLIS,
                 TvContract.PreviewPrograms.COLUMN_CHANNEL_ID,
+                TvContract.PreviewPrograms.COLUMN_INTENT_URI,
             ),
             null,
             null,
@@ -247,6 +255,7 @@ object Backdrops {
                         // a series name that reads as the whole thing being that short.
                         runtime = if (series || cursor.isNull(8)) null else minutesOf(cursor.getLong(8)),
                         channel = if (cursor.isNull(9)) null else rows[cursor.getLong(9)],
+                        intentUri = cursor.getString(10)?.takeIf { it.isNotBlank() },
                     )
                 )
             }
