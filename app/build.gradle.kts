@@ -41,7 +41,7 @@ kotlin {
 
 android {
     namespace = "app.orbit.launcher"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.orbit.launcher"
