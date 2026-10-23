@@ -486,12 +486,28 @@ internal fun Offer(focused: Boolean) {
 @Composable
 internal fun Ambient(picture: Picture, source: String?, focused: Boolean) {
     HeroText(
-        label = source?.uppercase()?.let { "ON $it" } ?: "ALSO ON THIS TV",
+        label = sourceOf(source, picture.channel),
         title = picture.title.orEmpty(),
         focused = focused,
         description = picture.description,
         detail = detailOf(picture),
     )
+}
+
+/**
+ * Where an ambient picture came from: the app, and the app's own row within it.
+ *
+ * The publishing apps sort their rows themselves, and a name like "Films" or "Next up" says
+ * more about why a picture is on the screen than the app's name does on its own. An app Orbit
+ * cannot name gets neither, because "on this TV" is the most that can honestly be claimed
+ * about a picture from an app that is no longer installed.
+ *
+ * A row named after its own app is not said twice.
+ */
+internal fun sourceOf(app: String?, channel: String?): String {
+    val named = app?.trim()?.takeIf { it.isNotEmpty() } ?: return "ALSO ON THIS TV"
+    val row = channel?.trim()?.takeIf { it.isNotEmpty() && !it.equals(named, ignoreCase = true) }
+    return listOfNotNull(named, row).joinToString(", ") { it.uppercase() }.let { "ON $it" }
 }
 
 /**
@@ -548,6 +564,14 @@ internal fun Clock() {
 
 @Composable
 internal fun HeroLabel(text: String) {
-    Text(text, color = Color(0xFF7FD4FF), fontSize = 11.sp)
+    // One line. Naming the app's own row as well as the app makes this the longest it has
+    // been, and a label that wraps pushes the title down the screen.
+    Text(
+        text,
+        color = Color(0xFF7FD4FF),
+        fontSize = 11.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
     Spacer(Modifier.height(5.dp))
 }

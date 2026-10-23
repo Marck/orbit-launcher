@@ -80,4 +80,27 @@ class BackdropsDetailTest {
     fun `a row with nothing to add gets no line at all`() {
         assertNull(detailOf(picture()))
     }
+
+    @Test
+    fun `a picture is named after the app and the app's own row`() {
+        assertEquals("ON JELLYFIN, FILMS", sourceOf("Jellyfin", "Films"))
+        assertEquals("ON JELLYFIN, RECENTLY ADDED MEDIA", sourceOf("Jellyfin", "Recently added media"))
+    }
+
+    @Test
+    fun `an app that publishes no row name is named on its own`() {
+        assertEquals("ON JELLYFIN", sourceOf("Jellyfin", null))
+        assertEquals("ON JELLYFIN", sourceOf("Jellyfin", "   "))
+    }
+
+    @Test
+    fun `a row named after its own app is not said twice`() {
+        assertEquals("ON JELLYFIN", sourceOf("Jellyfin", "jellyfin"))
+    }
+
+    @Test
+    fun `an app that cannot be named claims no more than the TV`() {
+        assertEquals("ALSO ON THIS TV", sourceOf(null, "Films"))
+        assertEquals("ALSO ON THIS TV", sourceOf("", "Films"))
+    }
 }
