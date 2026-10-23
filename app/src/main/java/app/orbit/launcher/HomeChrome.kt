@@ -112,7 +112,6 @@ internal fun Pill(label: String, onClick: () -> Unit, modifier: Modifier = Modif
     Box(
         modifier
             .onFocusChanged { focused = it.isFocused }
-            .focusable()
             .clickable(onClick = onClick)
             .clip(RoundedCornerShape(50))
             .background(if (focused) Color.White else Color(0x1FFFFFFF))

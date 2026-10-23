@@ -44,7 +44,16 @@ internal class RowFocus(
         get() = focused.value
         set(value) { focused.value = value }
 
-    fun requester(id: String): FocusRequester = requesters.getOrPut(id) { FocusRequester() }
+    /**
+     * The requester for a tile, made once and kept for as long as the row is.
+     *
+     * Composable so the one it hands back is remembered against the id: the map outlives any
+     * one composition, but a lint check reads a FocusRequester built during composition as a
+     * thing that will be rebuilt on every frame, and it is clearer this way in any case.
+     */
+    @Composable
+    fun requester(id: String): FocusRequester =
+        remember(id) { requesters.getOrPut(id) { FocusRequester() } }
 
     /**
      * The tile that has just taken focus, and the place it sits in.

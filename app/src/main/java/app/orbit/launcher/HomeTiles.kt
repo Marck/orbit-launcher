@@ -121,8 +121,8 @@ internal fun AppTile(
     onEndEdit: (Boolean) -> Unit,
     onEdgeLeft: (() -> Unit)? = null,
 ) {
-    // Read with hasFocus: while OK is down, Compose hands focus to the clickable inside the tile,
-    // and the tile should stay lit through the press, and through a hold that opens its menu.
+    // hasFocus rather than isFocused: it covers the node and anything inside it, so the tile
+    // stays lit through a press and through a hold that opens its menu.
     var focused by remember { mutableStateOf(false) }
     // Stays lit while its menu is open, the way the stock launcher keeps the tile up behind it.
     val lit = focused || held
@@ -144,7 +144,6 @@ internal fun AppTile(
                     if (it.hasFocus) onFocused()
                 }
                 .tileKeys(editing, { onMenu(spot.rect()) }, onMove, onEndEdit, onEdgeLeft = onEdgeLeft)
-                .focusable()
                 .clickable(onClick = onClick)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Surface)
@@ -223,7 +222,6 @@ internal fun PlusTile(
                     onEndEdit = {},
                     onEdgeRight = onEdgeRight,
                 )
-                .focusable()
                 .clickable(onClick = onClick)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF1E2838))
@@ -302,7 +300,6 @@ internal fun InputTile(
                 if (it.hasFocus) onFocused()
             }
             .tileKeys(editing, { onMenu(spot.rect()) }, onMove, onEndEdit, onEdgeLeft = onEdgeLeft)
-            .focusable()
             .clickable(onClick = onClick)
             .clip(RoundedCornerShape(10.dp))
             .background(if (highlighted) LastInput else Color(0xFF2A3444))

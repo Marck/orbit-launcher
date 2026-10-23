@@ -145,7 +145,9 @@ private fun Screen() {
                 Tile(
                     input = input,
                     favorite = input.id in favorites,
-                    requester = requesters.getOrPut(input.id) { FocusRequester() },
+                    requester = remember(input.id) {
+                        requesters.getOrPut(input.id) { FocusRequester() }
+                    },
                     onEdgeLeft = if (index == 0) {
                         { ordered.lastOrNull()?.let { jumpTo(ordered.lastIndex, it.id) } }
                     } else {
