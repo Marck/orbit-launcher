@@ -57,21 +57,21 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: orbit-release-apk
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       # Turns a shrunk stack trace back into line numbers.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: orbit-mapping
           path: app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: ignore
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: lint-report
