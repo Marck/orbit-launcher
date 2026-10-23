@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.view.KeyEvent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -207,6 +208,25 @@ class HeroTvTest : TvTest() {
         says("CARRY ON")
         says("Back to Jellyfin")
         shot("back-to")
+    }
+
+    @Test
+    fun `with nothing at all the clock takes focus and offers the backdrops`() {
+        // Nothing to carry on with, no pictures, and nothing opened yet, which is the one
+        // state where the hero used to have no focus target and so no way to the picker.
+        val s = launch(HomeActivity::class.java)
+        // The hint is not there until the clock is focused, which is the point of it.
+        silentAbout("Press OK to choose backdrops")
+        press(s, KeyEvent.KEYCODE_DPAD_UP)
+        says("Press OK to choose backdrops")
+        while (nextStarted() != null) Unit
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
+        val started = nextStarted()
+        assertEquals(AppPickerActivity::class.java.name, started?.component?.className)
+        assertTrue(
+            "opens the backdrop sources",
+            started?.getBooleanExtra(AppPickerActivity.EXTRA_BACKDROPS, false) == true,
+        )
     }
 
     @Test
