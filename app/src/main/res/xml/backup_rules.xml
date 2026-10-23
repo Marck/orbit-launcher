@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What survives a reset or a reinstall, on Android 11 and below.
+
+  Only what the owner chose: which apps and inputs are on the screen and in what order,
+  which apps supply backdrops, and the picture they picked. Naming anything at all means
+  everything else is left out, which is the point.
+
+  What is deliberately not here: orbit.playback, which holds the names of programmes the
+  TV was seen playing, and orbit.last, which holds the app opened last. Neither is a
+  setting, both say what someone watched, and neither is worth sending anywhere.
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="orbit.favorites.xml" />
+    <include domain="sharedpref" path="orbit.inputs.xml" />
+    <include domain="sharedpref" path="orbit.backdrops.xml" />
+    <include domain="external" path="avatar.png" />
+    <include domain="external" path="avatar.jpg" />
+    <include domain="external" path="avatar.jpeg" />
+    <include domain="external" path="avatar.webp" />
+</full-backup-content>

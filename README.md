@@ -243,3 +243,23 @@ depends on Compose internals that a release can change without a word in its not
 the harness renders on a desktop JVM rather than the panel. Those come as one pull
 request labelled `check-on-tv`, to be installed and driven by hand before merging:
 pop-out on focus, the hero, the pickers, and Back and Home.
+
+## What survives a reset
+
+Favorites, their order, the chosen inputs, which apps supply backdrops and the profile
+picture are included in Android's Auto Backup, in `res/xml/backup_rules.xml` and
+`res/xml/data_extraction_rules.xml`. Naming anything means everything else is left out,
+which is the point: `orbit.playback` holds the names of programmes the TV was seen
+playing and `orbit.last` holds the app opened last. Neither is a setting, both say what
+someone watched, and neither leaves the set.
+
+Whether any of it is actually backed up depends on the TV having a backup transport:
+
+```bash
+adb shell bmgr enabled
+adb shell bmgr list transports   # a * marks the one in use
+```
+
+On the set this was written for, the Backup Manager is enabled but no transport is
+selected, so nothing is backed up today and `bmgr backupnow` answers `Transport error`.
+The rules still matter for a set that has one, and for a transfer to another device.
