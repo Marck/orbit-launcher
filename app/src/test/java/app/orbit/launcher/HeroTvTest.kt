@@ -58,7 +58,8 @@ class HeroTvTest : TvTest() {
         description: String? = null,
         year: Int? = null,
         runtime: Int? = null,
-    ) = Picture(server, "pic://ambient/$title", title, seasons, description, year, runtime)
+        channel: String? = null,
+    ) = Picture(server, "pic://ambient/$title", title, seasons, description, year, runtime, channel)
 
     /** A decoded poster. No test can fetch one, and the hero only shows with its picture up. */
     private fun poster(): Bitmap =
@@ -153,6 +154,17 @@ class HeroTvTest : TvTest() {
         says("What this one is about.")
         says("3 SEASONS")
         shot("ambient")
+    }
+
+    @Test
+    fun `an ambient picture says which of the app's own rows it came from`() {
+        ShotHooks.pictures = listOf(
+            picture("A Row Of Its Own", description = "About.", channel = "Recently added media")
+        )
+        launch(HomeActivity::class.java)
+        says("ON JELLYFIN, RECENTLY ADDED MEDIA")
+        says("A Row Of Its Own")
+        shot("ambient-row")
     }
 
     @Test

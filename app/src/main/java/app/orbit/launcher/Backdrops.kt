@@ -26,6 +26,10 @@ import androidx.compose.runtime.setValue
  * shows, so a picture reads the same whichever of the two put it on the screen. The long one is
  * empty on every row on this set, so there is nothing to fall back to.
  *
+ * [channel] is the name of the publishing app's own row, its "channel" in the TV provider's
+ * words: the server on this set publishes five of them, and every preview row says which one
+ * it belongs to. It is what the app calls that row, so it is left exactly as the app wrote it.
+ *
  * [year] and [runtime] come from the two fields every row on this set already fills in:
  * a release date on 113 of 117, and a duration on all 117. Both are left out when the app
  * reported something that cannot be one, rather than shown as whatever it said.
@@ -39,6 +43,7 @@ data class Picture(
     val year: Int? = null,
     /** Minutes, and only on something with a single running length. Never on a series row. */
     val runtime: Int? = null,
+    val channel: String? = null,
 )
 
 object Backdrops {
@@ -160,8 +165,39 @@ object Backdrops {
         return minutes.takeIf { it in 1..(12 * 60) }
     }
 
+    /**
+     * What each of the publishing apps calls its own rows, by the id the preview rows refer to.
+     *
+     * A second table, read once per walk. There are 30 of these against 1359 preview rows, so
+     * it is a small read that saves a lookup per row. An app that publishes rows but no channel
+     * for them, or a provider that will not hand the table over, simply leaves the names out:
+     * a backdrop without one reads as it did before.
+     */
+    private fun rowNames(context: Context): Map<Long, String> = runCatching {
+        val names = mutableMapOf<Long, String>()
+        context.contentResolver.query(
+            TvContract.Channels.CONTENT_URI,
+            arrayOf(
+                TvContract.Channels._ID,
+                TvContract.Channels.COLUMN_DISPLAY_NAME,
+            ),
+            null,
+            null,
+            null,
+        ).use { cursor ->
+            if (cursor == null) return@runCatching emptyMap()
+            while (cursor.moveToNext()) {
+                if (cursor.isNull(0)) continue
+                val name = cursor.getString(1)?.trim()?.takeIf { it.isNotBlank() } ?: continue
+                names[cursor.getLong(0)] = name
+            }
+        }
+        names
+    }.getOrDefault(emptyMap())
+
     /** Walks the preview rows that are a film or a programme and have a picture. */
     private inline fun read(context: Context, onRow: (Picture) -> Unit) {
+        val rows = rowNames(context)
         context.contentResolver.query(
             TvContract.PreviewPrograms.CONTENT_URI,
             arrayOf(
@@ -174,6 +210,7 @@ object Backdrops {
                 TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION,
                 TvContract.PreviewPrograms.COLUMN_RELEASE_DATE,
                 TvContract.PreviewPrograms.COLUMN_DURATION_MILLIS,
+                TvContract.PreviewPrograms.COLUMN_CHANNEL_ID,
             ),
             null,
             null,
@@ -209,6 +246,7 @@ object Backdrops {
                         // A series row's duration is one episode's, not the series', and under
                         // a series name that reads as the whole thing being that short.
                         runtime = if (series || cursor.isNull(8)) null else minutesOf(cursor.getLong(8)),
+                        channel = if (cursor.isNull(9)) null else rows[cursor.getLong(9)],
                     )
                 )
             }
