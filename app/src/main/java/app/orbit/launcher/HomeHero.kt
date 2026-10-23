@@ -490,9 +490,32 @@ internal fun Ambient(picture: Picture, source: String?, focused: Boolean) {
         title = picture.title.orEmpty(),
         focused = focused,
         description = picture.description,
-        detail = picture.seasons?.let { if (it == 1) "1 SEASON" else "$it SEASONS" },
+        detail = detailOf(picture),
     )
 }
+
+/**
+ * The line under an ambient picture: its year, then how much of it there is.
+ *
+ * The same shape a listing uses, and the same shape the Continue watching line above it uses,
+ * so the two read as one screen. Each part is there only when the app that published the row
+ * actually said it, which is why a row with nothing to add gets no line at all rather than an
+ * empty one. A series counts in seasons and a film in running time; neither ever shows both,
+ * because a series row's duration is one episode's.
+ */
+internal fun detailOf(picture: Picture): String? = listOfNotNull(
+    picture.year?.toString(),
+    picture.seasons?.let { if (it == 1) "1 SEASON" else "$it SEASONS" },
+    picture.runtime?.let { minutes ->
+        val hours = minutes / 60
+        val rest = minutes % 60
+        when {
+            hours == 0 -> "${rest}M"
+            rest == 0 -> "${hours}H"
+            else -> "${hours}H ${rest}M"
+        }
+    },
+).joinToString(" - ").takeIf { it.isNotEmpty() }
 
 /**
  * The way back to the last thing opened, when there is nothing to carry on with and no picture.

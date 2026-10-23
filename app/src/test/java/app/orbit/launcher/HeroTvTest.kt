@@ -52,8 +52,13 @@ class HeroTvTest : TvTest() {
         progress = Progress(0.75f, "90 MIN WATCHED, 30 LEFT"),
     )
 
-    private fun picture(title: String, seasons: Int? = null, description: String? = null) =
-        Picture(server, "pic://ambient/$title", title, seasons, description)
+    private fun picture(
+        title: String,
+        seasons: Int? = null,
+        description: String? = null,
+        year: Int? = null,
+        runtime: Int? = null,
+    ) = Picture(server, "pic://ambient/$title", title, seasons, description, year, runtime)
 
     /** A decoded poster. No test can fetch one, and the hero only shows with its picture up. */
     private fun poster(): Bitmap =
@@ -148,6 +153,18 @@ class HeroTvTest : TvTest() {
         says("What this one is about.")
         says("3 SEASONS")
         shot("ambient")
+    }
+
+    @Test
+    fun `an ambient film gives the year and the running length the app published`() {
+        ShotHooks.pictures = listOf(
+            picture("An Ambient Film", description = "What this one is about.", year = 2014, runtime = 109)
+        )
+        launch(HomeActivity::class.java)
+        says("An Ambient Film")
+        says("2014 - 1H 49M")
+        silentAbout("SEASON")
+        shot("ambient-film")
     }
 
     @Test
