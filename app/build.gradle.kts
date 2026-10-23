@@ -1,5 +1,6 @@
 import java.io.File
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -29,6 +30,14 @@ val committedKey = file("debug.jks")
 val signingKeystore: File = signingValue("storeFile")?.let(::File)?.takeIf(File::isFile)
     ?: committedKey
 val usingCommittedKey = signingKeystore == committedKey
+
+kotlin {
+    compilerOptions {
+        // The DSL that replaced kotlinOptions, which Kotlin 2.4 removed outright. Set here
+        // rather than inside android { }, which is where the old one lived.
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
 
 android {
     namespace = "app.orbit.launcher"
@@ -76,10 +85,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     buildFeatures {
