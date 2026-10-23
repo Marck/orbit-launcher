@@ -101,6 +101,17 @@ class HeroTvTest : TvTest() {
     }
 
     @Test
+    fun `a long title is given a second line rather than cut`() {
+        ShotHooks.watchNext = listOf(
+            episode.copy(title = "A Programme With A Name Far Longer Than The Hero Is Wide")
+        )
+        launch(HomeActivity::class.java)
+        // The whole name, not an ellipsis part way through it.
+        says("A Programme With A Name Far Longer Than The Hero Is Wide")
+        shot("long-title")
+    }
+
+    @Test
     fun `a film gives no episode line, only the numbers`() {
         ShotHooks.watchNext = listOf(film)
         launch(HomeActivity::class.java)
