@@ -11,6 +11,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -267,12 +268,26 @@ class InputsTopBarTest : TvTest() {
         tag = "ok2"
         favorites(myApps, myInputs)
         val s = home()
-        toTopBar(s, "All apps")
-        assertEquals("All apps", focused())
-        p(s, L); assertEquals("All apps", focused())
+        toTopBar(s, "Backdrops")
+        assertEquals("Backdrops", focused())
         drain()
         p(s, OK)
-        assertEquals(AppPickerActivity::class.java.name, nextStarted()?.component?.className)
+        val picker = nextStarted()
+        assertEquals(AppPickerActivity::class.java.name, picker?.component?.className)
+        // The same screen the apps button opens, but asked for the backdrop sources.
+        assertTrue(
+            "opens the backdrop picker",
+            picker?.getBooleanExtra(AppPickerActivity.EXTRA_BACKDROPS, false) == true,
+        )
+        p(s, R); assertEquals("All apps", focused())
+        drain()
+        p(s, OK)
+        val apps = nextStarted()
+        assertEquals(AppPickerActivity::class.java.name, apps?.component?.className)
+        assertFalse(
+            "the apps button is not the backdrop picker",
+            apps?.getBooleanExtra(AppPickerActivity.EXTRA_BACKDROPS, false) == true,
+        )
         p(s, R); assertEquals("All inputs", focused())
         drain()
         p(s, OK); assertEquals("test.allinputs", nextStarted()?.action)
@@ -293,19 +308,23 @@ class InputsTopBarTest : TvTest() {
         p(s, L); assertEquals("Search", focused())
         drain()
         p(s, OK); assertEquals("test.search", nextStarted()?.action)
+        p(s, R); assertEquals("Backdrops", focused())
         p(s, R); assertEquals("All apps", focused())
+        // And back along the row: nothing cancels left between them.
+        p(s, L); assertEquals("Backdrops", focused())
+        p(s, L); assertEquals("Search", focused())
     }
 
     @Test
-    fun ok_noSearchLeavesAllAppsHoldingTheEdge() {
+    fun ok_noSearchLeavesBackdropsHoldingTheEdge() {
         tag = "nosearch"
         ShotHooks.search = null
         favorites(myApps, myInputs)
         val s = home()
         assertEquals(0, rule.onAllNodes(hasContentDescription("Search"), true).fetchSemanticsNodes().size)
-        toTopBar(s, "All apps")
-        assertEquals("All apps", focused())
-        p(s, L); assertEquals("All apps", focused())
+        toTopBar(s, "Backdrops")
+        assertEquals("Backdrops", focused())
+        p(s, L); assertEquals("Backdrops", focused())
     }
 
     @Test
