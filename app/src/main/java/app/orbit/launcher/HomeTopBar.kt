@@ -77,6 +77,10 @@ internal fun TopBar(
 ) {
     val context = LocalContext.current
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
+    // The map is remembered, so getOrPut hands back the same requester for the life of the bar
+    // rather than a new one per frame. Lint cannot see that through the map, and this is not a
+    // composable lambda, so remember cannot be used here to tell it.
+    @Suppress("RememberInComposition")
     val button: (String) -> Modifier = { name ->
         Modifier
             .focusRequester(requesters.getOrPut(name) { FocusRequester() })
@@ -304,7 +308,6 @@ internal fun TopBarButton(
             // hasFocus, not isFocused: while OK is down, Compose hands focus to the clickable
             // inside, and the button should stay lit through the press.
             .onFocusChanged { focused = it.hasFocus }
-            .focusable()
             .clickable(onClick = onClick)
             .clip(CircleShape)
             .background(Color(0xFF2B3242))

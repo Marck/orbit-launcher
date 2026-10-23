@@ -200,7 +200,6 @@ internal fun MenuEntry(item: MenuItem, requester: FocusRequester, onFocused: () 
                 focused = it.hasFocus
                 if (it.hasFocus) onFocused()
             }
-            .focusable()
             .clickable(onClick = item.onClick)
             .background(if (focused) MenuLit else Color.Transparent)
             .padding(horizontal = 20.dp),

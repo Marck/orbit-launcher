@@ -111,19 +111,19 @@ class AvatarFlowTest : TvTest() {
     /** Arrows the remote to the picture labelled [label] under YOUR PICTURES: down twice, then right. */
     private fun focusTile(s: ActivityScenario<AvatarPickerActivity>, label: String) {
         // The pictures are read on Dispatchers.IO, on a real thread, while the clock here is a
-        // fake one. Wait for the list to land rather than trust a single pump, or the
-        // "Looking for pictures" placeholder is what gets read, at random.
-        var names: List<String> = emptyList()
-        var i = -1
-        for (attempt in 0 until 150) {
+        // fake one, so how long the read takes is a property of the machine. Wait for the list
+        // itself: the placeholder has to go before anything under YOUR PICTURES means anything,
+        // and the two are told apart rather than lumped into one condition, so a failure says
+        // which of them did not happen.
+        fun listed(): List<String> {
             val t = texts()
-            names = t.drop(t.indexOf("YOUR PICTURES") + 1).takeWhile { it != "CURRENT" }
-            i = names.indexOf(label)
-            if (i in 0..5) break
-            Thread.sleep(100)
-            pump(100)
+            return t.drop(t.indexOf("YOUR PICTURES") + 1).takeWhile { it != "CURRENT" }
         }
-        check(i in 0..5) { "$label not in first picture row: $names" }
+        waitFor("the pictures to be read", budgetMs = 30_000) {
+            listed().none { it.startsWith("Looking for pictures") }
+        }
+        waitFor("$label among the first pictures", budgetMs = 10_000) { listed().indexOf(label) in 0..5 }
+        val i = listed().indexOf(label)
         // From Orbit: down to Bloom, down to the first picture, then right.
         repeat(2) { press(s, KeyEvent.KEYCODE_DPAD_DOWN) }
         repeat(i) { press(s, KeyEvent.KEYCODE_DPAD_RIGHT) }

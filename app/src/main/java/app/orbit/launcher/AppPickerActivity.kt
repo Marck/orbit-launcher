@@ -197,7 +197,9 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                 PickerTile(
                     app = app,
                     favorite = app.packageName in favorites,
-                    requester = requesters.getOrPut(app.packageName) { FocusRequester() },
+                    requester = remember(app.packageName) {
+                        requesters.getOrPut(app.packageName) { FocusRequester() }
+                    },
                     onFocused = { current = app.packageName },
                     onEdgeLeft = if (index == 0) {
                         { ordered.lastOrNull()?.let { jumpTo(ordered.lastIndex, it.packageName) } }
