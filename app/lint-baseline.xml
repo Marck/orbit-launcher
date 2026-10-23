@@ -1,60 +1,24 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<issues format="6" by="lint 8.7.3" type="baseline" client="gradle" dependencies="false" name="AGP (8.7.3)" variant="all" version="8.7.3">
+<issues format="6" by="lint 8.13.2" type="baseline" client="gradle" dependencies="false" name="AGP (8.13.2)" variant="all" version="8.13.2">
 
     <issue id="SelectedPhotoAccess" message="Your app is currently not handling Selected Photos Access introduced in Android 14+" errorLine1="    &lt;uses-permission android:name=&quot;android.permission.READ_MEDIA_IMAGES&quot; /&gt;" errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location file="src/main/AndroidManifest.xml" line="18" column="36" />
     </issue>
 
     <issue id="GradleDependency" message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.1" errorLine1="    implementation(&quot;androidx.core:core-ktx:1.15.0&quot;)" errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location file="build.gradle.kts" line="112" column="20" />
+        <location file="build.gradle.kts" line="117" column="20" />
     </issue>
 
     <issue id="GradleDependency" message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0" errorLine1="    implementation(&quot;androidx.activity:activity-compose:1.9.3&quot;)" errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location file="build.gradle.kts" line="113" column="20" />
+        <location file="build.gradle.kts" line="118" column="20" />
     </issue>
 
     <issue id="GradleDependency" message="A newer version of androidx.compose:compose-bom than 2024.12.01 is available: 2026.09.00" errorLine1="    implementation(platform(&quot;androidx.compose:compose-bom:2024.12.01&quot;))" errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location file="build.gradle.kts" line="114" column="20" />
-    </issue>
-
-    <issue id="ProduceStateDoesNotAssignValue" message="produceState calls should assign `value` inside the producer lambda" errorLine1="    val images by produceState&lt;List&lt;PickerImage&gt;?&gt;(initialValue = null, granted, rescan) {" errorLine2="                  ~~~~~~~~~~~~">
-        <location file="src/main/java/app/orbit/launcher/AvatarPickerActivity.kt" line="124" column="19" />
-    </issue>
-
-    <issue id="ProduceStateDoesNotAssignValue" message="produceState calls should assign `value` inside the producer lambda" errorLine1="    val hasAvatar by produceState(initialValue = false, Profile.revision) {" errorLine2="                     ~~~~~~~~~~~~">
-        <location file="src/main/java/app/orbit/launcher/AvatarPickerActivity.kt" line="128" column="22" />
-    </issue>
-
-    <issue id="ProduceStateDoesNotAssignValue" message="produceState calls should assign `value` inside the producer lambda" errorLine1="    val bitmap by produceState&lt;Bitmap?&gt;(initialValue = null, avatar.id) {" errorLine2="                  ~~~~~~~~~~~~">
-        <location file="src/main/java/app/orbit/launcher/AvatarPickerActivity.kt" line="265" column="19" />
-    </issue>
-
-    <issue id="ProduceStateDoesNotAssignValue" message="produceState calls should assign `value` inside the producer lambda" errorLine1="    val bitmap by produceState&lt;Bitmap?&gt;(initialValue = null, image) {" errorLine2="                  ~~~~~~~~~~~~">
-        <location file="src/main/java/app/orbit/launcher/AvatarPickerActivity.kt" line="279" column="19" />
-    </issue>
-
-    <issue id="ProduceStateDoesNotAssignValue" message="produceState calls should assign `value` inside the producer lambda" errorLine1="    val apps by produceState(initialValue = AppRepository.cached(), Returns.count) {" errorLine2="                ~~~~~~~~~~~~">
-        <location file="src/main/java/app/orbit/launcher/HomeActivity.kt" line="134" column="17" />
-    </issue>
-
-    <issue id="ProduceStateDoesNotAssignValue" message="produceState calls should assign `value` inside the producer lambda" errorLine1="    val homeOpensOrbit by produceState(initialValue = true, Returns.count) {" errorLine2="                          ~~~~~~~~~~~~">
-        <location file="src/main/java/app/orbit/launcher/HomeActivity.kt" line="164" column="27" />
-    </issue>
-
-    <issue id="ProduceStateDoesNotAssignValue" message="produceState calls should assign `value` inside the producer lambda" errorLine1="    val picture by produceState&lt;android.graphics.Bitmap?&gt;(initialValue = null, Profile.revision) {" errorLine2="                   ~~~~~~~~~~~~">
-        <location file="src/main/java/app/orbit/launcher/HomeTopBar.kt" line="265" column="20" />
-    </issue>
-
-    <issue id="DiscouragedApi" message="Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed." errorLine1="            android:screenOrientation=&quot;landscape&quot;" errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location file="src/main/AndroidManifest.xml" line="76" column="13" />
-    </issue>
-
-    <issue id="DataExtractionRules" message="The attribute `android:allowBackup` is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute `android:dataExtractionRules` specifying an `@xml` resource which configures cloud backups and device transfers on Android 12 and higher." errorLine1="        android:allowBackup=&quot;false&quot;" errorLine2="                             ~~~~~">
-        <location file="src/main/AndroidManifest.xml" line="49" column="30" />
+        <location file="build.gradle.kts" line="119" column="20" />
     </issue>
 
     <issue id="AutoboxingStateCreation" message="Prefer `mutableIntStateOf` instead of `mutableStateOf`" errorLine1="    var rescan by remember { mutableStateOf(0) }" errorLine2="                             ~~~~~~~~~~~~~~">
-        <location file="src/main/java/app/orbit/launcher/AvatarPickerActivity.kt" line="93" column="30" />
+        <location file="src/main/java/app/orbit/launcher/AvatarPickerActivity.kt" line="92" column="30" />
     </issue>
 
-</issues>
+    </issues>
