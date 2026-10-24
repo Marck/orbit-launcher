@@ -125,6 +125,35 @@ class HeroTvTest : TvTest() {
     }
 
     @Test
+    fun `an episode nobody has started is not headed continue watching`() {
+        // What the media server publishes on the set this was written for: both of its rows
+        // are the next episode of a series, with no position on them, and the heading used to
+        // say the owner was part way through something they had never opened.
+        ShotHooks.watchNext = listOf(episode.copy(
+            kind = Kind.NEXT,
+            programType = android.media.tv.TvContract.WatchNextPrograms.TYPE_TV_EPISODE,
+            progress = null,
+        ))
+        launch(HomeActivity::class.java)
+        says("NEXT EPISODE")
+        silentAbout("CONTINUE WATCHING")
+        says("A Programme With Episodes")
+        shot("next-episode")
+    }
+
+    @Test
+    fun `something only put aside says so rather than claiming it was watched`() {
+        ShotHooks.watchNext = listOf(film.copy(
+            kind = Kind.WATCHLIST,
+            programType = android.media.tv.TvContract.WatchNextPrograms.TYPE_MOVIE,
+            progress = null,
+        ))
+        launch(HomeActivity::class.java)
+        says("SAVED FOR LATER")
+        silentAbout("CONTINUE WATCHING")
+    }
+
+    @Test
     fun `a long title is given a second line rather than cut`() {
         ShotHooks.watchNext = listOf(
             episode.copy(title = "A Programme With A Name Far Longer Than The Hero Is Wide")

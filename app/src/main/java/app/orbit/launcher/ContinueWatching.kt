@@ -26,7 +26,72 @@ data class Resumable(
     val intentUri: String,
     /** Null unless the app reported both where it had got to and how long the thing is. */
     val progress: Progress?,
-)
+    /** What the app says this row is for. Decides the heading above the title. */
+    val kind: Kind = Kind.CONTINUE,
+    /** The row's TvContract type, or null when the app left it off. */
+    val programType: Int? = null,
+) {
+    /** The heading the hero puts above the title, in the words of what this row really is. */
+    val heading: String get() = kind.heading(programType)
+}
+
+/**
+ * Why an app put a row in Watch Next.
+ *
+ * The contract has four of these and they do not mean the same thing: only [CONTINUE] is a
+ * programme that was started and stopped. Treating them all as one is how a series whose next
+ * episode has not been touched ends up under "continue watching", which is what the media
+ * server publishes on the set this was written for: both of its rows say [NEXT].
+ *
+ * A row with no kind on it, or one the contract gains later, reads as [CONTINUE], which is
+ * what every row was treated as before.
+ */
+enum class Kind {
+    /** Started and not finished. Carry on where it was left. */
+    CONTINUE,
+
+    /** The one after the last one finished. Nobody has watched any of it. */
+    NEXT,
+
+    /** Out since the last visit. Nobody has watched any of it either. */
+    NEW,
+
+    /** Put aside on purpose, and never started. */
+    WATCHLIST,
+    ;
+
+    /**
+     * The heading, in the words of what the row actually is.
+     *
+     * [programType] is the row's own TvContract type, which decides whether "episode" is a
+     * true word for it: an app may mark a film as the next thing to watch, and calling that an
+     * episode would be a different lie from the one this replaces.
+     */
+    fun heading(programType: Int?): String = when (this) {
+        CONTINUE -> "CONTINUE WATCHING"
+        NEXT -> if (episodic(programType)) "NEXT EPISODE" else "NEXT UP"
+        NEW -> if (episodic(programType)) "NEW EPISODE" else "NEW"
+        WATCHLIST -> "SAVED FOR LATER"
+    }
+
+    private fun episodic(programType: Int?): Boolean = programType in EPISODIC
+
+    companion object {
+        private val EPISODIC = setOf(
+            TvContract.WatchNextPrograms.TYPE_TV_EPISODE,
+            TvContract.WatchNextPrograms.TYPE_TV_SEASON,
+            TvContract.WatchNextPrograms.TYPE_TV_SERIES,
+        )
+
+        /** Reads the column's value, falling back to [CONTINUE] for anything unrecognised. */
+        fun of(watchNextType: Int?): Kind = when (watchNextType) {
+            TvContract.WatchNextPrograms.WATCH_NEXT_TYPE_NEXT -> NEXT
+            TvContract.WatchNextPrograms.WATCH_NEXT_TYPE_NEW -> NEW
+            TvContract.WatchNextPrograms.WATCH_NEXT_TYPE_WATCHLIST -> WATCHLIST
+            else -> CONTINUE
+        }
+    }
+}
 
 /**
  * How far in, exactly as the publishing app reported it.
@@ -188,6 +253,8 @@ object ContinueWatching {
             posterUri = c.text(TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI),
             intentUri = intentUri,
             progress = progress(c),
+            kind = Kind.of(c.int(TvContract.WatchNextPrograms.COLUMN_WATCH_NEXT_TYPE)),
+            programType = c.int(TvContract.WatchNextPrograms.COLUMN_TYPE),
         )
     }
 
