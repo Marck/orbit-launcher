@@ -155,6 +155,20 @@ private fun PickerScreen(onDone: () -> Unit) {
         )
         Spacer(Modifier.height(18.dp))
 
+        // Read once, here, rather than inside the grid's content.
+        //
+        // Both of these are produceState delegates, so every mention of them inside the lambda
+        // below is a fresh snapshot read. A lazy grid builds its interval list and then asks
+        // that list for keys again while it measures, so a read that answered one way when the
+        // intervals were built and another way during the measure leaves it indexing past the
+        // end: "Index 11, size 11" out of LazyGridItemProviderImpl.getKey. The scan finishing
+        // is exactly such a change, which is why it showed up as the picker intermittently
+        // never getting past "Looking for pictures...". Holding them in locals makes the whole
+        // grid recompose on a change instead, which rebuilds the intervals and the contents
+        // together.
+        val pictures = images
+        val showCurrent = hasAvatar
+
         LazyVerticalGrid(
             columns = GridCells.Adaptive(Thumb + 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -203,20 +217,20 @@ private fun PickerScreen(onDone: () -> Unit) {
                     }
                 }
 
-                images == null -> item(span = { GridItemSpan(maxLineSpan) }) {
+                pictures == null -> item(span = { GridItemSpan(maxLineSpan) }) {
                     Text("Looking for pictures…", color = Muted, fontSize = 13.sp)
                 }
 
-                images.orEmpty().isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { NoPicturesHelp() }
+                pictures.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { NoPicturesHelp() }
 
-                else -> items(images.orEmpty(), key = { "file-${it.key}" }) { image ->
+                else -> items(pictures, key = { "file-${it.key}" }) { image ->
                     Tile(label = image.name, requester = null, image = image) {
                         choose { Profile.save(context, image.uri, SavedPixels) }
                     }
                 }
             }
 
-            if (hasAvatar) {
+            if (showCurrent) {
                 header("CURRENT")
                 item(key = "none") {
                     Tile(label = "No picture", requester = null) {
