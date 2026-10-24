@@ -498,7 +498,9 @@ internal fun HeroText(
 @Composable
 internal fun Watching(item: Resumable, progress: Progress?, focused: Boolean) {
     HeroText(
-        label = "CONTINUE WATCHING",
+        // Not always "continue watching": an app says whether a row was started, is the one
+        // after the last one, is newly out, or was only ever put aside.
+        label = item.heading,
         title = item.title,
         focused = focused,
         description = item.description,
