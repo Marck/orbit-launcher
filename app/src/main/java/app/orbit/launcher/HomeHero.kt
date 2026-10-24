@@ -49,6 +49,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +66,25 @@ import kotlinx.coroutines.withContext
 /** The top of the screen: what is worth saying, and the artwork behind it. */
 
 internal val HeroMinH = 108.dp
+
+/**
+ * The room the hero always takes, whatever it is showing.
+ *
+ * Measured, not chosen. Unconstrained, each kind of hero asks for:
+ * the permission offer 124.5dp, an ambient picture with a year and a running length 153dp,
+ * and something to carry on with, at its tallest, 164dp. The clock asks for 200dp, but its
+ * text reaches only 73dp and the rest is slack it never draws in, so it is not what the room
+ * is sized to; it is simply held to the same height as everything else.
+ *
+ * 166dp is the tallest of those that is really drawn, plus 2dp so the bound is not exactly on
+ * the last pixel of the text. The title, the description and the detail line are each capped
+ * at a fixed number of lines, so this is a true ceiling rather than the longest string anyone
+ * happened to try.
+ */
+internal val HeroH = 166.dp
+
+/** Names the hero's own box, so a test can measure it without guessing where it is. */
+internal const val HeroTag = "orbit.hero"
 
 /** How long each thing to carry on with is shown before the next one. */
 internal const val CycleMs = 10_000L
@@ -184,81 +204,92 @@ internal fun Hero(
         requester.focusWhenReady()
     }
 
-    Row(
-        // On the row rather than on the focusable inside it, to keep it away from the
-        // clickable's own focus target.
-        Modifier
-            // IntrinsicSize.Min first: the accent beside the text fills the height, and without
-            // a bound to fill it would take the whole screen and push the rows off it.
-            .height(IntrinsicSize.Min)
-            .heightIn(min = HeroMinH)
-            .focusProperties {
-                up = above
-                down = below ?: FocusRequester.Default
-            },
-        // Top aligned, not centred: one thing to carry on with has an episode line and the next
-        // one does not, and centred text would jump up and down as the hero steps through them.
-        verticalAlignment = Alignment.Top,
-    ) {
-        // The focus mark for a block this size is an accent down its side, not a ring.
-        Box(
+    // Always the same room, whatever is in it. The hero used to be as tall as its own text,
+    // with only a floor under it, so it stood at three different heights depending on what it
+    // had to say: 108dp for an ambient picture with a title alone, 153dp once that picture had
+    // a year and a running length on it, and 200dp for something to carry on with. Everything
+    // below moved with it, and since the hero steps through pictures by itself, the apps row
+    // walked up and down the screen while nobody was touching the remote.
+    //
+    // The box is fixed and the content keeps its own height inside it, top aligned, so the
+    // focus accent still hugs the text instead of running the full height of a half empty box.
+    Box(Modifier.height(HeroH).testTag(HeroTag)) {
+        Row(
+            // On the row rather than on the focusable inside it, to keep it away from the
+            // clickable's own focus target.
             Modifier
-                .width(3.dp)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (focused) Color(0xFF7FD4FF) else Color.Transparent)
-        )
-        Spacer(Modifier.width(13.dp))
-
-        Box(
-            Modifier
-                .fillMaxWidth(HeroTextWidth)
-                .focusRequester(requester)
-                .onFocusChanged {
-                    focused = it.hasFocus
-                    if (it.hasFocus) onFocused()
-                }
-                // Holding OK is how the pictures are configured, the same gesture a tile uses
-                // for its menu. The release is swallowed so the hero does not also resume.
-                .onPreviewKeyEvent { event ->
-                    val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
-                    val press = event.nativeKeyEvent.downTime
-                    when {
-                        ok && event.type == KeyEventType.KeyDown && event.isHeld() -> {
-                            if (heldPress != press) {
-                                heldPress = press
-                                context.openScreen(
-                                    Intent(context, AppPickerActivity::class.java)
-                                        .putExtra(AppPickerActivity.EXTRA_BACKDROPS, true)
-                                )
-                            }
-                            true
-                        }
-                        ok && event.type == KeyEventType.KeyUp && heldPress == press -> true
-                        else -> false
-                    }
-                }
-                // The clickable is the hero's only focus target. A focusable() in front of it
-                // would make a second one, and the focus properties set above would then not be
-                // read from whichever of the two actually held focus.
-                .then(
-                    action?.let {
-                        Modifier.clickable(interactionSource = null, indication = null, onClick = it)
-                    } ?: Modifier
-                )
+                // IntrinsicSize.Min first: the accent beside the text fills the height, and without
+                // a bound to fill it would take the whole screen and push the rows off it.
+                .height(IntrinsicSize.Min)
+                .heightIn(min = HeroMinH)
+                .focusProperties {
+                    up = above
+                    down = below ?: FocusRequester.Default
+                },
+            // Top aligned, not centred: one thing to carry on with has an episode line and the next
+            // one does not, and centred text would jump up and down as the hero steps through them.
+            verticalAlignment = Alignment.Top,
         ) {
-            when {
-                item != null -> Watching(item, progress, focused)
-                !granted && !asked -> Offer(focused)
-                ambient != null -> Ambient(ambient, ambientSource, focused)
-                // Still looking. Nothing is claimed in the meantime.
-                watching.settling -> Unit
-                backApp != null -> BackTo(backApp.label, focused)
-                backInput != null -> BackTo(backInput.label, focused)
-                else -> Clock(focused)
+            // The focus mark for a block this size is an accent down its side, not a ring.
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(if (focused) Color(0xFF7FD4FF) else Color.Transparent)
+            )
+            Spacer(Modifier.width(13.dp))
+
+            Box(
+                Modifier
+                    .fillMaxWidth(HeroTextWidth)
+                    .focusRequester(requester)
+                    .onFocusChanged {
+                        focused = it.hasFocus
+                        if (it.hasFocus) onFocused()
+                    }
+                    // Holding OK is how the pictures are configured, the same gesture a tile uses
+                    // for its menu. The release is swallowed so the hero does not also resume.
+                    .onPreviewKeyEvent { event ->
+                        val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
+                        val press = event.nativeKeyEvent.downTime
+                        when {
+                            ok && event.type == KeyEventType.KeyDown && event.isHeld() -> {
+                                if (heldPress != press) {
+                                    heldPress = press
+                                    context.openScreen(
+                                        Intent(context, AppPickerActivity::class.java)
+                                            .putExtra(AppPickerActivity.EXTRA_BACKDROPS, true)
+                                    )
+                                }
+                                true
+                            }
+                            ok && event.type == KeyEventType.KeyUp && heldPress == press -> true
+                            else -> false
+                        }
+                    }
+                    // The clickable is the hero's only focus target. A focusable() in front of it
+                    // would make a second one, and the focus properties set above would then not be
+                    // read from whichever of the two actually held focus.
+                    .then(
+                        action?.let {
+                            Modifier.clickable(interactionSource = null, indication = null, onClick = it)
+                        } ?: Modifier
+                    )
+            ) {
+                when {
+                    item != null -> Watching(item, progress, focused)
+                    !granted && !asked -> Offer(focused)
+                    ambient != null -> Ambient(ambient, ambientSource, focused)
+                    // Still looking. Nothing is claimed in the meantime.
+                    watching.settling -> Unit
+                    backApp != null -> BackTo(backApp.label, focused)
+                    backInput != null -> BackTo(backInput.label, focused)
+                    else -> Clock(focused)
+                }
             }
         }
-    }
+        }
 }
 
 /** What the hero knows about Continue watching, read once for the whole screen. */
