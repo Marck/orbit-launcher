@@ -363,9 +363,15 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
         delay(SettleMs)
         waited = true
     }
-    // Only once its picture is actually on screen: a title over a black rectangle is worse
-    // than no hero at all, and some artwork never loads.
-    val shown = picture.takeIf { item == null && art != null }
+    // The picture the artwork on screen actually belongs to, which is not always the one the
+    // cycle has moved on to. [art] keeps the last bitmap while the next one is being fetched,
+    // so taking the current step here put the new title over the old picture for as long as
+    // the fetch took. Naming it after what came back keeps the two together, and the pair
+    // simply changes a moment later than the step does.
+    //
+    // Only once its picture is actually on screen, too: a title over a black rectangle is
+    // worse than no hero at all, and some artwork never loads.
+    val shown = pictureFor(pool, fetched)?.takeIf { item == null && art != null }
     // Still looking: the rows have not been read yet, or one of them is being fetched. Rows can
     // only be read with the permission, so without it nothing is coming and nothing is waited
     // for. On a cold start this runs to a few seconds, which was long enough to watch the hero
@@ -376,6 +382,19 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
         ask.launch(ContinueWatching.PERMISSION)
     }
 }
+
+/**
+ * The picture a fetched piece of artwork belongs to.
+ *
+ * Named after what came back rather than where the cycle has got to. Those are the same thing
+ * only when nothing is in flight: the bitmap is kept while the next one is fetched, so reading
+ * the current step instead put the new title over the previous picture until the fetch landed.
+ *
+ * Nothing when the pool no longer holds it, which is what a reshuffle or a new read leaves
+ * behind. The hero then shows no picture rather than a name the artwork is not of.
+ */
+internal fun pictureFor(pool: List<Picture>, fetched: String?): Picture? =
+    fetched?.let { uri -> pool.firstOrNull { it.uri == uri } }
 
 /**
  * The programme's own artwork, bled in from the right and faded out towards the middle and the
