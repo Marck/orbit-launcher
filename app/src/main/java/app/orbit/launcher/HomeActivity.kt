@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -58,7 +60,7 @@ internal object Returns {
 }
 
 /** The parts of the screen focus can be in, so a return can put it back in the same one. */
-private enum class Zone { APPS, INPUTS, HERO, TOP }
+private enum class Zone { APPS, LIBRARY, INPUTS, HERO, TOP }
 
 /**
  * Whether a key from the remote is being handled right now.
@@ -217,6 +219,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     // Closing the menu has to hand focus back to the tile it belonged to. Without this the
     // focus falls to whatever comes first on screen and the remote walks off somewhere else.
     var refocusApps by remember { mutableIntStateOf(0) }
+    var refocusLibrary by remember { mutableIntStateOf(0) }
     var refocusInputs by remember { mutableIntStateOf(0) }
     var refocusHero by remember { mutableIntStateOf(0) }
     val noticeFocus = remember { FocusRequester() }
@@ -288,6 +291,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     fun refocus(where: Zone) {
         when (where) {
             Zone.APPS -> refocusApps++
+            Zone.LIBRARY -> refocusLibrary++
             Zone.INPUTS -> refocusInputs++
             Zone.HERO -> refocusHero++
             Zone.TOP -> refocusTop++
@@ -338,11 +342,17 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
 
     // Kept while focus is elsewhere, so stepping up to the top bar does not blank the hero.
     var focusedApp by rememberSaveable { mutableStateOf<String?>(null) }
-    val watching = rememberWatching(focusedApp)
+    // One read of the preview rows for the whole screen: the hero takes the wide ones, the
+    // poster row takes the covers. Read unconditionally, because the row it feeds is only drawn
+    // when it has something in it and a read inside that test would restart every time the row
+    // appeared or went away.
+    val library = rememberLibrary()
+    val watching = rememberWatching(focusedApp, library)
+    val posters = rememberPosters(library)
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Backdrop(watching.art, Modifier.align(Alignment.TopEnd))
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             // No safe margin below: the space under the hero stretches anyway, and the notice
             // needs that room to fit above the rows.
             Column(Modifier.padding(start = SafeH, top = SafeV, end = SafeH)) {
@@ -378,7 +388,11 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                     onFocused = { moveTo(Zone.HERO) },
                 )
             }
-            Spacer(Modifier.weight(1f))
+            // Was a weight, which pushed the rows to the bottom of a screen that always
+            // fitted. With the posters in, the content is taller than the screen, so there is
+            // no slack to hand out and the gap is the one the hero wants rather than whatever
+            // is left over.
+            Spacer(Modifier.height(HeroGap))
             if (!homeOpensOrbit && !noticeDismissed) {
                 Notice(
                     title = "Orbit is not the home app yet",
@@ -457,6 +471,20 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             )
             // Smaller than it looks: the apps row already ends in room for its tile labels.
             Spacer(Modifier.height(12.dp))
+            // Named for what it holds rather than where it came from. "Library" would be the
+            // same claim the hero's own source line was taken out for: most of these covers
+            // come from a shop front, not from anything the owner has.
+            if (posters.isNotEmpty()) {
+                RowLabel("POSTERS")
+                PosterRow(
+                    posters = posters,
+                    refocus = refocusLibrary,
+                    active = zone == Zone.LIBRARY && menu == null,
+                    onFocused = { moveTo(Zone.LIBRARY) },
+                    onOpen = { picture -> context.openPicture(picture) },
+                )
+                Spacer(Modifier.height(12.dp))
+            }
             RowLabel(if (editing != null && editingKey == FavoriteStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
             InputsRow(
                 inputs = favoriteInputs,
