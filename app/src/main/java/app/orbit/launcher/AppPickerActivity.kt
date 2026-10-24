@@ -1,9 +1,15 @@
 package app.orbit.launcher
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,9 +24,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,12 +51,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -94,8 +101,19 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
     // Only the apps that actually publish a picture are worth offering as a source.
     // The lint check cannot see the assignment through the withContext call; the baseline
     // already carries eight of the same false report.
+    // Nothing can be read without this, so an empty grid means one of two very different
+    // things and the screen has to be able to tell them apart.
+    var listings by remember { mutableStateOf(ContinueWatching.granted(context)) }
+    var refusedListings by remember { mutableStateOf(false) }
+    val askListings = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        listings = it
+        // Set once the system will no longer show its prompt. Asking again then does nothing
+        // at all, so the button has to send the owner to the app's settings instead.
+        refusedListings = !it &&
+            (context as? Activity)?.shouldShowRequestPermissionRationale(ContinueWatching.PERMISSION) == false
+    }
     @Suppress("ProduceStateDoesNotAssignValue")
-    val publishers by produceState(initialValue = emptyList<String>(), backdrops) {
+    val publishers by produceState(initialValue = emptyList<String>(), backdrops, listings) {
         value = if (backdrops) withContext(Dispatchers.IO) { Backdrops.publishers(context) } else emptyList()
     }
     val apps = remember(all, publishers, backdrops) {
@@ -193,6 +211,44 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
             contentPadding = PaddingValues(top = PopRoom, bottom = SafeV),
             modifier = Modifier.fillMaxWidth(),
         ) {
+            // An empty grid used to be a title, a sentence about choosing, and then nothing:
+            // no reason given and no way forward, which is what an owner who declined the
+            // listings would see every time they opened this.
+            if (backdrops && ordered.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Text(
+                        if (listings) {
+                            "No app on this TV publishes pictures Orbit can use. Apps that keep " +
+                                "their own rows on the TV's home screen are the ones that do."
+                        } else {
+                            "Orbit needs access to the TV listings to see which apps publish " +
+                                "pictures. Without it there is nothing to choose from."
+                        },
+                        color = Muted,
+                        fontSize = 13.sp,
+                    )
+                    if (!listings) {
+                        Spacer(Modifier.height(10.dp))
+                        if (refusedListings) {
+                            ActionButton("Open app settings", autoFocus = true) {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                            Uri.fromParts("package", context.packageName, null),
+                                        )
+                                    )
+                                }
+                            }
+                        } else {
+                            ActionButton("Allow access", autoFocus = true) {
+                                askListings.launch(ContinueWatching.PERMISSION)
+                            }
+                        }
+                    }
+                }
+            }
+
             itemsIndexed(ordered, key = { _, app -> app.packageName }) { index, app ->
                 PickerTile(
                     app = app,

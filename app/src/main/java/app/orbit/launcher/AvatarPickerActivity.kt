@@ -346,7 +346,7 @@ private fun TileBody(
 }
 
 @Composable
-private fun ActionButton(label: String, autoFocus: Boolean, onClick: () -> Unit) {
+internal fun ActionButton(label: String, autoFocus: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val requester = remember { FocusRequester() }
     LaunchedEffect(autoFocus) {
