@@ -41,11 +41,19 @@ object AvatarPicker {
     fun hasPermission(context: Context): Boolean =
         context.checkSelfPermission(permission()) == PackageManager.PERMISSION_GRANTED
 
+    /**
+     * Always returns, even when a step of it fails.
+     *
+     * The screen tells "still looking" from "looked and found nothing" by whether this has come
+     * back yet, so a throw out of here is not a missing picture, it is a picker that says
+     * "Looking for pictures..." for as long as it is left open. The three steps are independent:
+     * a media store that will not answer is no reason to skip the walk, and vice versa.
+     */
     fun scan(context: Context): List<PickerImage> {
         val found = LinkedHashMap<String, PickerImage>()
-        requestIndex(context)
-        scanMediaStore(context, found)
-        scanDirectories(context, found)
+        runCatching { requestIndex(context) }
+        runCatching { scanMediaStore(context, found) }
+        runCatching { scanDirectories(context, found) }
         return found.values.take(MAX_RESULTS)
     }
 

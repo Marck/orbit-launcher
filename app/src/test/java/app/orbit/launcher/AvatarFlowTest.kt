@@ -119,10 +119,21 @@ class AvatarFlowTest : TvTest() {
             val t = texts()
             return t.drop(t.indexOf("YOUR PICTURES") + 1).takeWhile { it != "CURRENT" }
         }
-        waitFor("the pictures to be read", budgetMs = 30_000) {
+        // The diagnosis matters more than the budget here. This timed out once in CI (run
+        // 40046346991) and the log said only that it had waited, so there was nothing to tell
+        // a slow read from a scan that never came back at all. Now it says which.
+        waitFor(
+            "the pictures to be read",
+            budgetMs = 30_000,
+            diagnose = { "under YOUR PICTURES: ${listed()}; whole screen: ${texts()}" },
+        ) {
             listed().none { it.startsWith("Looking for pictures") }
         }
-        waitFor("$label among the first pictures", budgetMs = 10_000) { listed().indexOf(label) in 0..5 }
+        waitFor(
+            "$label among the first pictures",
+            budgetMs = 10_000,
+            diagnose = { "under YOUR PICTURES: ${listed()}" },
+        ) { listed().indexOf(label) in 0..5 }
         val i = listed().indexOf(label)
         // From Orbit: down to Bloom, down to the first picture, then right.
         repeat(2) { press(s, KeyEvent.KEYCODE_DPAD_DOWN) }

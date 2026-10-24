@@ -146,16 +146,31 @@ abstract class TvTest {
      * one, so how many frames it takes is a property of the machine, not of the code. A fixed
      * settle that is generous on a laptop is not generous on a build runner. Wait for the thing
      * itself instead of guessing how long it takes.
+     *
+     * The budget is real time, and has to be. It used to count the milliseconds this pumped
+     * into the fake clock, which run about four times faster than the wall: a measured 2000ms
+     * budget handed the background work 562ms to finish in. That is what kept N7 coming back,
+     * a test that passes on a laptop and times out on a loaded runner while the read it is
+     * waiting for is still perfectly healthy. [WaitBudgetTest] holds this to it.
      */
-    fun waitFor(what: String, budgetMs: Long = 12_000, condition: () -> Boolean) {
-        var waited = 0L
-        while (waited < budgetMs) {
+    fun waitFor(
+        what: String,
+        budgetMs: Long = 12_000,
+        /** What the screen looked like when the wait ran out. Only called on the way to failing. */
+        diagnose: () -> String = { "" },
+        condition: () -> Boolean,
+    ) {
+        val deadline = System.nanoTime() + budgetMs * 1_000_000L
+        while (true) {
             if (condition()) return
+            if (System.nanoTime() >= deadline) break
             Thread.sleep(20)
             pump(100)
-            waited += 100
         }
-        check(condition()) { "waited ${budgetMs}ms for $what" }
+        check(condition()) {
+            val state = runCatching { diagnose() }.getOrElse { "diagnose threw: $it" }
+            "waited ${budgetMs}ms for $what" + if (state.isBlank()) "" else ". $state"
+        }
     }
 
     /** Launches an activity the way a TV would show it: not in touch mode. */
