@@ -352,6 +352,10 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Backdrop(watching.art, Modifier.align(Alignment.TopEnd))
+        // The artwork runs under the top bar, and a bright frame up there swallowed the clock
+        // and the glyphs whole. A fade down from the top edge holds them legible against any
+        // picture, and over a dark one there is nothing to see.
+        TopScrim(Modifier.align(Alignment.TopCenter))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             // No safe margin below: the space under the hero stretches anyway, and the notice
             // needs that room to fit above the rows.

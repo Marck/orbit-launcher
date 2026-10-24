@@ -186,7 +186,8 @@ class HeroHeightTest : TvTest() {
          * Where the hero starts, in root pixels.
          *
          * Set by the safe area, the top bar and the gap under it, none of which depend on what
-         * the hero has to say. Written down so a change to any of them is noticed here too.
+         * the hero has to say. Written down so a change to any of them is noticed here too:
+         * it caught the top bar growing by 7dp and moving everything below it down 14px.
          */
         const val HeroTop = 116f
     }

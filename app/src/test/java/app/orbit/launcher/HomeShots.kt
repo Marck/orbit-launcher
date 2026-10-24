@@ -17,12 +17,14 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.util.TimeZone
 import org.robolectric.annotation.GraphicsMode
 
 private const val OUT = "build/tv-shots/shots"
@@ -31,6 +33,26 @@ private const val OUT = "build/tv-shots/shots"
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w960dp-h540dp-land-television-xhdpi")
 class HomeShots {
+
+    /**
+     * The pinned clock, which this class missed.
+     *
+     * Every other screenshot class takes it from TvTest, which this one does not extend, so
+     * its shots still carried the minute they were recorded in and the date they were recorded
+     * on. Two recordings happening to land in the same minute is what made the suite look
+     * fully deterministic when it was not.
+     */
+    @Before
+    fun pinTheClock() {
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+        ShotHooks.now = TvTest.PINNED_CLOCK
+    }
+
+    @After
+    fun unpinTheClock() {
+        ShotHooks.now = null
+    }
+
 
     @get:Rule
     val rule = createEmptyComposeRule()
