@@ -26,6 +26,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Before
 import org.junit.Rule
 import org.robolectric.Shadows.shadowOf
+import java.util.TimeZone
 
 /**
  * Base for tests that drive the real Orbit screens like a TV remote. See HARNESS.md.
@@ -68,6 +69,17 @@ abstract class TvTest {
     fun app(pkg: String, label: String, art: Drawable?, removable: Boolean = true, isBanner: Boolean = true) =
         LaunchableApp(pkg, label, art, isBanner = isBanner, removable = removable)
 
+    companion object {
+        /**
+         * What every screenshot's clock reads: 2024-01-02 03:04:00 UTC.
+         *
+         * Any fixed instant would do. The zone is pinned with it, because the clock is
+         * formatted in the default one and a shot taken here would otherwise show a different
+         * hour from the same shot taken on a build machine.
+         */
+        const val PINNED_CLOCK = 1_704_164_640_000L
+    }
+
     /** The default fixture: the owner's apps plus two extra, and four inputs. Override freely. */
     @Before
     fun fixture() {
@@ -99,6 +111,11 @@ abstract class TvTest {
         ShotHooks.watchNext = null
         ShotHooks.pictures = null
         ShotHooks.artwork = null
+        // Every screen here has a clock on it, so without this each shot differs from the last
+        // recording by the minute it happened to be taken in, and the date rolls over nightly
+        // on top of that. Pinned to a fixed instant so a difference means the layout moved.
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+        ShotHooks.now = PINNED_CLOCK
         // Infinite marquee animations would make an auto-advancing clock never settle.
         rule.mainClock.autoAdvance = false
     }

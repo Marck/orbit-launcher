@@ -621,9 +621,9 @@ internal fun BackTo(label: String, focused: Boolean) {
  */
 @Composable
 internal fun Clock(focused: Boolean) {
-    val now by produceState(initialValue = Date()) {
+    val now by produceState(initialValue = reading()) {
         while (true) {
-            value = Date()
+            value = reading()
             delay(10_000)
         }
     }
