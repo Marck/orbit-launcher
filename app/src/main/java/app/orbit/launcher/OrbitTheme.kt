@@ -36,6 +36,31 @@ internal val LabelGap = PopOut + 4.dp
  */
 internal val RowHeight = RowTop + TileH + LabelGap + 16.dp
 
+/**
+ * A library poster, at 2:3, which is the shape the publishing apps draw their covers in.
+ *
+ * Measured against the screen rather than chosen: at 960x540dp the hero floor, the two rows of
+ * tiles and both safe margins leave about 230dp once the inputs row moves below the fold, and
+ * this is what fits in it with its label and its growing room.
+ */
+internal val PosterW = 85.dp
+internal val PosterH = 128.dp
+
+/** Wide enough for the tile on this panel, and a fraction of what a backdrop costs to fetch. */
+internal const val PosterFetchPx = 256
+
+/**
+ * The poster row: a poster, the room above it and the room a focused one grows into. No label
+ * line, because a cover carries its own title.
+ */
+internal val PosterRowHeight = RowTop + PosterH * FocusScale + 4.dp
+
+/**
+ * Between the hero and the first row. Fixed rather than whatever is left over: with the poster
+ * row in, the screen is full and there is nothing left to share out.
+ */
+internal val HeroGap = 30.dp
+
 internal val Surface = Color(0xFF14181F)
 internal val OnSurface = Color(0xFFDDE5F0)
 internal val Muted = Color(0xFF8B93A4)

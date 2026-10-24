@@ -51,6 +51,15 @@ data class Picture(
      * the id of something in the owner's library.
      */
     val intentUri: String? = null,
+    /**
+     * Whether the artwork is wide enough to sit behind the hero.
+     *
+     * The publishing app declares a ratio per row, and on this set the two shapes are a real
+     * split in the data rather than a matter of taste: the server sends 16:9 for its episode
+     * and folder rows and a tall cover for everything else, 5 wide against 112 covers. A row
+     * that declares no ratio is taken as wide, which is what the contract's own default says.
+     */
+    val wide: Boolean = true,
 )
 
 object Backdrops {
@@ -108,7 +117,10 @@ object Backdrops {
     }.getOrDefault(emptyList())
 
     /**
-     * Pictures from the chosen apps, shuffled, leaving out anything named in [except].
+     * Wide pictures from the chosen apps, shuffled, leaving out anything named in [except].
+     *
+     * Wide only: this is what goes behind the hero, and a cover stretched across it is a seam.
+     * The covers are read too, and [posters] is where they go.
      *
      * What is in Watch Next belongs to the app that serves it, and the hero shows it there. The
      * same programme turning up as an ambient picture behind another app reads exactly like the
@@ -120,16 +132,49 @@ object Backdrops {
      * The ones with nothing to say are kept on the end rather than dropped, so an app chosen on
      * its own still supplies something.
      */
-    fun art(context: Context, except: Set<String> = emptySet()): List<Picture> {
+    fun art(context: Context, except: Set<String> = emptySet()): List<Picture> =
+        wide(all(context), context, except)
+
+    /**
+     * The tall covers from the chosen apps, for the row of posters.
+     *
+     * The same rows the hero cannot use. A cover is the shape the publishing app drew it in,
+     * so shown at that shape it needs no cropping and carries its own printed title, which is
+     * why the row under it says nothing the artwork already says.
+     */
+    fun posters(context: Context, except: Set<String> = emptySet()): List<Picture> =
+        covers(all(context), context, except)
+
+    /**
+     * Everything the chosen apps publish, both shapes, in the order the provider gave them.
+     *
+     * The one walk of the table. The hero and the poster row want different shapes out of the
+     * same rows, and walking it once each meant 1359 rows read twice on this set for no reason.
+     * The screen reads this once and hands both of them what came back; [art] and [posters] are
+     * the same thing for a caller that wants only one shape and has no list already.
+     *
+     * Call off the main thread.
+     */
+    fun all(context: Context): List<Picture> {
         val chosen = sources(context)
         if (chosen.isEmpty()) return emptyList()
-        ShotHooks.pictures?.let { return pick(it, chosen, except) }
+        ShotHooks.pictures?.let { shot -> return shot.filter { it.packageName in chosen } }
         return runCatching {
             val found = mutableListOf<Picture>()
-            read(context) { picture -> found += picture }
-            pick(found, chosen, except)
+            read(context) { picture -> if (picture.packageName in chosen) found += picture }
+            found
         }.getOrDefault(emptyList())
     }
+
+    /**
+     * The two shapes, out of rows already read. Cheap enough for the main thread: the reading
+     * is what costs, and on this set these are picking over 117 rows rather than 1359.
+     */
+    fun wide(found: List<Picture>, context: Context, except: Set<String> = emptySet()): List<Picture> =
+        pick(found.filter { it.wide }, sources(context), except)
+
+    fun covers(found: List<Picture>, context: Context, except: Set<String> = emptySet()): List<Picture> =
+        pick(found.filter { !it.wide }, sources(context), except)
 
     /**
      * The rows that may be shown, in the order they should be: from a chosen app, not already
@@ -227,13 +272,12 @@ object Backdrops {
             if (cursor == null) return
             while (cursor.moveToNext()) {
                 if (cursor.isNull(2) || cursor.getInt(2) !in TYPES) continue
-                // Wide artwork only. A tall cover cropped to fill the backdrop shows its own
-                // printed border down the side, which reads as a seam rather than a picture.
-                if (!cursor.isNull(3) &&
-                    cursor.getInt(3) != TvContract.PreviewPrograms.ASPECT_RATIO_16_9
-                ) {
-                    continue
-                }
+                // Both shapes are read. The hero still takes wide artwork only, because a tall
+                // cover cropped to fill the backdrop shows its own printed border down the
+                // side, which reads as a seam. The covers are what the poster row is made of,
+                // and dropping them here is what used to throw away 112 of the server's 117.
+                val wide = cursor.isNull(3) ||
+                    cursor.getInt(3) == TvContract.PreviewPrograms.ASPECT_RATIO_16_9
                 val packageName = cursor.getString(0)?.takeIf { it.isNotBlank() } ?: continue
                 val uri = cursor.getString(1)?.takeIf { it.isNotBlank() } ?: continue
                 // An item count only means seasons on a series row; on a film it means nothing.
@@ -256,6 +300,7 @@ object Backdrops {
                         runtime = if (series || cursor.isNull(8)) null else minutesOf(cursor.getLong(8)),
                         channel = if (cursor.isNull(9)) null else rows[cursor.getLong(9)],
                         intentUri = cursor.getString(10)?.takeIf { it.isNotBlank() },
+                        wide = wide,
                     )
                 )
             }

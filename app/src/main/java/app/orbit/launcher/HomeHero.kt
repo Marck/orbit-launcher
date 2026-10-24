@@ -288,7 +288,7 @@ internal class Watching(
  * behind the whole screen.
  */
 @Composable
-internal fun rememberWatching(focusedApp: String?): Watching {
+internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Watching {
     val context = LocalContext.current
     var granted by remember { mutableStateOf(ContinueWatching.granted(context)) }
     var asked by rememberSaveable { mutableStateOf(HomePrefs.listingsAsked(context)) }
@@ -320,20 +320,14 @@ internal fun rememberWatching(focusedApp: String?): Watching {
     }
     val item = mine.getOrNull(index)
 
-    // Ambient pictures, for an app that serves nothing of its own.
+    // Ambient pictures, for an app that serves nothing of its own. The wide ones out of the
+    // single read the screen does for the hero and the poster row together.
     // Null until the rows have been read. An empty list means they were read and there is
     // nothing to show, which is a different thing: one is worth waiting for, the other is not.
-    @Suppress("ProduceStateDoesNotAssignValue")
-    val ambient by produceState<List<Picture>?>(
-        initialValue = null,
-        Backdrops.revision,
-        FavoriteStore.revision,
-        Returns.count,
-        items,
-    ) {
-        // Keyed on the titles so the pool is rebuilt when Watch Next changes.
+    // Rebuilt on the titles too, so the pool drops whatever Watch Next has taken over.
+    val ambient = remember(library, items) {
         val shown = items.mapNotNull { it.title }.toSet()
-        value = withContext(Dispatchers.IO) { Backdrops.art(context, except = shown) }
+        library?.let { Backdrops.wide(it, context, except = shown) }
     }
     val pool = ambient.orEmpty()
     var ambientIndex by remember(ambient) { mutableIntStateOf(0) }
