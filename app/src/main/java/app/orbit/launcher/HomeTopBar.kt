@@ -65,6 +65,15 @@ import kotlinx.coroutines.withContext
  * [onFocused] reports each button by name as it takes focus. [onOpen] starts where a button leads,
  * given the name to tell the owner if it cannot.
  */
+/**
+ * The instant both clocks show: the real one, or whatever a screenshot run pinned.
+ *
+ * A screen with a clock on it photographs differently every minute, which was enough on its own
+ * to make most shots of the home screen differ from the last recording for a reason nobody
+ * changed. Pinning it leaves the comparison about the layout.
+ */
+internal fun reading(): Date = Date(ShotHooks.now ?: System.currentTimeMillis())
+
 @Composable
 internal fun TopBar(
     first: FocusRequester,
@@ -94,11 +103,11 @@ internal fun TopBar(
     // The 12 or 24 hour setting is read again on every tick, so changing it on the TV shows
     // within the minute. Each tick lands on the minute itself, so the clock turns over with the
     // others in the room rather than up to a tick behind them.
-    var now by remember { mutableStateOf(Date()) }
+    var now by remember { mutableStateOf(reading()) }
     var twentyFour by remember { mutableStateOf(DateFormat.is24HourFormat(context)) }
     LaunchedEffect(Unit) {
         while (true) {
-            now = Date()
+            now = reading()
             twentyFour = DateFormat.is24HourFormat(context)
             delay(60_000 - System.currentTimeMillis() % 60_000)
         }
