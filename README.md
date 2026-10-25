@@ -182,6 +182,47 @@ Back closes an open menu or puts back a move. Otherwise it goes to the first app
 rather than closing Orbit. Home pressed while Orbit is showing does the same, and
 also closes the menu and puts back a move that was not kept.
 
+## Making Orbit the home screen
+
+Two separate things, and the second is the one that matters on this set.
+
+**1. The preferred home activity.** Orbit declares `android.intent.category.HOME`, so it is a
+candidate as soon as it is installed:
+
+```bash
+adb shell cmd package set-home-activity app.orbit.launcher/.HomeActivity
+adb shell dumpsys package preferred | grep -A 3 'category.HOME'
+```
+
+**2. The home button.** On the set this was written for, that is not enough. The preference is
+recorded and `dumpsys` shows Orbit as the preferred home, and the physical home button still
+opens the TV maker's launcher: the key never reaches the preferred-activity resolution. That is
+what `HomeButtonService` is for. It is an accessibility service that watches for the stock home
+screen coming to the front and puts Orbit there instead.
+
+On the TV: Settings, Device Preferences, Accessibility, then Orbit home button. Orbit offers
+this itself, in the notice under the hero, which opens the home settings and falls back to the
+accessibility settings on a set that has no home setting. Over adb:
+
+```bash
+adb shell settings put secure enabled_accessibility_services \
+  app.orbit.launcher/app.orbit.launcher.HomeButtonService
+adb shell settings put secure accessibility_enabled 1
+adb shell dumpsys accessibility | grep -i orbit   # Bound services: should name Orbit
+```
+
+Then press home from inside any app and check where it lands:
+
+```bash
+adb shell dumpsys activity activities | grep mResumedActivity
+```
+
+Both settings persist across a reboot. Neither survives an uninstall, which is why both build
+types are signed with the same key: see [Signing](#signing).
+
+The service reads nothing from notifications or screen content. Its only capability is
+`TYPE_WINDOW_STATE_CHANGED`, which is how it knows the stock launcher opened.
+
 ## Top bar
 
 Left of the profile picture sit four small buttons: All apps, the TV's own inputs panel,
