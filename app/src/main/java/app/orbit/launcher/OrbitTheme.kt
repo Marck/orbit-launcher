@@ -66,7 +66,14 @@ internal val OnSurface = Color(0xFFDDE5F0)
 internal val Muted = Color(0xFF8B93A4)
 internal val LastInput = Color(0xFF1AA3C4)
 internal val Editing = Color(0xFFFFC14D)
-internal val Glyph = Color(0xFFBFC9DA)
+/**
+ * Top bar glyphs. White, as the stock top bar draws them.
+ *
+ * They used to sit on a filled disc, which carried them against any picture; without the disc
+ * a muted blue grey was lost against pale artwork, so the glyph itself has to hold the
+ * contrast. See TopScrim for what holds it against a bright frame.
+ */
+internal val Glyph = Color.White
 internal val Scrim = Color(0xB3000000)
 internal val MenuCard = Color(0xFFDADCE0)
 internal val MenuLit = Color.White

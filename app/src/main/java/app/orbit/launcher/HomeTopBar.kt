@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,6 +43,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -65,6 +67,9 @@ import kotlinx.coroutines.withContext
  * [onFocused] reports each button by name as it takes focus. [onOpen] starts where a button leads,
  * given the name to tell the owner if it cannot.
  */
+/** The room a top bar glyph takes. Unchanged from the disc it replaces, so nothing below moves. */
+internal val TopBarButtonSize = 21.dp
+
 /**
  * The instant both clocks show: the real one, or whatever a screenshot run pinned.
  *
@@ -128,7 +133,7 @@ internal fun TopBar(
         Shortcuts(first, button, destinations, onOpen)
         Avatar(button)
         Spacer(Modifier.width(9.dp))
-        Text(time.format(now), color = Muted, fontSize = 12.sp)
+        Text(time.format(now), color = Color.White, fontSize = 16.sp)
     }
 }
 
@@ -272,11 +277,14 @@ internal fun Shortcuts(
     if (storeIntent != null) {
         TopBarButton(button("store"), onClick = { onOpen(storeIntent, "Play Store") }) {
             if (storeIcon != null) {
-                Image(
+                // The store's own icon, drawn as a silhouette rather than in its own colours.
+                // Icon tints what it is given, so the shape is still the store's and the
+                // colour is the one every other glyph up here uses.
+                Icon(
                     bitmap = storeIcon,
                     contentDescription = "Play Store",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(2.dp),
+                    tint = Glyph,
+                    modifier = Modifier.padding(4.dp),
                 )
             } else {
                 Icon(
@@ -294,7 +302,7 @@ internal fun Shortcuts(
             imageVector = Icons.Filled.Settings,
             contentDescription = "Settings",
             tint = Glyph,
-            modifier = Modifier.padding(3.dp),
+            modifier = Modifier.padding(4.dp),
         )
     }
     Spacer(Modifier.width(9.dp))
@@ -340,7 +348,7 @@ internal fun TopBarButton(
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
-            .size(21.dp)
+            .size(TopBarButtonSize)
             .scale(if (focused) 1.15f else 1f)
             .then(modifier)
             // hasFocus, not isFocused: while OK is down, Compose hands focus to the clickable
@@ -348,14 +356,43 @@ internal fun TopBarButton(
             .onFocusChanged { focused = it.hasFocus }
             .clickable(onClick = onClick)
             .clip(CircleShape)
-            .background(Color(0xFF2B3242))
-            // A faint ring always, so a dark picture still reads as a disc rather than a hole.
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Color.White else Color(0x3DFFFFFF),
-                shape = CircleShape,
+            // No disc and no ring until it is focused, the way the stock top bar draws these.
+            // The one that has focus gets a ring rather than only going brighter, because
+            // brightness alone is a weak mark on a screen being driven from across a room.
+            .then(
+                if (focused) {
+                    Modifier.border(width = 2.dp, color = Color.White, shape = CircleShape)
+                } else {
+                    Modifier
+                }
             ),
         contentAlignment = Alignment.Center,
         content = content,
+    )
+}
+
+/** How far down the screen the top fade reaches. Deep enough to clear the bar and its scale. */
+private val ScrimHeight = 72.dp
+
+/**
+ * A fade from black at the top edge to nothing below the bar.
+ *
+ * The hero's artwork is drawn full bleed and reaches the top of the screen, so a pale or busy
+ * frame up there took the clock and the glyphs with it. This sits between the picture and the
+ * bar. Over a dark picture it is invisible, so nothing is lost where nothing was wrong.
+ */
+@Composable
+internal fun TopScrim(modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(ScrimHeight)
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0.75f),
+                    0.6f to Color.Black.copy(alpha = 0.3f),
+                    1f to Color.Transparent,
+                )
+            )
     )
 }
