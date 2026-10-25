@@ -35,4 +35,15 @@ object ShotHooks {
 
     /** Epoch millis the clocks should read, or null to follow the real one. */
     var now: Long? = null
+
+    /**
+     * Whether the hero moves on by itself.
+     *
+     * True everywhere but in a test that presses left or right. The hero steps on every
+     * [CycleMs] on its own, which a test driving it from the remote cannot tell apart from its
+     * own key presses: the first test written for the stepping passed with the key handling
+     * taken out, because waiting for the picture to change is waiting for something that
+     * happens anyway. With this off, the only thing that moves the hero is the remote.
+     */
+    var cycling: Boolean = true
 }

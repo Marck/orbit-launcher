@@ -112,6 +112,8 @@ abstract class TvTest {
         ShotHooks.watchNext = null
         ShotHooks.pictures = null
         ShotHooks.artwork = null
+        // On unless a test driving the hero from the remote turns it off.
+        ShotHooks.cycling = true
         // Decoded pictures outlive a test, since the cache is one object in a shared process.
         ArtworkCache.clear()
         // Every screen here has a clock on it, so without this each shot differs from the last

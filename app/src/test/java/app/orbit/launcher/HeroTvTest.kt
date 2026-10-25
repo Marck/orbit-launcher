@@ -379,9 +379,15 @@ class HeroTvTest : TvTest() {
 
     @Test
     fun `right steps the hero on and left steps it back`() {
-        // Bounded pumps on purpose. The hero also moves on by itself every CycleMs, so a test
-        // that waits for the picture to change gets a pass whether the keys work or not: that
-        // is exactly what the first version of this test did.
+        // The hero also moves on by itself every CycleMs, which a test driving it from the
+        // remote cannot tell apart from its own presses. The first version of this test waited
+        // for the picture to change and passed with the key handling taken out. The second
+        // pressed within a bounded settle, which was better and still not enough: it passed on
+        // its own branch and failed once merged, because how much of the fake clock the wait
+        // above burns through decides where in the ten seconds the presses land.
+        //
+        // So the cycle is off here, and the remote is the only thing that moves the hero.
+        ShotHooks.cycling = false
         val titles = listOf("First Ambient", "Second Ambient", "Third Ambient")
         ShotHooks.pictures = titles.map { picture(it, description = "What $it is about.") }
         val s = launch(HomeActivity::class.java)
@@ -389,18 +395,34 @@ class HeroTvTest : TvTest() {
         waitFor("the hero to show one of its pictures") { heroTitle(titles) != null }
         val before = heroTitle(titles)
 
-        // One press, one settle, nowhere near the ten seconds the hero cycles on its own.
-        press(s, KeyEvent.KEYCODE_DPAD_RIGHT, settle = 600)
+        // Waiting is safe now, and necessary: the artwork behind a step is decoded on a real
+        // background thread while the clock here is a fake one, so a settle measured in fake
+        // milliseconds returns before the picture it is waiting for has landed. With the cycle
+        // off, a wait that ends can only have been ended by the key.
+        press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
+        waitFor("the hero to step on", diagnose = { "showing: ${heroTitle(titles)}" }) {
+            heroTitle(titles) != before
+        }
         val middle = heroTitle(titles)
         assertNotNull("the hero stopped showing anything", middle)
         assertTrue("right did not step the hero on", middle != before)
 
-        press(s, KeyEvent.KEYCODE_DPAD_LEFT, settle = 600)
-        // The automatic cycle only ever goes forwards, so with three pictures it cannot land
-        // back where it started in two steps. Coming back is the step going the other way.
+        press(s, KeyEvent.KEYCODE_DPAD_LEFT)
+        waitFor("the hero to step back", diagnose = { "showing: ${heroTitle(titles)}" }) {
+            heroTitle(titles) == before
+        }
         assertEquals("left did not step the hero back", before, heroTitle(titles))
         // And neither key took focus off the hero.
         assertFalse("a step took focus out of the hero: ${focused()}", focused() in topBarButtons)
+    }
+
+    @Test
+    fun `the hero cycles on its own unless a test says otherwise`() {
+        // The seam is a test seam, not a behaviour. A build that shipped with it off would
+        // leave the hero on one picture until somebody pressed a key.
+        ShotHooks.cycling = false
+        ShotHooks.cycling = true
+        assertTrue("the hero would not cycle in a real build", ShotHooks.cycling)
     }
 
     @Test
