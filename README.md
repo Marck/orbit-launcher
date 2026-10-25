@@ -220,6 +220,24 @@ adb shell dumpsys activity activities | grep mResumedActivity
 Both settings persist across a reboot. Neither survives an uninstall, which is why both build
 types are signed with the same key: see [Signing](#signing).
 
+**Force-stopping Orbit turns the home button off.** Android clears an app's entry from
+`enabled_accessibility_services` when the app is force-stopped, and it does not come back when
+the app is started again. Measured on the set: enabled and bound, then one `am force-stop`, and
+the setting reads `null` with no service bound. Nothing warns about it, and the symptom is that
+the home button quietly goes back to the TV maker's launcher. A reinstall over the top is fine
+and keeps it; only force-stopping clears it. So after any force-stop, from the shell or from
+the TV's own app settings, turn it on again:
+
+```bash
+adb shell settings get secure enabled_accessibility_services   # null means it was cleared
+```
+
+Note also that being the preferred home activity and the home button working are not the same
+thing. On this set `dumpsys package preferred` names Orbit and the remote's home button still
+opens the TV maker's launcher, because the key never reaches that resolution. Orbit treats
+either one as good enough to stop showing its notice, so a set where the preference is recorded
+but not honoured will not be warned that the service is off.
+
 The service reads nothing from notifications or screen content. Its only capability is
 `TYPE_WINDOW_STATE_CHANGED`, which is how it knows the stock launcher opened.
 
