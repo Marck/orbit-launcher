@@ -33,10 +33,18 @@ class HeroOverflowTest : TvTest() {
 
     private val server = "org.jellyfin.androidtv"
 
+    // Long enough to run past even the roomiest hero. A description only has to be cut when it
+    // does not fit, and the hero now gives one as many lines as the rest of it leaves going
+    // spare, so a few sentences no longer overflow anything.
     private val long =
         "After inheriting a hotel from her late brother, a single mom moves in with his " +
             "good-natured ghost and high-maintenance guests who will never check out, which " +
-            "goes on for a good while longer than two lines of anything could ever hold."
+            "goes on for a good while longer than two lines of anything could ever hold. " +
+            "The guests arrive with demands nobody can meet, the ghost has opinions about all " +
+            "of them, and the hotel itself turns out to have rather more rooms than the floor " +
+            "plan admits to. Every episode adds another, and the season ends with a corridor " +
+            "that was not there in the morning and a booking for a party of eleven who have " +
+            "not been seen since the building first opened its doors to anyone at all."
 
     @Before
     fun oneLongDescription() {

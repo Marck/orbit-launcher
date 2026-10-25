@@ -51,6 +51,7 @@ class BackdropsShapeTest {
     @After
     fun tearDown() {
         ShotHooks.pictures = null
+        CountingTv.longDescription = null
     }
 
     @Test
@@ -178,6 +179,8 @@ class BackdropsShapeTest {
             90L * 60_000L,
             null,
             null,
+            // The long description, which most apps leave empty: the short one is then used.
+            longDescription,
         )
 
         override fun getType(uri: Uri): String? = null
@@ -191,6 +194,9 @@ class BackdropsShapeTest {
 
             /** What the cover row declares. Set per test, because apps do not agree on it. */
             var coverRatio = TvContract.PreviewPrograms.ASPECT_RATIO_2_3
+
+            /** The long description, which only the test about it fills in. */
+            var longDescription: String? = null
 
             /** One row per kind instead of the usual pair, for the test about kinds. */
             var rowTypes: List<Int>? = null
@@ -272,6 +278,19 @@ class BackdropsShapeTest {
         assertEquals("What A Cover is about.", cover.description)
         assertEquals(2019, cover.year)
         assertEquals(90, cover.runtime)
+    }
+
+    @Test
+    fun `the long description is read, and preferred over the capped one`() {
+        // Pins the column's position as much as the choice: read from the wrong index this
+        // comes back as the intent uri, the channel, or nothing at all.
+        CountingTv.longDescription = "The whole sentence, which the short column could not hold."
+        sourcedToServer()
+        ShotHooks.pictures = null
+        registerTvProvider()
+
+        val cover = Backdrops.all(context).single { !it.wide }
+        assertEquals("The whole sentence, which the short column could not hold.", cover.description)
     }
 
     @Test

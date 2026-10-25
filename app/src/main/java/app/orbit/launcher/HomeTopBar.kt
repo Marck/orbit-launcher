@@ -415,7 +415,11 @@ internal val ScrimStops = listOf(0.62f, 0.42f, 0.25f, 0.13f, 0.05f, 0f)
  * bar. Over a dark picture it is invisible, so nothing is lost where nothing was wrong.
  */
 @Composable
-internal fun TopScrim(modifier: Modifier = Modifier) {
+internal fun TopScrim(art: ImageBitmap?, modifier: Modifier = Modifier) {
+    // Once per picture: the strip is a few thousand pixels and the artwork only changes when
+    // the hero steps.
+    val pale = remember(art) { art?.let { paleShare(it) } ?: 0f }
+    val strength = scrimStrength(pale)
     Box(
         modifier
             .fillMaxWidth()
@@ -423,9 +427,82 @@ internal fun TopScrim(modifier: Modifier = Modifier) {
             .background(
                 Brush.verticalGradient(
                     *ScrimStops.mapIndexed { i, alpha ->
-                        i / (ScrimStops.size - 1f) to Color.Black.copy(alpha = alpha)
+                        i / (ScrimStops.size - 1f) to
+                            Color.Black.copy(alpha = (alpha * strength).coerceAtMost(ScrimCeiling))
                     }.toTypedArray()
                 )
             )
     )
+}
+
+/** Above this a pixel counts as pale enough to lose a white glyph in. */
+private const val PaleAt = 0.7f
+
+/** Where the scrim starts working harder, and where it stops. */
+internal const val PaleFloor = 0.05f
+internal const val PaleFull = 0.3f
+
+/** The most the fade is ever multiplied by, and the darkest any one stop may end up. */
+internal const val ScrimMaxStrength = 1.5f
+internal const val ScrimCeiling = 0.9f
+
+/**
+ * The share of the strip under the bar, from nothing to one, that is pale enough to swallow a
+ * white glyph.
+ *
+ * A mean would not do. Prime publishes artwork with its own banner laid across the top, a white
+ * pill with black lettering in it, which covers perhaps a quarter of the strip: bright enough to
+ * lose the clock in, not bright enough to move an average over a picture that is dark elsewhere.
+ * Counting how much of it is pale finds that where an average cannot.
+ *
+ * Only the part the glyphs actually sit over is read. The artwork is drawn against the right
+ * edge and covers [BackdropWidth] of the screen, so the left of it is behind the hero's words,
+ * where nothing needs protecting.
+ */
+internal fun paleShare(art: ImageBitmap): Float {
+    val width = art.width
+    val height = art.height
+    if (width <= 0 || height <= 0) return 0f
+    val from = (width * GlyphsFrom).toInt().coerceIn(0, width - 1)
+    val span = width - from
+    val strip = (height * StripShare).toInt().coerceIn(1, height)
+    val line = IntArray(span)
+    var pale = 0
+    var counted = 0
+    for (r in 0 until StripRows) {
+        val y = (strip.toLong() * r / StripRows).toInt().coerceAtMost(height - 1)
+        art.readPixels(line, startX = from, startY = y, width = span, height = 1)
+        var x = 0
+        while (x < span) {
+            if (luminance(line[x]) > PaleAt) pale++
+            counted++
+            x += PixelStep
+        }
+    }
+    return if (counted == 0) 0f else pale.toFloat() / counted
+}
+
+/** Rec. 709, which weights the channels the way the eye does rather than evenly. */
+private fun luminance(pixel: Int): Float =
+    (0.2126f * ((pixel shr 16) and 0xFF) +
+        0.7152f * ((pixel shr 8) and 0xFF) +
+        0.0722f * (pixel and 0xFF)) / 255f
+
+/** Where the glyphs begin across the artwork, and how far down the picture the bar reaches. */
+private const val GlyphsFrom = 0.23f
+private const val StripShare = 0.18f
+private const val StripRows = 4
+private const val PixelStep = 8
+
+/**
+ * What to multiply the fade by for a strip that is [pale] pale.
+ *
+ * One for the dark artwork that most of it is, so nothing changes where nothing was wrong, and
+ * up to [ScrimMaxStrength] once a pale thing is sitting under the bar. Ramped rather than
+ * switched, because the hero steps between pictures and a scrim that snapped between two
+ * darknesses would be its own kind of ugly.
+ */
+internal fun scrimStrength(pale: Float): Float {
+    val over = (pale - PaleFloor) / (PaleFull - PaleFloor)
+    return 1f + (ScrimMaxStrength - 1f) * over.coerceIn(0f, 1f)
 }

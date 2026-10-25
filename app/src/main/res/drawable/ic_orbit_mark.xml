@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Orbit's mark: a gradient ring with a moon riding a tilted orbit across it.
+
+  Geometry rather than a traced bitmap, so it stays sharp at any banner size, carries no
+  licence question of its own and can be read in a diff. The banner at @drawable/banner is
+  the same three paths over black, scaled into a 320x180 frame; change one and change both.
+
+  Built around a centre of 50,50: the ring is a 27.5 to 16.5 annulus, the orbit an ellipse
+  tilted 18.6 degrees whose inner edge is drawn closer in x than in y so the band tapers to a
+  point at its tips, and the moon sits on the band's centre line at its upper right.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <path android:fillType="evenOdd"
+        android:pathData="M22.5,50a27.5,27.5 0 1,0 55,0a27.5,27.5 0 1,0 -55,0z M33.5,50a16.5,16.5 0 1,0 33,0a16.5,16.5 0 1,0 -33,0z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="30" android:startY="28" android:endX="70" android:endY="74">
+                <item android:offset="0" android:color="#FF2B7BFF" />
+                <item android:offset="0.5" android:color="#FF5C53F8" />
+                <item android:offset="1" android:color="#FF8E2AF0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <group android:pivotX="50" android:pivotY="50" android:rotation="-18.6">
+        <path android:fillType="evenOdd"
+            android:pathData="M5.4,50a44.6,14.3 0 1,0 89.2,0a44.6,14.3 0 1,0 -89.2,0z M6.5,50a43.5,10.9 0 1,0 87,0a43.5,10.9 0 1,0 -87,0z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear"
+                    android:startX="6" android:startY="62" android:endX="94" android:endY="34">
+                    <item android:offset="0" android:color="#FFBFCDEC" />
+                    <item android:offset="0.55" android:color="#FFE8EEFA" />
+                    <item android:offset="1" android:color="#FFFFFFFF" />
+                </gradient>
+            </aapt:attr>
+        </path>
+    </group>
+
+    <path android:fillColor="#FFF4F7FF"
+        android:pathData="M74.2,30.5a4.3,4.3 0 1,0 8.6,0a4.3,4.3 0 1,0 -8.6,0z" />
+</vector>

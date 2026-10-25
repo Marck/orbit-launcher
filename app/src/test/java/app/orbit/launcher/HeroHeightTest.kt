@@ -181,6 +181,30 @@ class HeroHeightTest : TvTest() {
         shot("tallest")
     }
 
+    @Test
+    fun `the description takes the room the rest of the hero is not using`() {
+        // The box is a fixed height whatever is in it, so a hero with a one line title and no
+        // episode line was leaving most of the bottom of it empty and cutting the description
+        // off anyway. Worked out before the description is measured, so it is checked here
+        // rather than read back off the screen.
+        val tightest = descriptionLines(titleLines = 2, detail = true, progress = true)
+        val roomiest = descriptionLines(titleLines = 1, detail = false, progress = false)
+
+        assertTrue("a description was dropped outright", tightest >= 1)
+        assertTrue("never more than the cap", roomiest <= DescriptionLines)
+        assertTrue(
+            "a one line title and no episode line bought nothing: $tightest then $roomiest",
+            roomiest > tightest,
+        )
+        // Each thing that is not there makes room, and none of them takes it away.
+        assertTrue(descriptionLines(1, detail = true, progress = true) >= tightest)
+        assertTrue(descriptionLines(2, detail = false, progress = true) >= tightest)
+        assertTrue(descriptionLines(2, detail = true, progress = false) >= tightest)
+        // The tallest hero is the one the fixed height was measured against, so it keeps the
+        // two lines it always had: anything more would be the clipping this must not cause.
+        assertEquals(2, tightest)
+    }
+
     private companion object {
         /**
          * Where the hero starts, in root pixels.

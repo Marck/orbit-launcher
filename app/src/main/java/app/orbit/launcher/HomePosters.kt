@@ -127,6 +127,8 @@ internal fun PosterRow(
         row.restore(null)
     }
 
+    val keys = remember(posters) { pictureKeys(posters) }
+
     LazyRow(
         modifier = Modifier
             .height(PosterRowHeight)
@@ -135,11 +137,11 @@ internal fun PosterRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(start = SafeH, top = RowTop, end = SafeH),
     ) {
-        itemsIndexed(posters, key = { _, picture -> picture.uri }) { index, picture ->
+        itemsIndexed(posters, key = { index, _ -> keys[index] }) { index, picture ->
             PosterTile(
                 picture = picture,
-                requester = row.requester(picture.uri),
-                onFocused = { row.took(picture.uri, index) },
+                requester = row.requester(keys[index]),
+                onFocused = { row.took(keys[index], index) },
                 onClick = { onOpen(picture) },
             )
         }

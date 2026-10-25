@@ -62,6 +62,62 @@ data class Picture(
     val wide: Boolean = true,
 )
 
+/**
+ * A key per picture, unique however the publishing app repeats itself.
+ *
+ * Compose throws the moment two items in a lazy row share a key, and an app has every reason to
+ * publish one image twice: two episodes of one series carry the same series cover, and a title
+ * in two libraries comes back once per library. That crashed Orbit outright while the owner was
+ * moving along the poster row.
+ *
+ * The artwork is still the natural identity, so a repeat is numbered rather than the row being
+ * keyed by position, which would hand one item's composition and its focus memory to another
+ * whenever the list changed underneath.
+ */
+internal fun pictureKeys(pictures: List<Picture>): List<String> {
+    val seen = HashMap<String, Int>(pictures.size)
+    return pictures.map { picture ->
+        // The row's own way in names one thing; the artwork is shared, so it is the fallback.
+        val base = picture.intentUri ?: picture.uri
+        val before = seen.getOrDefault(base, 0)
+        seen[base] = before + 1
+        if (before == 0) base else "$base#$before"
+    }
+}
+
+/**
+ * What the TV provider caps a short description at, cutting mid word to get there.
+ *
+ * Not a guess: Netflix's row for one series arrives as "...who will never check o", which is
+ * exactly this many characters. Every fix for that was aimed at the hero's own trimming, and
+ * none of them could have worked, because the words were already gone before Orbit saw them.
+ */
+internal const val ShortDescriptionCap = 150
+
+/**
+ * The fuller of the two descriptions a row can carry, tidied if it still arrived cut.
+ *
+ * An app publishes a short description and may publish a long one as well. Only the short one
+ * was ever read, and it is the one the provider truncates. So the long one is preferred where
+ * there is one.
+ *
+ * Where there is not, a short one that stopped dead on the cap has its dangling part word taken
+ * off and an ellipsis put on: the same treatment the hero gives text of its own that will not
+ * fit, so a cut by the app and a cut by the screen look alike rather than one looking broken.
+ * A description that really is exactly [ShortDescriptionCap] characters and ends on a whole
+ * word loses that word; it keeps the ellipsis, so it still reads as unfinished rather than wrong.
+ */
+internal fun bestDescription(long: String?, short: String?): String? {
+    val full = long?.trim()?.takeIf { it.isNotEmpty() }
+    val brief = short?.trim()?.takeIf { it.isNotEmpty() }
+    if (full != null && (brief == null || full.length >= brief.length)) return full
+    val text = brief ?: return null
+    if (text.length < ShortDescriptionCap) return text
+    // Stopped at the cap. Anything that ends in its own punctuation finished on purpose.
+    if (text.last() in ".!?\u2026\"')") return text
+    return trimToWord(text, text.length - 1) ?: text
+}
+
 object Backdrops {
 
     /**
@@ -278,6 +334,8 @@ object Backdrops {
                 TvContract.PreviewPrograms.COLUMN_DURATION_MILLIS,
                 TvContract.PreviewPrograms.COLUMN_CHANNEL_ID,
                 TvContract.PreviewPrograms.COLUMN_INTENT_URI,
+                // Appended, not inserted: the rows are read by position below.
+                TvContract.PreviewPrograms.COLUMN_LONG_DESCRIPTION,
             ),
             null,
             null,
@@ -307,7 +365,7 @@ object Backdrops {
                         uri = uri,
                         title = cursor.getString(4)?.takeIf { it.isNotBlank() },
                         seasons = seasons,
-                        description = cursor.getString(6)?.takeIf { it.isNotBlank() },
+                        description = bestDescription(cursor.getString(11), cursor.getString(6)),
                         year = yearOf(cursor.getString(7)),
                         // A series row's duration is one episode's, not the series', and under
                         // a series name that reads as the whole thing being that short.
