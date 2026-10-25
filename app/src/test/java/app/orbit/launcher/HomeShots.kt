@@ -18,6 +18,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.After
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -41,6 +42,12 @@ class HomeShots {
      * its shots still carried the minute they were recorded in and the date they were recorded
      * on. Two recordings happening to land in the same minute is what made the suite look
      * fully deterministic when it was not.
+     *
+     * Now actually measured, which it had not been: two runs of this class alone, minutes
+     * apart, produced 24 shots each and all 24 matched byte for byte. The earlier claim
+     * compared a full-suite recording against an isolated one, and those differ for reasons
+     * that have nothing to do with the clock. [shot] refuses to record with the pin missing, so
+     * losing it again fails by name rather than quietly adding the noise back.
      */
     @Before
     fun pinTheClock() {
@@ -135,6 +142,14 @@ class HomeShots {
     }
 
     private fun shot(name: String) {
+        // A shot taken with the clock unpinned carries the minute it was recorded in, so it
+        // differs from the last recording for a reason nobody changed. This is the fault that
+        // made two recordings of unchanged code disagree on 47 of 79 shots, and the one that
+        // survived in this class because it does not take its setup from TvTest.
+        assertNotNull(
+            "the clock was not pinned, so this shot would differ on every run",
+            ShotHooks.now,
+        )
         rule.onRoot().captureRoboImage("$OUT/$name.png")
     }
 
