@@ -64,12 +64,26 @@ data class Picture(
 
 object Backdrops {
 
-    /** A film or a programme. A clip or a channel strip is not a backdrop. */
+    /**
+     * Something to watch. A channel strip is not a backdrop.
+     *
+     * Clips were left out too, on the reasoning that a clip is a trailer rather than a
+     * programme. Counting what the set actually publishes says otherwise: of the shop front
+     * that was missing from the picker entirely, all 21 of its rows are clips, and that is its
+     * whole catalogue. The type says what an app chose to call its rows, not what they are, and
+     * one app calling everything a clip should not amount to Orbit refusing to read it.
+     *
+     * The filter that matters is the owner's: they pick which apps supply pictures. This one is
+     * only here to keep out rows that are not programmes at all, which is why a channel strip
+     * stays out. On this set that is 15 rows from the TV maker's own shop front and 2 from the
+     * media server, all of them a row's banner rather than anything to watch.
+     */
     private val TYPES = setOf(
         TvContract.PreviewPrograms.TYPE_MOVIE,
         TvContract.PreviewPrograms.TYPE_TV_SERIES,
         TvContract.PreviewPrograms.TYPE_TV_SEASON,
         TvContract.PreviewPrograms.TYPE_TV_EPISODE,
+        TvContract.PreviewPrograms.TYPE_CLIP,
     )
 
     /** Enough for a long sitting without reading the whole list into memory. */

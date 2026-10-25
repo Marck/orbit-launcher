@@ -145,17 +145,31 @@ class BackdropsShapeTest {
             val columns = projection ?: emptyArray()
             val cursor = MatrixCursor(columns)
             if (previews) {
-                // One wide row and one cover, from the same app.
-                cursor.addRow(row(TvContract.PreviewPrograms.ASPECT_RATIO_16_9, "A Wide Still"))
-                cursor.addRow(row(coverRatio, "A Cover"))
+                val kinds = rowTypes
+                if (kinds != null) {
+                    // One row per kind, named after it, so a test can see which survived.
+                    kinds.forEach {
+                        cursor.addRow(
+                            row(TvContract.PreviewPrograms.ASPECT_RATIO_16_9, "Type $it", it)
+                        )
+                    }
+                } else {
+                    // One wide row and one cover, from the same app.
+                    cursor.addRow(row(TvContract.PreviewPrograms.ASPECT_RATIO_16_9, "A Wide Still"))
+                    cursor.addRow(row(coverRatio, "A Cover"))
+                }
             }
             return cursor
         }
 
-        private fun row(aspect: Int, title: String): Array<Any?> = arrayOf(
+        private fun row(
+            aspect: Int,
+            title: String,
+            type: Int = TvContract.PreviewPrograms.TYPE_MOVIE,
+        ): Array<Any?> = arrayOf(
             "server",
             "pic://server/$title",
-            TvContract.PreviewPrograms.TYPE_MOVIE,
+            type,
             aspect,
             title,
             null,
@@ -177,13 +191,20 @@ class BackdropsShapeTest {
 
             /** What the cover row declares. Set per test, because apps do not agree on it. */
             var coverRatio = TvContract.PreviewPrograms.ASPECT_RATIO_2_3
+
+            /** One row per kind instead of the usual pair, for the test about kinds. */
+            var rowTypes: List<Int>? = null
         }
     }
 
-    private fun registerTvProvider(coverRatio: Int = TvContract.PreviewPrograms.ASPECT_RATIO_2_3) {
+    private fun registerTvProvider(
+        coverRatio: Int = TvContract.PreviewPrograms.ASPECT_RATIO_2_3,
+        rowTypes: List<Int>? = null,
+    ) {
         CountingTv.previewQueries = 0
         CountingTv.channelQueries = 0
         CountingTv.coverRatio = coverRatio
+        CountingTv.rowTypes = rowTypes
         val info = android.content.pm.ProviderInfo().apply {
             authority = TvContract.AUTHORITY
             applicationInfo = context.applicationInfo
@@ -264,5 +285,48 @@ class BackdropsShapeTest {
         )
         assertEquals(emptyList<Picture>(), Backdrops.art(context))
         assertEquals(emptyList<Picture>(), Backdrops.posters(context))
+    }
+
+    @Test
+    fun `a clip counts, because a shop front calls its whole catalogue one`() {
+        // Counted on the set: the shop front that was missing from the picker publishes 21
+        // rows and every one of them is a clip. Leaving clips out left that app out whole.
+        sourcedToServer()
+        ShotHooks.pictures = null
+        registerTvProvider(rowTypes = listOf(TvContract.PreviewPrograms.TYPE_CLIP))
+
+        val read = Backdrops.all(context)
+        assertEquals("a clip was dropped, so an app that only publishes clips is invisible", 1, read.size)
+    }
+
+    @Test
+    fun `a channel strip still does not count, since it is not something to watch`() {
+        sourcedToServer()
+        ShotHooks.pictures = null
+        registerTvProvider(rowTypes = listOf(TvContract.PreviewPrograms.TYPE_CHANNEL))
+
+        assertTrue("a row's own banner was taken for a backdrop", Backdrops.all(context).isEmpty())
+    }
+
+    @Test
+    fun `what counts is programmes and clips, and nothing else the contract allows`() {
+        sourcedToServer()
+        ShotHooks.pictures = null
+        // Every kind the contract defines, so adding one later is a decision rather than a
+        // default. Named by the row's own title, which is the kind it was built from.
+        val every = (0..12).toList()
+        registerTvProvider(rowTypes = every)
+
+        val kept = Backdrops.all(context).mapNotNull { it.title?.removePrefix("Type ")?.toIntOrNull() }
+        assertEquals(
+            listOf(
+                TvContract.PreviewPrograms.TYPE_MOVIE,
+                TvContract.PreviewPrograms.TYPE_TV_SERIES,
+                TvContract.PreviewPrograms.TYPE_TV_SEASON,
+                TvContract.PreviewPrograms.TYPE_TV_EPISODE,
+                TvContract.PreviewPrograms.TYPE_CLIP,
+            ).sorted(),
+            kept.sorted(),
+        )
     }
 }
