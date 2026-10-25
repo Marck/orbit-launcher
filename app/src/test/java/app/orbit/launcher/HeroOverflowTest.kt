@@ -109,4 +109,51 @@ class HeroOverflowTest : TvTest() {
         assertNull(trimToWord("Supercalifragilistic", 8))
         assertNull(trimToWord("anything", 0))
     }
+
+    @Test
+    fun `a next episode trims its title and its episode line at a word too`() {
+        // What the media server publishes for a series: a long name, and an episode line that
+        // carries the season, the episode and both numbers. Both were cut by character.
+        ShotHooks.pictures = emptyList()
+        ShotHooks.watchNext = listOf(
+            Resumable(
+                packageName = server,
+                title = "A Series With An Unreasonably Long Name That Will Not Fit On Two Lines " +
+                    "However Generous The Hero Is Feeling About It Today",
+                subtitle = "Season 14 episode 22, the one with the extremely long subtitle on it " +
+                    "that keeps going well past anything a single line at eleven point could hold",
+                description = "Short.",
+                posterUri = "pic://watch/long",
+                intentUri = "orbit://play/episode",
+                progress = null,
+            )
+        )
+        launch(HomeActivity::class.java)
+
+        waitFor("the title to settle") { shownStartingWith("A Series With")?.endsWith("…") == true }
+        val title = shownStartingWith("A Series With")!!
+        endsAtAWord(title.removeSuffix("…"), ShotHooks.watchNext!!.first().title)
+
+        waitFor("the episode line to settle") { shownStartingWith("SEASON 14")?.endsWith("…") == true }
+        val line = shownStartingWith("SEASON 14")!!
+        endsAtAWord(line.removeSuffix("…"), ShotHooks.watchNext!!.first().subtitle!!.uppercase())
+        shot("watch-next-trim")
+    }
+
+    /** The shown text of whichever node starts with [prefix]. */
+    private fun shownStartingWith(prefix: String): String? =
+        rule.onAllNodes(hasText(prefix, substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes()
+            .firstNotNullOfOrNull { node ->
+                node.config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text }
+            }
+
+    /** [shown] is a prefix of [full] that stops exactly where a word does. */
+    private fun endsAtAWord(shown: String, full: String) {
+        assertTrue("not a prefix of the original: $shown", full.startsWith(shown))
+        assertTrue(
+            "cut part way through a word: ...${shown.takeLast(24)}",
+            full.length == shown.length || full[shown.length] == ' ',
+        )
+    }
 }
