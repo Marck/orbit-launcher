@@ -42,12 +42,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -128,12 +131,12 @@ internal fun TopBar(
     }
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(date.format(now), color = Muted, fontSize = 12.sp)
+        Text(date.format(now), color = Muted, fontSize = 12.sp, style = Legible)
         Spacer(Modifier.weight(1f))
         Shortcuts(first, button, destinations, onOpen)
         Avatar(button)
         Spacer(Modifier.width(9.dp))
-        Text(time.format(now), color = Color.White, fontSize = 16.sp)
+        Text(time.format(now), color = Color.White, fontSize = 16.sp, style = Legible)
     }
 }
 
@@ -372,7 +375,37 @@ internal fun TopBarButton(
 }
 
 /** How far down the screen the top fade reaches. Deep enough to clear the bar and its scale. */
-private val ScrimHeight = 72.dp
+/**
+ * The clock and the date, carrying their own contrast.
+ *
+ * A soft black halo, which over a dark picture is invisible and over a pale one is the only
+ * thing holding thin white text apart from what is behind it. It is here so the fade above
+ * does not have to be dark enough to do that job on its own, which is what made it show.
+ */
+private val Legible = TextStyle(
+    shadow = Shadow(color = Color.Black.copy(alpha = 0.85f), offset = Offset.Zero, blurRadius = 10f),
+)
+
+/**
+ * How far the fade reaches.
+ *
+ * Nearly twice what it was. The fade is what hides the fade: run over 72dp it finished while
+ * there was still a third of its darkness left to lose, and the place it finished was a line
+ * across the screen. Measured on the set over a bright picture, the luminance climbed from 7
+ * to 43 down the bar and then flattened at 144px, which is exactly 72dp, and that flattening
+ * is the edge the owner saw as a panel behind the glyphs.
+ */
+private val ScrimHeight = 132.dp
+
+/**
+ * The darkness at each step down the fade.
+ *
+ * Each step is a little over half the one before it, which is what a fade with no edge in it
+ * looks like: the last stops are too faint to find, so there is no line where it stops. The
+ * first stop is lighter than it was, because the clock and the date no longer lean on it
+ * alone, and the glyphs are white silhouettes with a lot of weight to them.
+ */
+internal val ScrimStops = listOf(0.62f, 0.42f, 0.25f, 0.13f, 0.05f, 0f)
 
 /**
  * A fade from black at the top edge to nothing below the bar.
@@ -389,9 +422,9 @@ internal fun TopScrim(modifier: Modifier = Modifier) {
             .height(ScrimHeight)
             .background(
                 Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = 0.75f),
-                    0.6f to Color.Black.copy(alpha = 0.3f),
-                    1f to Color.Transparent,
+                    *ScrimStops.mapIndexed { i, alpha ->
+                        i / (ScrimStops.size - 1f) to Color.Black.copy(alpha = alpha)
+                    }.toTypedArray()
                 )
             )
     )
