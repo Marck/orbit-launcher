@@ -156,12 +156,15 @@ class HeroTvTest : TvTest() {
 
     @Test
     fun `a long title is given a second line rather than cut`() {
-        ShotHooks.watchNext = listOf(
-            episode.copy(title = "A Programme With A Name Far Longer Than The Hero Is Wide")
-        )
+        // Long enough to need the second line, short enough to fit on it. The string this used
+        // to use was longer than two lines hold, and the assertion could not tell: Compose
+        // keeps the whole string in the semantics whatever it actually draws, so the test
+        // passed on a title that was being ellipsized on screen the entire time. What happens
+        // past two lines is HeroOverflowTest's business.
+        val title = "A Programme With A Longish Name"
+        ShotHooks.watchNext = listOf(episode.copy(title = title))
         launch(HomeActivity::class.java)
-        // The whole name, not an ellipsis part way through it.
-        says("A Programme With A Name Far Longer Than The Hero Is Wide")
+        says(title)
         shot("long-title")
     }
 

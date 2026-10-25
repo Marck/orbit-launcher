@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
@@ -322,15 +323,23 @@ internal fun Hero(
  * ellipsis looks like a different kind of mistake.
  */
 @Composable
-private fun TwoLines(text: String) {
+private fun Trimmed(
+    text: String,
+    color: Color,
+    fontSize: TextUnit,
+    maxLines: Int,
+    lineHeight: TextUnit = TextUnit.Unspecified,
+    fontWeight: FontWeight? = null,
+) {
     var shown by remember(text) { mutableStateOf(text) }
     var settled by remember(text) { mutableStateOf(false) }
     Text(
         shown,
-        color = Muted,
-        fontSize = 13.sp,
-        lineHeight = 17.sp,
-        maxLines = DescriptionLines,
+        color = color,
+        fontSize = fontSize,
+        lineHeight = lineHeight,
+        fontWeight = fontWeight,
+        maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         onTextLayout = { layout ->
             if (!settled && layout.hasVisualOverflow) {
@@ -586,24 +595,23 @@ internal fun HeroText(
         // Two lines, because a title does not deserve to be cut: the hero's column is a little
         // over half the screen, and plenty of real programmes are longer than that. Tighter
         // leading than the default, so a second line costs the rows as little height as it can.
-        Text(
+        Trimmed(
             title,
             color = if (focused) Color.White else OnSurface,
             fontSize = 33.sp,
             lineHeight = 36.sp,
             fontWeight = FontWeight.Light,
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
         description?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(6.dp))
             // Two lines. These run to 300 characters, which left to themselves would fill the
             // screen and push the rows off it; one line cuts most of them mid-sentence.
-            TwoLines(it)
+            Trimmed(it, color = Muted, fontSize = 13.sp, lineHeight = 17.sp, maxLines = DescriptionLines)
         }
         detail?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(8.dp))
-            Text(it, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Trimmed(it, color = Muted, fontSize = 11.sp, maxLines = 1)
         }
         // Only when a position was actually reported. No bar beats a made-up one.
         progress?.let {
