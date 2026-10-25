@@ -99,7 +99,7 @@ class VerifyBackHomeTest : TvTest() {
         assertEquals("nl.uitzendinggemist", stored(FavoriteStore.APPS)[0])
         homePress(s)
         assertEquals(myApps, stored(FavoriteStore.APPS))
-        assertFalse(has("APPS - MOVING, OK TO KEEP"))
+        assertFalse(has("FAVORITE APPS - MOVING, OK TO KEEP"))
         assertEquals("TiviMate", focused())
     }
 
@@ -111,7 +111,7 @@ class VerifyBackHomeTest : TvTest() {
         s.moveToState(Lifecycle.State.CREATED); pump(300)
         s.moveToState(Lifecycle.State.RESUMED); pump(1500)
         assertEquals(myApps, stored(FavoriteStore.APPS))
-        assertFalse(has("APPS - MOVING, OK TO KEEP"))
+        assertFalse(has("FAVORITE APPS - MOVING, OK TO KEEP"))
         assertEquals("NPO Start", focused())
     }
 

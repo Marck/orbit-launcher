@@ -452,7 +452,15 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 )
                 Spacer(Modifier.height(14.dp))
             }
-            RowLabel(if (editing != null && editingKey == FavoriteStore.APPS) "APPS - MOVING, OK TO KEEP" else "APPS")
+            // "Favorite apps" is what the picker that fills this row calls itself, and what
+            // the row actually holds: the apps the owner put here, not every app on the set.
+            RowLabel(
+                if (editing != null && editingKey == FavoriteStore.APPS) {
+                    "FAVORITE APPS - MOVING, OK TO KEEP"
+                } else {
+                    "FAVORITE APPS"
+                }
+            )
             AppsRow(
                 noticeFocus = noticeFocus.takeIf { !homeOpensOrbit && !noticeDismissed },
                 apps = favoriteApps,
