@@ -218,7 +218,7 @@ class InputsTopBarTest : TvTest() {
         favorites(myApps, myInputs)
         val s = home()
         p(s, D); p(s, L)                     // inputs-row +
-        val label = rule.onAllNodes(hasText("Add input to favorites"), useUnmergedTree = true)
+        val label = rule.onAllNodes(hasText(AddInputLabel), useUnmergedTree = true)
             .fetchSemanticsNodes().single()
         val bottomDp = label.boundsInRoot.bottom / 2f   // xhdpi
         log("label bottom ${bottomDp}dp, safe limit ${540 - 27}dp")
