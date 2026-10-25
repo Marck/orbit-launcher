@@ -214,12 +214,12 @@ class AppsRowTvTest : TvTest() {
         favorites(myApps, myInputs)
         val s = home()
         press(s, R); press(s, MENU); press(s, D); press(s, OK)
-        assertTrue(has("APPS - MOVING, OK TO KEEP"))
+        assertTrue(has("FAVORITE APPS - MOVING, OK TO KEEP"))
         press(s, U); press(s, D); press(s, MENU) // swallowed during a move
         assertTrue(focused()!!.startsWith("NPO Start")); assertFalse(has("Open"))
         press(s, R); press(s, R); press(s, OK)
         val kept = listOf("ar.tvplayer.tv", "com.google.android.youtube.tv", "org.jellyfin.androidtv", "nl.uitzendinggemist", "org.xbmc.kodi", "com.tv.help")
-        assertEquals(kept, stored(FavoriteStore.APPS)); assertFalse(has("APPS - MOVING, OK TO KEEP"))
+        assertEquals(kept, stored(FavoriteStore.APPS)); assertFalse(has("FAVORITE APPS - MOVING, OK TO KEEP"))
         press(s, MENU); press(s, D); press(s, OK)
         repeat(6) { press(s, L) }
         press(s, BACK)
