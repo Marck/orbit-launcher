@@ -107,6 +107,11 @@ abstract class TvTest {
         ShotHooks.allInputs = Intent("test.allinputs")
         ShotHooks.search = Intent("test.search")
         ShotHooks.defaultHome = true
+        // Being the home app and the home button working are two things. A fixture that only
+        // said the first now gets the notice about the second, which is a real state on a real
+        // TV but not the one these tests are about. Saying a home press has arrived is what
+        // "home is sorted" was always meant to mean here.
+        HomePrefs.rememberHomePress(context)
         // The hooks are one global object and the test JVM is shared, so a class that sets
         // these would otherwise hand them to every class that runs after it.
         ShotHooks.watchNext = null

@@ -41,6 +41,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -90,6 +91,7 @@ class HomeActivity : ComponentActivity() {
     private var inFront = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        noteHomePress(intent)
         super.onCreate(savedInstanceState)
         setContent { SafeAreaScrolling { HomeScreen(events) } }
     }
@@ -104,7 +106,22 @@ class HomeActivity : ComponentActivity() {
     // stopping it. Coming home from an app stops it first, so that case is told apart here.
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        noteHomePress(intent)
         if (inFront) events.tryEmit(HomeEvent.HOME)
+    }
+
+    /**
+     * Remembers that the home button actually reached Orbit.
+     *
+     * The system puts [Intent.CATEGORY_HOME] on the intent it starts the home app with, and
+     * nothing else does: the home button service starts Orbit by class, with no category on it.
+     * So this fires only when the TV itself resolved the home key to Orbit, which is the one
+     * thing that cannot be read out of a setting.
+     */
+    private fun noteHomePress(intent: Intent?) {
+        if (intent?.categories?.contains(Intent.CATEGORY_HOME) == true) {
+            HomePrefs.rememberHomePress(this)
+        }
     }
 
     override fun onStop() {
@@ -179,11 +196,10 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     }
     // With the home button service on, Home reaches Orbit without it being the home app, and the
     // notice would be asking for something already done.
-    val homeOpensOrbit by produceState(initialValue = true, Returns.count) {
-        value = withContext(Dispatchers.IO) {
-            AppRepository.isDefaultHome(context) || isHomeButtonServiceOn(context)
-        }
+    val reach by produceState(initialValue = HomeReach.SERVICE, Returns.count) {
+        value = withContext(Dispatchers.IO) { homeReach(context) }
     }
+    val homeOpensOrbit = reach == HomeReach.SERVICE || reach == HomeReach.HONOURED
     // Kept, so a dismissed notice stays dismissed when Orbit is next started.
     var noticeDismissed by remember { mutableStateOf(HomePrefs.noticeDismissed(context)) }
     var playbackDismissed by remember { mutableStateOf(HomePrefs.playbackNoticeDismissed(context)) }
@@ -410,8 +426,16 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             Spacer(Modifier.height(HeroGap))
             if (!homeOpensOrbit && !noticeDismissed) {
                 Notice(
-                    title = "Orbit is not the home app yet",
-                    detail = "Set it as default so the home button opens Orbit",
+                    title = if (reach == HomeReach.IGNORED) {
+                        "The home button does not reach Orbit"
+                    } else {
+                        "Orbit is not the home app yet"
+                    },
+                    detail = if (reach == HomeReach.IGNORED) {
+                        "This TV sends it to its own launcher. Turn on Orbit home button."
+                    } else {
+                        "Set it as default so the home button opens Orbit"
+                    },
                     requester = noticeFocus,
                     above = heroFocus,
                     // Not every TV has the home app setting. Where it is missing, the
@@ -613,6 +637,35 @@ internal fun Context.openScreen(intent: Intent): Boolean =
     runCatching { startActivity(intent) }.isSuccess
 
 /** True when the owner has turned on Orbit's home button service in the accessibility settings. */
+/**
+ * Whether the home button gets to Orbit, and if not, why not.
+ *
+ * Being the home app on paper and the home button working are not the same thing. On the set
+ * this was written for, the preferred home activity is Orbit and the remote still opens the TV
+ * maker's launcher, because the key never reaches that resolution. A setting cannot tell the
+ * two apart; a home press arriving can.
+ */
+internal enum class HomeReach {
+    /** The service brings Orbit forward, so the button lands here whatever the TV resolves. */
+    SERVICE,
+
+    /** The TV resolves home to Orbit, and a home press has arrived to prove it. */
+    HONOURED,
+
+    /** Orbit is the home app and no home press has ever reached it. The remote is ignoring it. */
+    IGNORED,
+
+    /** Orbit is not the home app, and nothing is bringing it forward. */
+    NONE,
+}
+
+internal fun homeReach(context: Context): HomeReach = when {
+    isHomeButtonServiceOn(context) -> HomeReach.SERVICE
+    !AppRepository.isDefaultHome(context) -> HomeReach.NONE
+    HomePrefs.homePressSeen(context) -> HomeReach.HONOURED
+    else -> HomeReach.IGNORED
+}
+
 private fun isHomeButtonServiceOn(context: Context): Boolean {
     val ours = ComponentName(context, HomeButtonService::class.java)
     val enabled = Settings.Secure.getString(
@@ -627,6 +680,7 @@ internal object HomePrefs {
     private const val KEY_NOTICE_DISMISSED = "notice_dismissed"
     private const val KEY_LISTINGS_ASKED = "listings_asked"
     private const val KEY_PLAYBACK_DISMISSED = "playback_notice_dismissed"
+    private const val KEY_HOME_PRESS_SEEN = "home_press_seen"
 
     fun noticeDismissed(context: Context): Boolean =
         prefs(context).getBoolean(KEY_NOTICE_DISMISSED, false)
@@ -637,6 +691,16 @@ internal object HomePrefs {
 
     fun rememberListingsAsked(context: Context) {
         prefs(context).edit().putBoolean(KEY_LISTINGS_ASKED, true).apply()
+    }
+
+    /** Whether the TV has ever started Orbit as the home app. */
+    fun homePressSeen(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HOME_PRESS_SEEN, false)
+
+    fun rememberHomePress(context: Context) {
+        // The KTX form, which is what lint asks for. The neighbours predate the check and are
+        // in the baseline; a new one would push the count past it.
+        prefs(context).edit { putBoolean(KEY_HOME_PRESS_SEEN, true) }
     }
 
     fun dismissNotice(context: Context) {

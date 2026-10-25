@@ -106,6 +106,11 @@ class HomeShots {
         ShotHooks.storeIcon = banner("▶", 0xFFFFFFFF.toInt(), 0xFF01875F.toInt(), 120f)
         ShotHooks.allInputs = Intent("inputs")
         ShotHooks.defaultHome = true
+        // Being the home app and the home button working are two things. A fixture that only
+        // said the first now gets the notice about the second, which is a real state on a real
+        // TV but not the one these tests are about. Saying a home press has arrived is what
+        // "home is sorted" was always meant to mean here.
+        HomePrefs.rememberHomePress(context)
         rule.mainClock.autoAdvance = false
     }
 
