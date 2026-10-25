@@ -4,19 +4,77 @@ A replacement home screen for an Android TV set: one screen, no advertising rows
 a hero for what you were last watching, a scrolling row of favorite apps, and a row
 of TV inputs.
 
-Status: in use on the owner's set. Favorites, reordering, the input row, the pickers,
+Status: in use on the author's set. Favorites, reordering, the input row, the pickers,
 the profile picture and the hero all work.
 
-## Contents
+It was written for one Android TV set and nothing about it is specific to that set beyond
+what is written down here. It needs no account, no server and no network service of its
+own, and it sends nothing anywhere.
+
+## Putting Orbit on your TV
+
+Four steps. The whole thing takes about ten minutes, and every one of them is reversible.
+
+**1. Build and install it.** You need a JDK (17 or newer) and the Android SDK. There are no
+prebuilt releases, so you build it yourself:
+
+```bash
+export JAVA_HOME=/path/to/jdk
+export ANDROID_HOME=/path/to/android-sdk
+echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+adb connect <your-tv-ip>:5555          # or use a USB cable
+./gradlew assembleRelease
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+Enable developer options and USB or network debugging on the TV first: Settings, Device
+Preferences, About, then press Build seven times. See [Signing](#signing) before you build,
+because the key you sign with decides whether you can ever update without losing your
+settings.
+
+**2. Open it once and give it the listings permission.** Orbit asks the first time it needs
+it, from the hero. Without it Orbit still works, it just has nothing to put in the hero or
+the poster row, because those are other apps' rows and reading them needs
+`READ_TV_LISTINGS`. Nothing leaves the TV either way.
+
+**3. Make it your home screen.** See [Making Orbit the home screen](#making-orbit-the-home-screen).
+Expect this to be the fiddly step: on at least one maker's set the stock launcher cannot be
+outvoted and has to be disabled instead. There is a documented way back.
+
+**4. Choose what is on it.** Everything on the home screen is yours to pick:
+
+| What | How |
+|---|---|
+| Favorite apps | The grid glyph in the top bar, or the `+` tile at the end of the apps row |
+| Reorder a tile | Focus it, hold OK, then left and right. OK keeps it, Back puts it back |
+| Remove a tile | Focus it, hold OK, then Remove |
+| TV inputs | The `+` tile at the end of the inputs row |
+| Which apps may fill the hero | The picture glyph in the top bar |
+| Profile picture | The avatar glyph in the top bar |
+
+Nothing is configured in a file, and nothing you pick is stored anywhere but the TV.
+
+### If you want to undo all of it
+
+```bash
+adb shell pm enable com.google.android.tvlauncher   # if you disabled it
+adb uninstall app.orbit.launcher
+```
+
+The stock launcher comes straight back. Uninstalling also takes Orbit's settings and its
+permission with it.
+
+## The mockups
 
 | File | What it is |
 |---|---|
-| `index.html` | The chosen design, Orbit, with its live-TV variant, uninstall feedback, guide fallback ladder, scale spec and the add-to-favorites picker |
+| `index.html` | The chosen design, with its live-TV variant, uninstall feedback, guide fallback ladder, scale spec and the add-to-favorites picker |
 | `alternatives.html` | Three directions that were considered and rejected |
 | `bg-hero.jpg` | Generated placeholder backdrop for the mockups |
 
-Open either HTML file in a browser. They are static, with no build step and no
-external requests.
+Static, no build step and no external requests. They are the design the app was built from,
+kept because they are still the quickest way to see what was intended.
 
 ## Notes on content
 
@@ -34,7 +92,9 @@ MIT. See `LICENSE`.
 
 ## Building
 
-Needs JDK 17 and the Android SDK (platform 35, build-tools 35).
+Needs a JDK (17 or newer; the build targets JVM 17 bytecode) and the Android SDK.
+`compileSdk` is 37, `targetSdk` 35 and `minSdk` 29, so the oldest set this runs on is
+Android 10.
 
 ```bash
 export JAVA_HOME=/path/to/jdk-17
