@@ -332,7 +332,6 @@ private fun Trimmed(
     fontWeight: FontWeight? = null,
 ) {
     var shown by remember(text) { mutableStateOf(text) }
-    var settled by remember(text) { mutableStateOf(false) }
     Text(
         shown,
         color = color,
@@ -341,12 +340,20 @@ private fun Trimmed(
         fontWeight = fontWeight,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
+        // Only ever cuts the original, which is what stops this going round again: once
+        // [shown] is the shortened string it is no longer the same object as [text], so a
+        // second overflow cannot start a third pass.
+        //
+        // It is deliberately not a "have we been here before" flag. The hero's row is measured
+        // with IntrinsicSize.Min, so the text is laid out more than once and the first of those
+        // is at a width it does not overflow. A flag set on the first callback latched on that
+        // pass and let the real one through untouched: correct under test, and on the set the
+        // description still read "...never check o".
         onTextLayout = { layout ->
-            if (!settled && layout.hasVisualOverflow) {
+            if (layout.hasVisualOverflow && shown === text) {
                 trimToWord(text, layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
                     ?.let { shown = it }
             }
-            settled = true
         },
     )
 }
