@@ -13,8 +13,22 @@ import androidx.compose.ui.unit.dp
 // Sizes come straight from section B of the requirements.
 internal val SafeH = 48.dp
 internal val SafeV = 27.dp
-internal val TileW = 111.dp
-internal val TileH = 66.dp
+
+/**
+ * A tile, at the shape of the thing it holds.
+ *
+ * The requirement said 111 x 66dp, which is 1.68:1, and in the same breath said the artwork in
+ * it is an app's 320x180 banner, which is 16:9. Those do not fit, and the tile drew the banner
+ * to its own width and centred it: measured on the set, the Jellyfin tile was 132px tall with
+ * 126px of banner in it, leaving four pixels of tile above and three below. The owner saw a
+ * black line across the top and bottom of every app.
+ *
+ * So the tile is 16:9 now, and a banner fills it exactly. 112dp rather than 111 because at this
+ * panel's density that is 224px, and 224 is divisible by 16: the banner lands on whole pixels
+ * instead of a rounding error that would put a hairline back.
+ */
+internal val TileW = 112.dp
+internal val TileH = 63.dp
 // Narrow enough that a typical set's inputs fit the safe area without the row scrolling. A
 // scrolling row slides its first tile out of line with the apps above it.
 internal val InputW = 100.dp
