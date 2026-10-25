@@ -7,6 +7,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.view.KeyEvent
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -37,9 +39,9 @@ class PosterRowTvTest : TvTest() {
 
     private val server = "org.jellyfin.androidtv"
 
-    private fun cover(title: String, intentUri: String? = null) =
+    private fun cover(title: String, intentUri: String? = null, pkg: String = server) =
         Picture(
-            packageName = server,
+            packageName = pkg,
             uri = "pic://cover/$title",
             title = title,
             seasons = null,
@@ -91,6 +93,15 @@ class PosterRowTvTest : TvTest() {
         assertTrue("not on screen: $text", onScreen(text))
     }
 
+    /** Whether the top bar is on screen, rather than scrolled off the top of the column. */
+    private fun topBarShown(): Boolean = runCatching {
+        rule.onNodeWithContentDescription("Search").assertIsDisplayed()
+    }.isSuccess
+
+    private fun countOnScreen(text: String): Int =
+        rule.onAllNodes(androidx.compose.ui.test.hasText(text, substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().size
+
     private fun silentAbout(text: String) =
         assertFalse("should not be on screen: $text", onScreen(text))
 
@@ -101,13 +112,67 @@ class PosterRowTvTest : TvTest() {
     }
 
     @Test
-    fun `a cover gets a row of its own, under a label that does not overclaim`() {
+    fun `a cover gets a row of its own, named after the app it came from`() {
         ShotHooks.pictures = listOf(cover("A Cover On The Server"))
         launch(HomeActivity::class.java)
-        says("POSTERS")
-        // Not "library": most of these come from a shop front, not from anything the owner has.
+        says("ON JELLYFIN")
+        // Not "library": that is a claim about the owner, not about where the row came from.
         silentAbout("LIBRARY")
         shot("posters")
+    }
+
+    @Test
+    fun `covers from more than one app keep the name that claims nothing`() {
+        ShotHooks.pictures = listOf(
+            cover("A Cover On The Server"),
+            // A second chosen app. An app the owner never picked has its covers filtered
+            // out long before the label, so it could not make the row mixed.
+            cover("A Cover From Somewhere Else", pkg = "com.google.android.youtube.tv"),
+        )
+        launch(HomeActivity::class.java)
+        says("POSTERS")
+        silentAbout("ON JELLYFIN")
+        silentAbout("ON YOUTUBE")
+    }
+
+    @Test
+    fun `an app Orbit cannot name does not put its package on the screen`() {
+        // Checked on the rule rather than through the screen: a cover from an app the owner
+        // never chose is filtered out before any label is worked out, so the only way to reach
+        // this is an app that went away between the choosing and the read.
+        val orphan = cover("A Cover", pkg = "com.an.app.that.went.away")
+        assertEquals("POSTERS", posterRowLabel(listOf(orphan), ShotHooks.apps.orEmpty()))
+    }
+
+    @Test
+    fun `an app with a blank name is not named either`() {
+        val blank = app("com.quiet.app", "   ", null)
+        val picture = cover("A Cover", pkg = "com.quiet.app")
+        assertEquals("POSTERS", posterRowLabel(listOf(picture), listOf(blank)))
+    }
+
+    @Test
+    fun `the top bar comes back when focus leaves the posters`() {
+        // With the posters in, the column is taller than the screen. Compose scrolls a row
+        // into view as it takes focus and never scrolls back, which left the top bar and the
+        // date off the top of the screen for as long as focus stayed below the hero.
+        ShotHooks.pictures = List(12) { cover("Cover number $it") }
+        val s = launch(HomeActivity::class.java)
+        says("ON JELLYFIN")
+        assertTrue("the top bar should be on screen to begin with", topBarShown())
+
+        // Down past the posters and into the inputs, which is as far as the column goes.
+        ontoPosters(s)
+        press(s, KeyEvent.KEYCODE_DPAD_DOWN)
+        waitFor("the top bar to scroll away", diagnose = { "focus: ${focused()}" }) { !topBarShown() }
+        // Proves the rest of this test is testing something: with nothing scrolled away there
+        // is nothing to come back from, and the assertions below would hold on their own.
+        assertFalse("the rows below never pushed the top bar off screen", topBarShown())
+
+        press(s, KeyEvent.KEYCODE_DPAD_UP)
+        press(s, KeyEvent.KEYCODE_DPAD_UP)
+        waitFor("the top bar to come back", diagnose = { "focus: ${focused()}" }) { topBarShown() }
+        assertTrue("the top bar never came back after the posters", topBarShown())
     }
 
     @Test
@@ -116,6 +181,10 @@ class PosterRowTvTest : TvTest() {
         launch(HomeActivity::class.java)
         says("APPS")
         silentAbout("POSTERS")
+        // The hero names the still it is showing with the same words the row would use, so
+        // absence cannot be asserted here. Counting can: one line is the hero's, two would
+        // mean a row had been drawn for a set that has no covers.
+        assertEquals("a poster row was drawn with nothing in it", 1, countOnScreen("ON JELLYFIN"))
         shot("no-posters")
     }
 
@@ -123,9 +192,11 @@ class PosterRowTvTest : TvTest() {
     fun `a cover is never stretched across the hero`() {
         ShotHooks.pictures = listOf(cover("A Cover On The Server"))
         launch(HomeActivity::class.java)
-        says("POSTERS")
-        // The hero names what it is showing. A cover reaching it would be named there too.
-        silentAbout("ON JELLYFIN")
+        says("ON JELLYFIN")
+        // The hero writes out the title of whatever it is showing, and a tile does not: with
+        // artwork on it a cover says its name only to a screen reader. So the title being
+        // nowhere in the text on screen is the cover not having reached the hero.
+        silentAbout("A Cover On The Server")
     }
 
     @Test
@@ -143,7 +214,7 @@ class PosterRowTvTest : TvTest() {
             cover("A Cover On The Server", intentUri = itemIntent(server, "item-42"))
         )
         val s = launch(HomeActivity::class.java)
-        says("POSTERS")
+        says("ON JELLYFIN")
         ontoPosters(s)
         press(s, KeyEvent.KEYCODE_DPAD_CENTER)
         val started = nextStarted()
@@ -155,7 +226,7 @@ class PosterRowTvTest : TvTest() {
     fun `a poster with no way in still opens the app that published it`() {
         ShotHooks.pictures = listOf(cover("No Way In"))
         val s = launch(HomeActivity::class.java)
-        says("POSTERS")
+        says("ON JELLYFIN")
         ontoPosters(s)
         press(s, KeyEvent.KEYCODE_DPAD_CENTER)
         val started = nextStarted()
@@ -167,7 +238,7 @@ class PosterRowTvTest : TvTest() {
     fun `the inputs row is still reachable once the posters have pushed it off the screen`() {
         ShotHooks.pictures = List(8) { cover("Cover ${it + 1}") }
         val s = launch(HomeActivity::class.java)
-        says("POSTERS")
+        says("ON JELLYFIN")
         // Down through the posters and on into the inputs, which now sit below the fold. The
         // screen scrolls to bring them up; without that they would be drawn and unreachable.
         ontoPosters(s)

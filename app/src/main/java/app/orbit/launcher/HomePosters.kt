@@ -87,6 +87,27 @@ internal fun rememberPosters(library: List<Picture>?): List<Picture> {
     return remember(library) { library?.let { Backdrops.covers(it, context) }.orEmpty() }
 }
 
+/**
+ * What to call the row of covers.
+ *
+ * "POSTERS" says what they are and nothing about where they came from, which was the honest
+ * name while the row was taken to be mostly shop fronts. Measured on the set it is not: every
+ * cover in the row came from the owner's own media server. So when they all come from one app
+ * the row is named after that app, in the same words the hero uses directly above it, and when
+ * they come from more than one it keeps the name that claims nothing.
+ *
+ * An app Orbit cannot name keeps the neutral name as well. A package name is not something to
+ * put on a television, and naming the row after an app that is no longer installed would be
+ * claiming more than Orbit knows.
+ */
+internal fun posterRowLabel(posters: List<Picture>, apps: List<LaunchableApp>): String {
+    val only = posters.mapTo(mutableSetOf()) { it.packageName }.singleOrNull() ?: return "POSTERS"
+    val named = apps.firstOrNull { it.packageName == only }?.label?.trim()
+        ?.takeIf { it.isNotEmpty() } ?: return "POSTERS"
+    // The hero's own formatter, so the two lines on the screen read as one voice.
+    return sourceOf(named, null)
+}
+
 @Composable
 internal fun PosterRow(
     posters: List<Picture>,

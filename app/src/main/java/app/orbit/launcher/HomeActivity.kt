@@ -230,6 +230,8 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     var toFirst by remember { mutableIntStateOf(0) }
     // Saved with the activity, so focus comes back to the same place after it is recreated.
     var zone by rememberSaveable { mutableStateOf(Zone.APPS) }
+    // Hoisted so the column can be put back to the top. See the effect further down.
+    val column = rememberScrollState()
     var lastTop by rememberSaveable { mutableStateOf<String?>(null) }
     fun moveTo(where: Zone) {
         if (Remote.handling) zone = where
@@ -332,6 +334,15 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         }
     }
 
+    // Compose scrolls a row into view as it takes focus, but it never scrolls back out. Going
+    // down to the posters pushed the column up, and coming back to the apps row left it exactly
+    // where the posters had put it, with the top bar and the date off the top of the screen.
+    // The top bar, the hero and the apps row all sit at the top of the column, so whenever
+    // focus is in one of them that is where the column belongs.
+    LaunchedEffect(zone) {
+        if (zone == Zone.TOP || zone == Zone.HERO || zone == Zone.APPS) column.animateScrollTo(0)
+    }
+
     // There is nothing behind the home screen for Back to go to. Left to the system, Back would
     // close Orbit, only for it to be started again from scratch with nothing focused. A menu or a
     // move takes Back for itself before it gets here.
@@ -356,7 +367,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         // and the glyphs whole. A fade down from the top edge holds them legible against any
         // picture, and over a dark one there is nothing to see.
         TopScrim(Modifier.align(Alignment.TopCenter))
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxSize().verticalScroll(column)) {
             // No safe margin below: the space under the hero stretches anyway, and the notice
             // needs that room to fit above the rows.
             Column(Modifier.padding(start = SafeH, top = SafeV, end = SafeH)) {
@@ -475,11 +486,11 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             )
             // Smaller than it looks: the apps row already ends in room for its tile labels.
             Spacer(Modifier.height(12.dp))
-            // Named for what it holds rather than where it came from. "Library" would be the
-            // same claim the hero's own source line was taken out for: most of these covers
-            // come from a shop front, not from anything the owner has.
+            // Named after the app the covers came from when they all came from one, and after
+            // what they are when they did not. The old fixed "POSTERS" was justified by the
+            // covers mostly coming from a shop front, which measuring the set disproved.
             if (posters.isNotEmpty()) {
-                RowLabel("POSTERS")
+                RowLabel(posterRowLabel(posters, apps))
                 PosterRow(
                     posters = posters,
                     refocus = refocusLibrary,
