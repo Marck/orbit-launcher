@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -371,5 +372,52 @@ class HeroTvTest : TvTest() {
         pump(200)
         s.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
         pump(1500)
+    }
+
+    /** Which of [titles] the hero is showing, or null while it is showing none of them. */
+    private fun heroTitle(titles: List<String>): String? = titles.firstOrNull { onScreen(it) }
+
+    @Test
+    fun `right steps the hero on and left steps it back`() {
+        // Bounded pumps on purpose. The hero also moves on by itself every CycleMs, so a test
+        // that waits for the picture to change gets a pass whether the keys work or not: that
+        // is exactly what the first version of this test did.
+        val titles = listOf("First Ambient", "Second Ambient", "Third Ambient")
+        ShotHooks.pictures = titles.map { picture(it, description = "What $it is about.") }
+        val s = launch(HomeActivity::class.java)
+        ontoHero(s)
+        waitFor("the hero to show one of its pictures") { heroTitle(titles) != null }
+        val before = heroTitle(titles)
+
+        // One press, one settle, nowhere near the ten seconds the hero cycles on its own.
+        press(s, KeyEvent.KEYCODE_DPAD_RIGHT, settle = 600)
+        val middle = heroTitle(titles)
+        assertNotNull("the hero stopped showing anything", middle)
+        assertTrue("right did not step the hero on", middle != before)
+
+        press(s, KeyEvent.KEYCODE_DPAD_LEFT, settle = 600)
+        // The automatic cycle only ever goes forwards, so with three pictures it cannot land
+        // back where it started in two steps. Coming back is the step going the other way.
+        assertEquals("left did not step the hero back", before, heroTitle(titles))
+        // And neither key took focus off the hero.
+        assertFalse("a step took focus out of the hero: ${focused()}", focused() in topBarButtons)
+    }
+
+    @Test
+    fun `a step wraps off either end`() {
+        // Checked here rather than through the screen: the cycle starts wherever the shuffle
+        // put it, so the step off the front is not reachable by pressing keys on purpose.
+        assertEquals(1, stepTo(0, 1, 3))
+        assertEquals(2, stepTo(1, 1, 3))
+        // Off the end, round to the front.
+        assertEquals(0, stepTo(2, 1, 3))
+        // Off the front, round to the end. This is the one Kotlin's % gets wrong.
+        assertEquals(2, stepTo(0, -1, 3))
+        assertEquals(0, stepTo(1, -1, 3))
+        // A single entry stays put, whichever way it is stepped.
+        assertEquals(0, stepTo(0, 1, 1))
+        assertEquals(0, stepTo(0, -1, 1))
+        // And an empty cycle has nowhere to be but the start.
+        assertEquals(0, stepTo(0, 1, 0))
     }
 }

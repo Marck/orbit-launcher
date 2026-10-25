@@ -252,8 +252,21 @@ internal fun Hero(
                     // for its menu. The release is swallowed so the hero does not also resume.
                     .onPreviewKeyEvent { event ->
                         val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
+                        val back = event.key == Key.DirectionLeft
+                        val on = event.key == Key.DirectionRight
+                        // Only while there is a cycle to step through. With one picture, or
+                        // none, right still leaves for the top bar the way it always has.
+                        val cycling = (back || on) && watching.entries > 1
                         val press = event.nativeKeyEvent.downTime
                         when {
+                            // Held as well as tapped, so the owner can run through a long list
+                            // without pressing once per picture.
+                            cycling && event.type == KeyEventType.KeyDown -> {
+                                watching.step(if (on) 1 else -1)
+                                true
+                            }
+                            // The release too, or it would move focus after the step.
+                            cycling && event.type == KeyEventType.KeyUp -> true
                             ok && event.type == KeyEventType.KeyDown && event.isHeld() -> {
                                 if (heldPress != press) {
                                     heldPress = press
@@ -292,6 +305,15 @@ internal fun Hero(
         }
 }
 
+/**
+ * Where a step of [by] lands, wrapping both ways.
+ *
+ * Its own function so the wrapping can be checked exhaustively. Inside the hero it would only
+ * ever be exercised at whatever the cycle happened to be showing, and the step that matters
+ * most is the one off either end.
+ */
+internal fun stepTo(index: Int, by: Int, size: Int): Int = if (size < 1) 0 else (index + by).mod(size)
+
 /** What the hero knows about Continue watching, read once for the whole screen. */
 internal class Watching(
     val item: Resumable?,
@@ -311,6 +333,18 @@ internal class Watching(
     val granted: Boolean,
     val asked: Boolean,
     val ask: () -> Unit,
+    /**
+     * How many entries the hero is cycling through, so the screen can tell whether stepping
+     * through them means anything. One picture is not a cycle.
+     */
+    val entries: Int = 0,
+    /**
+     * Steps the cycle by [by], forwards or back, and starts its wait again.
+     *
+     * The hero moves on by itself every [CycleMs]. Without the restart, a step taken a moment
+     * before the timer fired would be followed straight away by one nobody asked for.
+     */
+    val step: (by: Int) -> Unit = {},
 )
 
 /**
@@ -342,7 +376,9 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     val mine = remember(items, focusedApp) { items.filter { it.packageName == focusedApp } }
     // Back to the first whenever the list itself changes, so the step is always within it.
     var index by remember(mine) { mutableIntStateOf(0) }
-    LaunchedEffect(mine) {
+    // Bumped by a step from the remote, which restarts the effect below and with it the wait.
+    var stepped by remember(mine) { mutableIntStateOf(0) }
+    LaunchedEffect(mine, stepped) {
         if (mine.size < 2) return@LaunchedEffect
         while (true) {
             delay(CycleMs)
@@ -362,7 +398,8 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     }
     val pool = ambient.orEmpty()
     var ambientIndex by remember(ambient) { mutableIntStateOf(0) }
-    LaunchedEffect(ambient, item != null) {
+    var ambientStepped by remember(ambient) { mutableIntStateOf(0) }
+    LaunchedEffect(ambient, item != null, ambientStepped) {
         if (item != null || pool.size < 2) return@LaunchedEffect
         while (true) {
             delay(CycleMs)
@@ -409,9 +446,25 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     // offer a way back and then take it away again, the thing it was taken out for.
     val looking = ambient == null || (picture != null && art == null && fetched != uri)
     val settling = item == null && granted && shown == null && looking && !waited
-    return Watching(item, progress, shown, settling, art, granted, asked) {
-        ask.launch(ContinueWatching.PERMISSION)
-    }
+    // Whichever cycle is the live one. Only one ever is: a programme to carry on with takes
+    // the hero, and the ambient pictures only run when there is none.
+    val entries = if (item != null) mine.size else pool.size
+    return Watching(
+        item, progress, shown, settling, art, granted, asked,
+        ask = { ask.launch(ContinueWatching.PERMISSION) },
+        entries = entries,
+        step = { by ->
+            if (item != null) {
+                if (mine.size > 1) {
+                    index = stepTo(index, by, mine.size)
+                    stepped++
+                }
+            } else if (pool.size > 1) {
+                ambientIndex = stepTo(ambientIndex, by, pool.size)
+                ambientStepped++
+            }
+        },
+    )
 }
 
 /**
