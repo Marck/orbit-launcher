@@ -1,6 +1,7 @@
 package app.orbit.launcher
 
 import android.content.Context
+import android.database.Cursor
 import android.media.tv.TvContract
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -318,29 +319,47 @@ object Backdrops {
     }.getOrDefault(emptyMap())
 
     /** Walks the preview rows that are a film or a programme and have a picture. */
+    /**
+     * The preview rows, with the long description where the provider has that column.
+     *
+     * It has been part of the contract since preview rows existed, but a provider that does
+     * not have it answers a projection naming it by throwing, and the read is wrapped, so the
+     * cost would be every backdrop rather than one field. Asked for once, dropped if it is not
+     * there, and the row reader checks the column count rather than assuming either way.
+     */
+    private fun previews(context: Context): Cursor? {
+        val base = arrayOf(
+            TvContract.PreviewPrograms.COLUMN_PACKAGE_NAME,
+            TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI,
+            TvContract.PreviewPrograms.COLUMN_TYPE,
+            TvContract.PreviewPrograms.COLUMN_POSTER_ART_ASPECT_RATIO,
+            TvContract.PreviewPrograms.COLUMN_TITLE,
+            TvContract.PreviewPrograms.COLUMN_ITEM_COUNT,
+            TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION,
+            TvContract.PreviewPrograms.COLUMN_RELEASE_DATE,
+            TvContract.PreviewPrograms.COLUMN_DURATION_MILLIS,
+            TvContract.PreviewPrograms.COLUMN_CHANNEL_ID,
+            TvContract.PreviewPrograms.COLUMN_INTENT_URI,
+        )
+        // Appended, not inserted: the rows are read by position below.
+        val withLong = base + TvContract.PreviewPrograms.COLUMN_LONG_DESCRIPTION
+        fun ask(projection: Array<String>) = runCatching {
+            context.contentResolver.query(
+                TvContract.PreviewPrograms.CONTENT_URI,
+                projection,
+                null,
+                null,
+                null,
+            )
+        }.getOrNull()
+        return ask(withLong) ?: ask(base)
+    }
+
+    internal const val LongDescriptionColumn = 11
+
     private inline fun read(context: Context, onRow: (Picture) -> Unit) {
         val rows = rowNames(context)
-        context.contentResolver.query(
-            TvContract.PreviewPrograms.CONTENT_URI,
-            arrayOf(
-                TvContract.PreviewPrograms.COLUMN_PACKAGE_NAME,
-                TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI,
-                TvContract.PreviewPrograms.COLUMN_TYPE,
-                TvContract.PreviewPrograms.COLUMN_POSTER_ART_ASPECT_RATIO,
-                TvContract.PreviewPrograms.COLUMN_TITLE,
-                TvContract.PreviewPrograms.COLUMN_ITEM_COUNT,
-                TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION,
-                TvContract.PreviewPrograms.COLUMN_RELEASE_DATE,
-                TvContract.PreviewPrograms.COLUMN_DURATION_MILLIS,
-                TvContract.PreviewPrograms.COLUMN_CHANNEL_ID,
-                TvContract.PreviewPrograms.COLUMN_INTENT_URI,
-                // Appended, not inserted: the rows are read by position below.
-                TvContract.PreviewPrograms.COLUMN_LONG_DESCRIPTION,
-            ),
-            null,
-            null,
-            null,
-        ).use { cursor ->
+        previews(context).use { cursor ->
             if (cursor == null) return
             while (cursor.moveToNext()) {
                 if (cursor.isNull(2) || cursor.getInt(2) !in TYPES) continue
@@ -365,7 +384,14 @@ object Backdrops {
                         uri = uri,
                         title = cursor.getString(4)?.takeIf { it.isNotBlank() },
                         seasons = seasons,
-                        description = bestDescription(cursor.getString(11), cursor.getString(6)),
+                        description = bestDescription(
+                            long = if (cursor.columnCount > LongDescriptionColumn) {
+                                cursor.getString(LongDescriptionColumn)
+                            } else {
+                                null
+                            },
+                            short = cursor.getString(6),
+                        ),
                         year = yearOf(cursor.getString(7)),
                         // A series row's duration is one episode's, not the series', and under
                         // a series name that reads as the whole thing being that short.

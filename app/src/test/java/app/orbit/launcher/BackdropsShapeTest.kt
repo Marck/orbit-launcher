@@ -52,6 +52,7 @@ class BackdropsShapeTest {
     fun tearDown() {
         ShotHooks.pictures = null
         CountingTv.longDescription = null
+        CountingTv.rejectLongDescription = false
     }
 
     @Test
@@ -143,6 +144,12 @@ class BackdropsShapeTest {
         ): Cursor {
             val previews = uri.toString().startsWith(TvContract.PreviewPrograms.CONTENT_URI.toString())
             if (previews) previewQueries++ else channelQueries++
+            // A provider without the column answers by throwing, not by leaving it null.
+            if (rejectLongDescription &&
+                projection?.contains(TvContract.PreviewPrograms.COLUMN_LONG_DESCRIPTION) == true
+            ) {
+                throw IllegalArgumentException("Invalid column long_description")
+            }
             val columns = projection ?: emptyArray()
             val cursor = MatrixCursor(columns)
             if (previews) {
@@ -151,17 +158,21 @@ class BackdropsShapeTest {
                     // One row per kind, named after it, so a test can see which survived.
                     kinds.forEach {
                         cursor.addRow(
-                            row(TvContract.PreviewPrograms.ASPECT_RATIO_16_9, "Type $it", it)
+                            fit(row(TvContract.PreviewPrograms.ASPECT_RATIO_16_9, "Type $it", it), columns)
                         )
                     }
                 } else {
                     // One wide row and one cover, from the same app.
-                    cursor.addRow(row(TvContract.PreviewPrograms.ASPECT_RATIO_16_9, "A Wide Still"))
-                    cursor.addRow(row(coverRatio, "A Cover"))
+                    cursor.addRow(fit(row(TvContract.PreviewPrograms.ASPECT_RATIO_16_9, "A Wide Still"), columns))
+                    cursor.addRow(fit(row(coverRatio, "A Cover"), columns))
                 }
             }
             return cursor
         }
+
+        /** A row cut to the projection asked for, the way a real provider answers. */
+        private fun fit(values: Array<Any?>, columns: Array<out String>): Array<Any?> =
+            if (values.size <= columns.size) values else values.copyOf(columns.size)
 
         private fun row(
             aspect: Int,
@@ -197,6 +208,9 @@ class BackdropsShapeTest {
 
             /** The long description, which only the test about it fills in. */
             var longDescription: String? = null
+
+            /** A provider that has never heard of the long description column. */
+            var rejectLongDescription = false
 
             /** One row per kind instead of the usual pair, for the test about kinds. */
             var rowTypes: List<Int>? = null
@@ -291,6 +305,22 @@ class BackdropsShapeTest {
 
         val cover = Backdrops.all(context).single { !it.wide }
         assertEquals("The whole sentence, which the short column could not hold.", cover.description)
+    }
+
+    @Test
+    fun `a provider without the long description still gives every backdrop`() {
+        // The read is wrapped, so a projection the provider rejects would cost the whole
+        // screen rather than one field. The column is dropped and everything else survives.
+        CountingTv.rejectLongDescription = true
+        sourcedToServer()
+        ShotHooks.pictures = null
+        registerTvProvider()
+
+        val all = Backdrops.all(context)
+        assertTrue("the backdrops went with the column", all.isNotEmpty())
+        val cover = all.single { !it.wide }
+        assertEquals("A Cover", cover.title)
+        assertEquals("What A Cover is about.", cover.description)
     }
 
     @Test

@@ -418,7 +418,9 @@ internal val ScrimStops = listOf(0.62f, 0.42f, 0.25f, 0.13f, 0.05f, 0f)
 internal fun TopScrim(art: ImageBitmap?, modifier: Modifier = Modifier) {
     // Once per picture: the strip is a few thousand pixels and the artwork only changes when
     // the hero steps.
-    val pale = remember(art) { art?.let { paleShare(it) } ?: 0f }
+    // A launcher must not come down over a picture it could not read. Nothing pale found is
+    // the same answer as a dark picture, which is the scrim it already had.
+    val pale = remember(art) { art?.let { runCatching { paleShare(it) }.getOrDefault(0f) } ?: 0f }
     val strength = scrimStrength(pale)
     Box(
         modifier
