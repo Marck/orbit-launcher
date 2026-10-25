@@ -305,6 +305,61 @@ internal fun Hero(
         }
 }
 
+
+/**
+ * A description, cut at a word rather than part way through one.
+ *
+ * Compose ellipsizes by character: it fits what it can on the last line and puts the ellipsis
+ * after it, so a line ends "who will never check o...". The ellipsis is there and doing its
+ * job, and it still reads as the screen having broken off mid word.
+ *
+ * So the first layout is measured, and if it overflowed, the text is cut back to the last whole
+ * word that fitted and laid out again. Two passes, and only ever two: the second text is
+ * shorter than what already fitted, so it cannot overflow and ask for a third. [settled] holds
+ * that even if a font or a width made it close.
+ *
+ * Trailing punctuation goes with the word, since a line ending in a stray comma before the
+ * ellipsis looks like a different kind of mistake.
+ */
+@Composable
+private fun TwoLines(text: String) {
+    var shown by remember(text) { mutableStateOf(text) }
+    var settled by remember(text) { mutableStateOf(false) }
+    Text(
+        shown,
+        color = Muted,
+        fontSize = 13.sp,
+        lineHeight = 17.sp,
+        maxLines = DescriptionLines,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { layout ->
+            if (!settled && layout.hasVisualOverflow) {
+                trimToWord(text, layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
+                    ?.let { shown = it }
+            }
+            settled = true
+        },
+    )
+}
+
+/** How many lines of description the hero gives a programme. */
+internal const val DescriptionLines = 2
+
+/**
+ * [text] cut back to the last whole word that fits in [fitted] characters, with an ellipsis.
+ *
+ * Null when there is no earlier word boundary to fall back to, which leaves the character cut
+ * alone: one very long word is better shown part way through than dropped entirely.
+ */
+internal fun trimToWord(text: String, fitted: Int): String? {
+    if (fitted <= 0 || fitted >= text.length) return null
+    val head = text.take(fitted)
+    val space = head.lastIndexOf(' ')
+    if (space <= 0) return null
+    val word = head.take(space).trimEnd { it == ' ' || it in ",;:-" }
+    return if (word.isEmpty()) null else "$word\u2026"
+}
+
 /**
  * Where a step of [by] lands, wrapping both ways.
  *
@@ -544,14 +599,7 @@ internal fun HeroText(
             Spacer(Modifier.height(6.dp))
             // Two lines. These run to 300 characters, which left to themselves would fill the
             // screen and push the rows off it; one line cuts most of them mid-sentence.
-            Text(
-                it,
-                color = Muted,
-                fontSize = 13.sp,
-                lineHeight = 17.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            TwoLines(it)
         }
         detail?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(8.dp))
