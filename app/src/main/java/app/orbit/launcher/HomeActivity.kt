@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -99,6 +100,8 @@ class HomeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         inFront = true
+        // Proof for the home button service that its last takeover actually landed.
+        Foreground.note(SystemClock.elapsedRealtime())
         Returns.count++
     }
 

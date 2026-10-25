@@ -15,9 +15,7 @@ import android.view.accessibility.AccessibilityEvent
  */
 class HomeButtonService : AccessibilityService() {
 
-    private var lastTakeover = 0L
-    private val recentTakeovers = ArrayDeque<Long>()
-    private var standDownUntil = 0L
+    private val takeover = Takeover()
 
     /**
      * On some sets the only All inputs panel belongs to the stock launcher, so
@@ -41,26 +39,9 @@ class HomeButtonService : AccessibilityService() {
         val className = event.className?.toString()
         if (className != null && className == inputsPanel) return
 
-        // The event itself proves the launcher is in front, so no foreground
-        // check is needed; getRunningTasks would only report our own tasks
-        // anyway. The debounce stops repeated events stacking launches.
-        val now = SystemClock.elapsedRealtime()
-        if (now < standDownUntil) return
-        if (now - lastTakeover < DEBOUNCE_MS) return
-
-        // If Orbit keeps failing to come up, the launcher keeps reappearing and
-        // this would relaunch Orbit forever. After a burst of takeovers, leave
-        // the stock launcher alone for a while so the TV stays usable.
-        while (recentTakeovers.isNotEmpty() && now - recentTakeovers.first() >= BURST_WINDOW_MS) {
-            recentTakeovers.removeFirst()
-        }
-        if (recentTakeovers.size >= MAX_TAKEOVERS_PER_BURST) {
-            recentTakeovers.clear()
-            standDownUntil = now + STAND_DOWN_MS
-            return
-        }
-        recentTakeovers.addLast(now)
-        lastTakeover = now
+        // The event itself proves the launcher is in front, so no foreground check is
+        // needed; getRunningTasks would only report our own tasks anyway.
+        if (!takeover.claim(SystemClock.elapsedRealtime())) return
 
         startActivity(
             Intent(this, HomeActivity::class.java).addFlags(
@@ -74,11 +55,6 @@ class HomeButtonService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     private companion object {
-        const val DEBOUNCE_MS = 700L
-        const val MAX_TAKEOVERS_PER_BURST = 3
-        const val BURST_WINDOW_MS = 10_000L
-        const val STAND_DOWN_MS = 60_000L
-
         // Keep in sync with android:packageNames in res/xml/home_button_service.xml,
         // which stops the system waking the service for any other app's windows.
         val STOCK_LAUNCHERS = setOf(
