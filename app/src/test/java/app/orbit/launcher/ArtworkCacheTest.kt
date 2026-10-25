@@ -33,6 +33,12 @@ import java.io.ByteArrayOutputStream
  * The decoding tests work by registering a stream that can only be read once. A second call
  * that still returns a picture can only have come from the cache, which is a stronger check
  * than counting calls into a double.
+ *
+ * The tests about budgets are here because the cache was measured on the set doing nothing at
+ * all: thirteen covers asked for on a return to the screen, thirteen misses, no hits. The hero
+ * had cycled through a few backdrops in between and each of those is worth four to nine covers,
+ * so a single shared bound was emptied of the row every time. These pin the two faults that
+ * caused it.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -150,5 +156,76 @@ class ArtworkCacheTest {
         assertEquals(ArtworkCache.key("content://a", 256), ArtworkCache.key("content://a", 256))
         assertTrue(ArtworkCache.key("content://a", 256) != ArtworkCache.key("content://b", 256))
         assertTrue(ArtworkCache.key("content://a", 256) != ArtworkCache.key("content://a", 512))
+    }
+
+    @Test
+    fun `the hero cycling its backdrops does not empty the row of covers`() {
+        // What was measured on the set: the row is read, the hero cycles while the screen sits
+        // there, and on the way back every cover had been evicted by a handful of backdrops.
+        val covers = (1..13).map { "content://server/cover/row/$it" }
+        covers.forEach {
+            ArtworkCache.put(it, PosterFetchPx, Bitmap.createBitmap(256, 384, Bitmap.Config.ARGB_8888))
+        }
+        assertEquals("every cover should be held to begin with", 13, covers.count { ArtworkCache.get(it, PosterFetchPx) != null })
+
+        // Six backdrops at the width the hero asks for: more than the old shared bound held.
+        repeat(6) { i ->
+            ArtworkCache.put("content://server/backdrop/$i", 1280, Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888))
+        }
+
+        assertEquals(
+            "backdrops evicted covers, so the row fills in a tile at a time again",
+            13,
+            covers.count { ArtworkCache.get(it, PosterFetchPx) != null },
+        )
+    }
+
+    @Test
+    fun `a picture too big for its own budget is refused rather than emptying it`() {
+        // An LruCache handed an entry larger than its maximum evicts everything else and then
+        // that entry too, which is how one oversized backdrop used to leave nothing behind.
+        ArtworkCache.put("content://keep/me", 1280, Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888))
+        val held = ArtworkCache.size(1280)
+        assertTrue("the small backdrop should be held", held > 0)
+
+        val huge = Bitmap.createBitmap(2048, 2048, Bitmap.Config.ARGB_8888)
+        assertTrue("this test needs a picture past the bound", huge.byteCount > ArtworkCache.bound(1280))
+        ArtworkCache.put("content://far/too/big", 1280, huge)
+
+        assertNull("an oversized picture was kept", ArtworkCache.get("content://far/too/big", 1280))
+        assertNotNull("an oversized picture took the rest with it", ArtworkCache.get("content://keep/me", 1280))
+        assertEquals("the budget changed", held, ArtworkCache.size(1280))
+    }
+
+    @Test
+    fun `covers and backdrops do not share a budget`() {
+        assertTrue(
+            "a cover fetch must land in the cover budget",
+            PosterFetchPx <= ArtworkCache.COVER_MAX_WIDTH,
+        )
+        assertEquals(ArtworkCache.COVER_BYTES, ArtworkCache.bound(PosterFetchPx))
+        assertEquals(ArtworkCache.BACKDROP_BYTES, ArtworkCache.bound(1280))
+    }
+
+    @Test
+    fun `a cover is held at the width it was asked for, not up to twice it`() {
+        // inSampleSize only halves, so a 1000px source for a 256px tile decodes to 500px and
+        // was kept at that: four times the pixels the tile ever draws.
+        val uri = "content://server/cover/sized"
+        serveOnce(uri, png(1000, 1500))
+        val decoded = ContinueWatching.poster(context, uri, maxWidth = PosterFetchPx)
+        assertNotNull(decoded)
+        assertEquals("the cover is wider than the width it was asked for", PosterFetchPx, decoded!!.width)
+        assertEquals("the cover's shape was not kept", PosterFetchPx * 3 / 2, decoded.height)
+    }
+
+    @Test
+    fun `a picture already narrower than the width asked for is left alone`() {
+        val uri = "content://server/cover/small"
+        serveOnce(uri, png(120, 180))
+        val decoded = ContinueWatching.poster(context, uri, maxWidth = PosterFetchPx)
+        assertNotNull(decoded)
+        assertEquals("a small cover was stretched", 120, decoded!!.width)
+        assertEquals(180, decoded.height)
     }
 }

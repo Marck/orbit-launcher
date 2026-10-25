@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.tv.TvContract
 import android.net.Uri
+import androidx.core.graphics.scale
 import kotlin.math.roundToInt
 
 /**
@@ -169,8 +170,9 @@ object ContinueWatching {
      */
     fun poster(context: Context, uri: String, maxWidth: Int): Bitmap? = runCatching {
         ShotHooks.artwork?.let { return@runCatching it }
-        // Already decoded once. The row is re-read and reshuffled on every return, so without
-        // this the same covers are fetched and decoded again each time the screen is opened.
+        // Already decoded once. The row is re-read on every return, and the provider behind a
+        // cover serves one at a time at around two and a half seconds each, so a miss here is
+        // what the owner sees as the row filling in a tile at a time.
         ArtworkCache.get(uri, maxWidth)?.let { return@runCatching it }
         val parsed = Uri.parse(uri)
         // Only the media server publishes a content URI its own provider can serve. Every other
@@ -187,8 +189,31 @@ object ContinueWatching {
         BitmapFactory.decodeByteArray(
             bytes, 0, bytes.size,
             BitmapFactory.Options().apply { inSampleSize = sample },
-        )?.also { ArtworkCache.put(uri, maxWidth, it) }
+        )
+            ?.let { narrowTo(it, maxWidth) }
+            ?.also { ArtworkCache.put(uri, maxWidth, it) }
     }.getOrNull()
+
+    /**
+     * Brings a decoded picture down to the width it is actually asked for.
+     *
+     * inSampleSize only halves, so it lands anywhere between the asked width and twice it: on
+     * this set a 2000px cover for a 256px tile decoded to 500x750, which is 1.5MB held for a
+     * tile drawn 204px wide. A row of them wanted 19MB and no bound a television can afford
+     * would have kept it. At the width asked for, the same cover is around 390KB and the whole
+     * row stays in memory between visits, which is the point of keeping it at all.
+     *
+     * Sampling first and scaling after is deliberate: scaling from the sampled copy rather than
+     * the full one keeps the work small, and the filtered scale is what stops the halving from
+     * showing.
+     */
+    private fun narrowTo(bitmap: Bitmap, maxWidth: Int): Bitmap {
+        if (bitmap.width <= maxWidth) return bitmap
+        val height = (bitmap.height.toLong() * maxWidth / bitmap.width).toInt().coerceAtLeast(1)
+        val scaled = bitmap.scale(maxWidth, height)
+        if (scaled !== bitmap) bitmap.recycle()
+        return scaled
+    }
 
     /** Reads a picture off the network. Call off the main thread. */
     private fun fetch(url: String): ByteArray? = runCatching {
