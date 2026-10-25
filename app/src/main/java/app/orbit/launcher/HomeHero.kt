@@ -379,7 +379,7 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     // Bumped by a step from the remote, which restarts the effect below and with it the wait.
     var stepped by remember(mine) { mutableIntStateOf(0) }
     LaunchedEffect(mine, stepped) {
-        if (mine.size < 2) return@LaunchedEffect
+        if (mine.size < 2 || !ShotHooks.cycling) return@LaunchedEffect
         while (true) {
             delay(CycleMs)
             index = (index + 1) % mine.size
@@ -400,7 +400,7 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     var ambientIndex by remember(ambient) { mutableIntStateOf(0) }
     var ambientStepped by remember(ambient) { mutableIntStateOf(0) }
     LaunchedEffect(ambient, item != null, ambientStepped) {
-        if (item != null || pool.size < 2) return@LaunchedEffect
+        if (item != null || pool.size < 2 || !ShotHooks.cycling) return@LaunchedEffect
         while (true) {
             delay(CycleMs)
             ambientIndex = (ambientIndex + 1) % pool.size
