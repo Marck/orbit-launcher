@@ -23,6 +23,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import com.github.takahirom.roborazzi.captureRoboImage
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Rule
 import org.robolectric.Shadows.shadowOf
@@ -233,6 +234,14 @@ abstract class TvTest {
 
     /** Screenshot of the current compose root. */
     fun shot(name: String) {
+        // A shot taken with the clock unpinned carries the minute it was recorded in, so it
+        // differs from the last recording for a reason nobody changed. This is the fault that
+        // made two recordings of unchanged code disagree on 47 of 79 shots, and the one that
+        // survived in this class because it does not take its setup from TvTest.
+        assertNotNull(
+            "the clock was not pinned, so this shot would differ on every run",
+            ShotHooks.now,
+        )
         rule.onRoot().captureRoboImage("$outDir/$name.png")
     }
 
