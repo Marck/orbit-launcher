@@ -178,9 +178,9 @@ class AppsRowTvTest : TvTest() {
         holdOk(s)
         // focused() reads null here: the swallowed release leaves Compose focus on the inner
         // clickable, which has no semantics of its own. The + stays lit and keys still work.
-        assertNull(nextStarted()); assertTrue(has("Add app to favorites"))
+        assertNull(nextStarted()); assertTrue(has(AddAppLabel))
         press(s, MENU)
-        assertFalse(has("Open")); assertTrue(has("Add app to favorites"))
+        assertFalse(has("Open")); assertTrue(has(AddAppLabel))
         press(s, R); assertEquals("TiviMate", focused())
     }
 

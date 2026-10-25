@@ -196,7 +196,7 @@ internal fun InputsRow(
                 },
                 onEdgeRight = { inputs.firstOrNull()?.let { row.jumpTo(0, it.id) } },
                 width = InputW,
-                label = "Add input to favorites",
+                label = AddInputLabel,
             ) { context.openScreen(Intent(context, InputPickerActivity::class.java)) }
         }
     }

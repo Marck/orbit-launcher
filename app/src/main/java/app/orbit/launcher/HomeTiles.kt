@@ -198,7 +198,7 @@ internal fun PlusTile(
     onFocused: () -> Unit,
     onEdgeRight: (() -> Unit)?,
     width: Dp = TileW,
-    label: String = "Add app to favorites",
+    label: String = AddAppLabel,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -235,10 +235,24 @@ internal fun PlusTile(
     }
 }
 
+/** The size a tile's caption is set in. Named so the labels can be checked against it. */
+internal val TileLabelSize = 12.sp
+
+/**
+ * The captions under the two plus tiles.
+ *
+ * Short enough to fit their tiles. "Add input to favorites" is almost twice the width of the
+ * 100dp tile it sits under, so the marquee below ran forever and any glance at the row caught
+ * it part way through a word: the row read as broken rather than as scrolling. The row headings
+ * already say FAVORITE APPS and INPUTS, so the rest of it was saying nothing twice.
+ */
+internal const val AddAppLabel = "Add app"
+internal const val AddInputLabel = "Add input"
+
 /**
  * One line under a tile, held to the tile's width so a long label cannot widen the tile and
  * shove the row. A label that does not fit scrolls through, as the stock launcher's do, rather
- * than being cut short.
+ * than being cut short. An app's own name can be any length, so the marquee stays for those.
  */
 @Composable
 internal fun TileLabel(text: String, width: Dp, color: Color = Color.White) {
@@ -246,7 +260,7 @@ internal fun TileLabel(text: String, width: Dp, color: Color = Color.White) {
         Text(
             text,
             color = color,
-            fontSize = 12.sp,
+            fontSize = TileLabelSize,
             maxLines = 1,
             modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
         )
