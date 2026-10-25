@@ -186,19 +186,46 @@ also closes the menu and puts back a move that was not kept.
 
 Two separate things, and the second is the one that matters on this set.
 
-**1. The preferred home activity.** Orbit declares `android.intent.category.HOME`, so it is a
-candidate as soon as it is installed:
+**1. The preferred home activity, which on this set does nothing.** Orbit declares
+`android.intent.category.HOME`, so it is a candidate as soon as it is installed. Setting it as
+the preferred one reports success and changes nothing:
 
 ```bash
 adb shell cmd package set-home-activity app.orbit.launcher/.HomeActivity
-adb shell dumpsys package preferred | grep -A 3 'category.HOME'
+adb shell cmd package resolve-activity -a android.intent.action.MAIN \
+  -c android.intent.category.HOME
 ```
 
-**2. The home button.** On the set this was written for, that is not enough. The preference is
-recorded and `dumpsys` shows Orbit as the preferred home, and the physical home button still
-opens the TV maker's launcher: the key never reaches the preferred-activity resolution. That is
-what `HomeButtonService` is for. It is an accessibility service that watches for the stock home
-screen coming to the front and puts Orbit there instead.
+The TV maker's launcher comes back, because it declares `mPriority=2` on its own home filter and
+no preferred activity is recorded at all:
+
+```bash
+adb shell dumpsys package com.google.android.tvlauncher | grep -A 4 'category.HOME'
+```
+
+So there are two ways to actually get there, and they are independent.
+
+**2. Disable the stock launcher.** The direct one. With it gone, the home key has nowhere else
+to resolve, and Orbit opens with no flash of anything else first:
+
+```bash
+adb shell pm disable-user --user 0 com.google.android.tvlauncher
+adb shell cmd package resolve-activity -a android.intent.action.MAIN \
+  -c android.intent.category.HOME        # now app.orbit.launcher.HomeActivity
+```
+
+This is reversible and it is not a one-way door. `com.android.tv.settings.system.FallbackHome` is
+part of the system, stays enabled and is direct-boot aware, so the TV always has a home screen to
+fall back on even if Orbit will not start. To put the stock launcher back:
+
+```bash
+adb shell pm enable com.google.android.tvlauncher
+```
+
+**3. The home button service.** The way round for leaving the stock launcher enabled. It is an
+accessibility service that watches for the stock home screen coming to the front and puts Orbit
+there instead, so the home key lands on Orbit about half a second later. Measured on the set:
+521ms. Not needed once the stock launcher is disabled, and harmless to leave on.
 
 On the TV: Settings, Device Preferences, Accessibility, then Orbit home button. Orbit offers
 this itself, in the notice under the hero, which opens the home settings and falls back to the

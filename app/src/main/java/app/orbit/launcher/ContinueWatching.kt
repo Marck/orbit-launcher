@@ -277,7 +277,10 @@ object ContinueWatching {
             packageName = packageName,
             title = title,
             subtitle = episode(c),
-            description = c.text(TvContract.WatchNextPrograms.COLUMN_SHORT_DESCRIPTION),
+            description = bestDescription(
+                c.text(TvContract.WatchNextPrograms.COLUMN_LONG_DESCRIPTION),
+                c.text(TvContract.WatchNextPrograms.COLUMN_SHORT_DESCRIPTION),
+            ),
             posterUri = c.text(TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI),
             intentUri = intentUri,
             progress = progress(c),

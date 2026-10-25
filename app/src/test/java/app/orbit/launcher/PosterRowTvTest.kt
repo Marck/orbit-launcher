@@ -112,6 +112,28 @@ class PosterRowTvTest : TvTest() {
     }
 
     @Test
+    fun `two rows sharing one cover do not take the screen down with them`() {
+        // What a media server actually publishes: two episodes of one series, each carrying the
+        // series cover. Compose throws "Key ... was already used" out of the row's measure pass,
+        // which took Orbit down while the owner was moving along the posters.
+        val shared = "pic://cover/one-series"
+        ShotHooks.pictures = listOf(
+            cover("Episode One").copy(uri = shared),
+            cover("Episode Two").copy(uri = shared),
+        )
+        val scenario = launch(HomeActivity::class.java)
+        says("ON JELLYFIN")
+
+        // Walked, not merely drawn: the crash came from the row measuring an item that was not
+        // on screen when it was built.
+        ontoPosters(scenario)
+        repeat(4) { press(scenario, KeyEvent.KEYCODE_DPAD_RIGHT) }
+        repeat(4) { press(scenario, KeyEvent.KEYCODE_DPAD_LEFT) }
+
+        says("ON JELLYFIN")
+    }
+
+    @Test
     fun `a cover gets a row of its own, named after the app it came from`() {
         ShotHooks.pictures = listOf(cover("A Cover On The Server"))
         launch(HomeActivity::class.java)

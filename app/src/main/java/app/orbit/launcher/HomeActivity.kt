@@ -11,6 +11,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,12 +38,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -358,8 +362,13 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     // where the posters had put it, with the top bar and the date off the top of the screen.
     // The top bar, the hero and the apps row all sit at the top of the column, so whenever
     // focus is in one of them that is where the column belongs.
+    // The zones the bar belongs to. Anywhere below the apps row and it goes, the same places
+    // the column scrolls back to the top for.
+    val barOpen = zone == Zone.TOP || zone == Zone.HERO || zone == Zone.APPS
+    val bar by animateFloatAsState(if (barOpen) 1f else 0f, label = "topBar")
+
     LaunchedEffect(zone) {
-        if (zone == Zone.TOP || zone == Zone.HERO || zone == Zone.APPS) column.animateScrollTo(0)
+        if (barOpen) column.animateScrollTo(0)
     }
 
     // There is nothing behind the home screen for Back to go to. Left to the system, Back would
@@ -385,11 +394,31 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         // The artwork runs under the top bar, and a bright frame up there swallowed the clock
         // and the glyphs whole. A fade down from the top edge holds them legible against any
         // picture, and over a dark one there is nothing to see.
-        TopScrim(Modifier.align(Alignment.TopCenter))
+        TopScrim(watching.art, Modifier.align(Alignment.TopCenter))
         Column(Modifier.fillMaxSize().verticalScroll(column)) {
             // No safe margin below: the space under the hero stretches anyway, and the notice
             // needs that room to fit above the rows.
             Column(Modifier.padding(start = SafeH, top = SafeV, end = SafeH)) {
+                // Scrolling alone can never take the bar off the screen: a column only scrolls
+                // as far as its content overflows, and on this set that left the glyphs and the
+                // clock peeking over the top row. So the bar collapses out of the layout as
+                // well, and the rows take the space back.
+                //
+                // Collapsed rather than removed. [topBarFocus] is what the hero names as the
+                // thing above it, and a FocusRequester whose node has left the composition
+                // throws the moment focus moves onto it.
+                Box(
+                    Modifier
+                        .graphicsLayer {
+                            alpha = bar
+                            clip = true
+                        }
+                        .layout { measurable, constraints ->
+                            val placed = measurable.measure(constraints)
+                            val height = (placed.height * bar).roundToInt()
+                            layout(placed.width, height) { placed.place(0, height - placed.height) }
+                        }
+                ) {
                 TopBar(
                     first = topBarFocus,
                     destinations = destinations,
@@ -407,7 +436,8 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                     },
                     onOpen = ::open,
                 )
-                Spacer(Modifier.height(10.dp))
+                }
+                Spacer(Modifier.height(10.dp * bar))
                 Hero(
                     apps = apps,
                     inputs = inputs,

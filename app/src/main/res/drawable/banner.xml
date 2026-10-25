@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The TV app list wants 320x180. Same three paths as @drawable/ic_orbit_mark, over black,
+  scaled 2.6x about the mark's own centre and placed in the middle of the frame: the artwork
+  then fills roughly seven tenths of the width and eight tenths of the height, which leaves it
+  room to breathe beside the banners the stock apps ship.
+
+  A vector rather than a png, so one file serves every density and the launcher can draw it at
+  whatever size it likes without it going soft. The intrinsic size is 16:9 and under the 200dp
+  that lint asks vectors to stay inside; the frame it is drawn into is 320x180 either way, and
+  192dp lands at 384px on this panel, which is more than that.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="192dp"
+    android:height="108dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <path android:fillColor="#FF000000" android:pathData="M0,0h320v180h-320z" />
+
+    <group
+        android:pivotX="50" android:pivotY="50"
+        android:scaleX="2.6" android:scaleY="2.6"
+        android:translateX="110" android:translateY="40">
+
+        <path android:fillType="evenOdd"
+            android:pathData="M22.5,50a27.5,27.5 0 1,0 55,0a27.5,27.5 0 1,0 -55,0z M33.5,50a16.5,16.5 0 1,0 33,0a16.5,16.5 0 1,0 -33,0z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear"
+                    android:startX="30" android:startY="28" android:endX="70" android:endY="74">
+                    <item android:offset="0" android:color="#FF2B7BFF" />
+                    <item android:offset="0.5" android:color="#FF5C53F8" />
+                    <item android:offset="1" android:color="#FF8E2AF0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <group android:pivotX="50" android:pivotY="50" android:rotation="-18.6">
+            <path android:fillType="evenOdd"
+                android:pathData="M5.4,50a44.6,14.3 0 1,0 89.2,0a44.6,14.3 0 1,0 -89.2,0z M6.5,50a43.5,10.9 0 1,0 87,0a43.5,10.9 0 1,0 -87,0z">
+                <aapt:attr name="android:fillColor">
+                    <gradient android:type="linear"
+                        android:startX="6" android:startY="62" android:endX="94" android:endY="34">
+                        <item android:offset="0" android:color="#FFBFCDEC" />
+                        <item android:offset="0.55" android:color="#FFE8EEFA" />
+                        <item android:offset="1" android:color="#FFFFFFFF" />
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
+
+        <path android:fillColor="#FFF4F7FF"
+            android:pathData="M74.2,30.5a4.3,4.3 0 1,0 8.6,0a4.3,4.3 0 1,0 -8.6,0z" />
+    </group>
+</vector>

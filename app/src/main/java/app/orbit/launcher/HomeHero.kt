@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -49,8 +50,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
@@ -214,7 +215,17 @@ internal fun Hero(
     //
     // The box is fixed and the content keeps its own height inside it, top aligned, so the
     // focus accent still hugs the text instead of running the full height of a half empty box.
-    Box(Modifier.height(HeroH).testTag(HeroTag)) {
+    // BoxWithConstraints, so the text column can be given a width in dp rather than a fraction.
+    //
+    // The row below measures with IntrinsicSize.Min, which asks each child how tall it is at a
+    // given width. A fraction does not survive that question: the column was asked at the full
+    // screen width, where a description of ordinary length fits in two lines, and the row was
+    // then fixed at two lines tall. The real pass handed the same text 52% of the width, where
+    // it needs three, so it was cut by the height it had already been given. That is a clip, not
+    // an overflow, so no ellipsis was drawn and nothing the text itself does could have caught
+    // it: "...who will never check o" survived every fix aimed at the trimming.
+    BoxWithConstraints(Modifier.height(HeroH).testTag(HeroTag)) {
+        val textWidth = maxWidth * HeroTextWidth
         Row(
             // On the row rather than on the focusable inside it, to keep it away from the
             // clickable's own focus target.
@@ -243,7 +254,7 @@ internal fun Hero(
 
             Box(
                 Modifier
-                    .fillMaxWidth(HeroTextWidth)
+                    .width(textWidth)
                     .focusRequester(requester)
                     .onFocusChanged {
                         focused = it.hasFocus
@@ -330,36 +341,74 @@ private fun Trimmed(
     maxLines: Int,
     lineHeight: TextUnit = TextUnit.Unspecified,
     fontWeight: FontWeight? = null,
+    onLines: ((Int) -> Unit)? = null,
 ) {
-    var shown by remember(text) { mutableStateOf(text) }
+    // Null until this text has been cut back, and reset by [remember] when the text changes.
+    // Not an identity check against [text]: an equal string arriving as a fresh instance, which
+    // is what a reread of the provider hands over, made `shown === text` false before the first
+    // real layout and killed the trim outright. That is how "...never check o" survived a fix
+    // that passed its own tests.
+    var trimmed by remember(text) { mutableStateOf<String?>(null) }
     Text(
-        shown,
+        trimmed ?: text,
         color = color,
         fontSize = fontSize,
         lineHeight = lineHeight,
         fontWeight = fontWeight,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
-        // Only ever cuts the original, which is what stops this going round again: once
-        // [shown] is the shortened string it is no longer the same object as [text], so a
-        // second overflow cannot start a third pass.
+        // Only ever cuts the original, and only once: having a result is itself the record,
+        // so a second overflow cannot start a third pass.
         //
         // It is deliberately not a "have we been here before" flag. The hero's row is measured
         // with IntrinsicSize.Min, so the text is laid out more than once and the first of those
         // is at a width it does not overflow. A flag set on the first callback latched on that
-        // pass and let the real one through untouched: correct under test, and on the set the
-        // description still read "...never check o".
+        // pass and let the real one through untouched. A result is only recorded when there was
+        // something to cut, so the pass that does overflow still gets its turn.
         onTextLayout = { layout ->
-            if (layout.hasVisualOverflow && shown === text) {
+            onLines?.invoke(layout.lineCount)
+            if (layout.hasVisualOverflow && trimmed == null) {
                 trimToWord(text, layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
-                    ?.let { shown = it }
+                    ?.let { trimmed = it }
             }
         },
     )
 }
 
-/** How many lines of description the hero gives a programme. */
-internal const val DescriptionLines = 2
+/** The most the hero will ever give a description, however much room is going spare. */
+internal const val DescriptionLines = 6
+
+/**
+ * The pieces of the hero that are not the description, as they measure on this panel.
+ *
+ * Taken from the same measurement [HeroH] is: the tallest hero really drawn came to 164dp, and
+ * these add up to it with two lines of description in the middle. They are constants rather than
+ * something read back out of the layout because the count has to be known before the description
+ * is measured, not after.
+ */
+private val LabelBlock = 18.dp
+private val TitleLine = 36.dp
+private val TitleGap = 6.dp
+private val DescriptionLine = 17.dp
+private val DetailBlock = 22.dp
+private val ProgressBlock = 11.dp
+
+/**
+ * How many lines of description fit in what the rest of the hero has left.
+ *
+ * The box is a fixed [HeroH] whatever is in it, so a hero with a one line title and no episode
+ * line was leaving around 70dp of it empty and cutting the description off anyway. The room only
+ * varies by three things, all of them known before the description is laid out: whether the title
+ * took a second line, whether there is an episode line, and whether there is a progress bar.
+ *
+ * At least one line always comes back, so a description is never dropped outright.
+ */
+internal fun descriptionLines(titleLines: Int, detail: Boolean, progress: Boolean): Int {
+    val used = LabelBlock + TitleLine * titleLines.coerceIn(1, 2) + TitleGap +
+        (if (detail) DetailBlock else 0.dp) + (if (progress) ProgressBlock else 0.dp)
+    val room = HeroH - used
+    return (room / DescriptionLine).toInt().coerceIn(1, DescriptionLines)
+}
 
 /**
  * [text] cut back to the last whole word that fits in [fitted] characters, with an ellipsis.
@@ -497,8 +546,14 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
         item?.let { it.progress ?: PlaybackMemory.progressFor(context, it.packageName, it.title) }
     }
     // The safety net, in case a fetch never comes back at all.
-    var waited by remember(Returns.count) { mutableStateOf(false) }
-    LaunchedEffect(Returns.count) {
+    //
+    // Keyed on the link as well as the return, because the wait is for a particular picture and
+    // not for the screen as a whole. Keyed on the return alone it ran once and was spent: six
+    // seconds later every further fetch had no grace at all, so moving the cursor from an app
+    // with something to carry on with to one without it dropped the hero to "Back to ..." for
+    // as long as the next picture took to arrive.
+    var waited by remember(Returns.count, uri) { mutableStateOf(false) }
+    LaunchedEffect(Returns.count, uri) {
         delay(SettleMs)
         waited = true
     }
@@ -597,6 +652,9 @@ internal fun HeroText(
     detail: String? = null,
     progress: Progress? = null,
 ) {
+    // The title decides how much is left for the description, so its height is reported back
+    // rather than assumed.
+    var titleLines by remember(title) { mutableIntStateOf(1) }
     Column {
         HeroLabel(label)
         // Two lines, because a title does not deserve to be cut: the hero's column is a little
@@ -609,12 +667,19 @@ internal fun HeroText(
             lineHeight = 36.sp,
             fontWeight = FontWeight.Light,
             maxLines = 2,
+            onLines = { titleLines = it },
         )
         description?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(6.dp))
             // Two lines. These run to 300 characters, which left to themselves would fill the
             // screen and push the rows off it; one line cuts most of them mid-sentence.
-            Trimmed(it, color = Muted, fontSize = 13.sp, lineHeight = 17.sp, maxLines = DescriptionLines)
+            Trimmed(
+                it,
+                color = Muted,
+                fontSize = 13.sp,
+                lineHeight = 17.sp,
+                maxLines = descriptionLines(titleLines, detail != null, progress != null),
+            )
         }
         detail?.takeIf { it.isNotBlank() }?.let {
             Spacer(Modifier.height(8.dp))
