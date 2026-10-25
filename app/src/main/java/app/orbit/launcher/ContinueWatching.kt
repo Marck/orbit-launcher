@@ -169,6 +169,9 @@ object ContinueWatching {
      */
     fun poster(context: Context, uri: String, maxWidth: Int): Bitmap? = runCatching {
         ShotHooks.artwork?.let { return@runCatching it }
+        // Already decoded once. The row is re-read and reshuffled on every return, so without
+        // this the same covers are fetched and decoded again each time the screen is opened.
+        ArtworkCache.get(uri, maxWidth)?.let { return@runCatching it }
         val parsed = Uri.parse(uri)
         // Only the media server publishes a content URI its own provider can serve. Every other
         // app on this set publishes an https link to its own artwork, so that is fetched. Only
@@ -184,7 +187,7 @@ object ContinueWatching {
         BitmapFactory.decodeByteArray(
             bytes, 0, bytes.size,
             BitmapFactory.Options().apply { inSampleSize = sample },
-        )
+        )?.also { ArtworkCache.put(uri, maxWidth, it) }
     }.getOrNull()
 
     /** Reads a picture off the network. Call off the main thread. */
