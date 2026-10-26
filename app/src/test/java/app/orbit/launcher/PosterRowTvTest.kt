@@ -197,6 +197,55 @@ class PosterRowTvTest : TvTest() {
         assertTrue("the top bar never came back after the posters", topBarShown())
     }
 
+    /** Which cover has focus, or null when focus is not in the row at all. */
+    private fun focusedCover(names: List<String>): String? =
+        focused()?.let { f -> names.firstOrNull { f.contains(it) } }
+
+    /**
+     * The row comes round, in both directions.
+     *
+     * Written as a property rather than by naming the first and last cover, because the row's
+     * order is shuffled: which cover sits at either end is not knowable from here, and a test
+     * that assumed it would pass or fail on the shuffle rather than on the behaviour.
+     *
+     * The property is that **every** press moves. One more press than there are covers means
+     * an end is reached whatever the order, and before this the press at that end did nothing
+     * at all. Collecting what was visited also proves it goes round the whole row rather than
+     * bouncing between two of them.
+     */
+    private fun assertComesRound(key: Int) {
+        val names = ('A'..'L').map { "Cover $it" }
+        ShotHooks.pictures = names.map { cover(it) }
+        val s = launch(HomeActivity::class.java)
+        says("ON JELLYFIN")
+        ontoPosters(s)
+        waitFor("a cover to take focus", diagnose = { "focus: ${focused()}" }) {
+            focusedCover(names) != null
+        }
+
+        val seen = linkedSetOf<String>()
+        repeat(names.size + 1) {
+            val before = focusedCover(names)!!
+            seen += before
+            press(s, key)
+            waitFor("the press at $before to move", diagnose = { "focus: ${focused()}" }) {
+                focusedCover(names).let { it != null && it != before }
+            }
+        }
+
+        assertEquals("the row did not go round every cover", names.size, seen.size)
+    }
+
+    @Test
+    fun `the row comes round going left`() {
+        assertComesRound(KeyEvent.KEYCODE_DPAD_LEFT)
+    }
+
+    @Test
+    fun `the row comes round going right`() {
+        assertComesRound(KeyEvent.KEYCODE_DPAD_RIGHT)
+    }
+
     @Test
     fun `a set with no covers keeps the screen it had, with no empty row on it`() {
         ShotHooks.pictures = listOf(wide("A Wide Still"))
