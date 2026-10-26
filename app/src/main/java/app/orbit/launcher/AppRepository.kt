@@ -14,6 +14,16 @@ data class LaunchableApp(
     val isBanner: Boolean,
     /** A factory app cannot be uninstalled, so the option is not offered for one. */
     val removable: Boolean,
+    /**
+     * A factory app whose update can still come off.
+     *
+     * Taking it off does not remove the app: it puts back the version the television shipped
+     * with and wipes the data. The system's own uninstaller words the two differently, which is
+     * how this was confirmed rather than assumed. Asked about Netflix it says "Replace this app
+     * with the factory version? All data will be removed."; asked about an app that was never
+     * updated it says "Do you want to uninstall this app?" and then cannot do it.
+     */
+    val factoryUpdated: Boolean = false,
     /** When the package was last installed or updated, or 0 when that could not be read. */
     val updatedAt: Long = 0L,
 )
@@ -26,6 +36,21 @@ data class LaunchableApp(
  * icon. The launcher ships no third-party artwork.
  */
 object AppRepository {
+
+    /**
+     * Whether the app came with the television.
+     *
+     * Read off the flag rather than off where the app lives: an updated factory app moves to
+     * /data/app and is then indistinguishable by path from one the owner installed. Measured on
+     * the set, Netflix and Prime Video both sit in /data/app and both still carry SYSTEM.
+     */
+    internal fun removable(flags: Int): Boolean =
+        (flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0
+
+    /** A factory app that has since been updated, so the update can be taken off again. */
+    internal fun factoryUpdated(flags: Int): Boolean =
+        !removable(flags) &&
+            (flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
 
     /**
      * Last loaded list, kept for the lifetime of the process.
@@ -89,8 +114,8 @@ object AppRepository {
                 label = info.loadLabel(pm).toString(),
                 art = art,
                 isBanner = isBanner,
-                removable = (info.activityInfo.applicationInfo.flags and
-                    android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0,
+                removable = removable(info.activityInfo.applicationInfo.flags),
+                factoryUpdated = factoryUpdated(info.activityInfo.applicationInfo.flags),
                 updatedAt = updatedAt,
             )
         }
