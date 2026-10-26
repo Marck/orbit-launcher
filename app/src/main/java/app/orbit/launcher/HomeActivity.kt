@@ -260,6 +260,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         if (Remote.handling) zone = where
     }
     var known by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var about by remember { mutableStateOf(false) }
 
     // An app can be removed from anywhere, so notice it by comparing successive reads rather
     // than by watching the uninstall we started.
@@ -451,6 +452,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                         refocusApps++
                     },
                     onOpen = ::open,
+                    onAbout = { about = true },
                 )
                 }
                 Spacer(Modifier.height(10.dp * bar))
@@ -617,6 +619,12 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
         }
 
         confirmation?.let { Confirmation(it) }
+
+        if (about) AboutCard(onDismiss = {
+            about = false
+            // Back to the button it was opened from, which is where the remote left off.
+            refocusTop++
+        })
 
         menu?.let { target ->
             TileMenuSheet(

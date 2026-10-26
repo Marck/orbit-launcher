@@ -330,13 +330,19 @@ The service reads nothing from notifications or screen content. Its only capabil
 
 ## Top bar
 
-Left of the profile picture sit four small buttons: All apps, the TV's own inputs panel,
-the Play Store and Settings. Press up from the rows to reach them. A button is left out
-when the TV has nothing for it to open.
+Left of the profile picture sit small buttons: the TV's own search, All apps, its inputs
+panel, the Play Store, Settings and About. Press up from the rows to reach them. A button
+is left out when the TV has nothing for it to open.
 
 **All apps** opens the same grid as the add tile, but selecting an app there opens it.
-Holding OK, or pressing Menu, adds it to the favorites or takes it out again. The rows
-show favorites only, so this is how an app that is not a favorite gets opened.
+Holding OK, or pressing Menu, raises a menu offering to add it to the favorites or take it
+out, and to uninstall it. The rows show favorites only, so this is how an app that is not a
+favorite gets opened.
+
+**About** says what is running: the version, whether it is a `stable` or a `debug` build,
+and the commit it was built from. Any key closes it. The commit is the useful part, since
+every build between two releases carries the same version; compare it with the repository
+to see whether the TV is up to date. A build made with uncommitted changes says so.
 
 ## Setting the profile picture
 
@@ -373,6 +379,30 @@ protected content on screen. Check what is in front first:
 ```bash
 adb shell dumpsys activity | grep -m1 ResumedActivity
 ```
+
+## Releasing
+
+Versions are [semver](https://semver.org). The version lives in one place, `orbitVersion`
+in `app/build.gradle.kts`, and `versionCode` is derived from it, so there is nothing to
+keep in step by hand.
+
+To cut a release:
+
+```bash
+# 1. Bump orbitVersion in app/build.gradle.kts, then open a PR and merge it as usual.
+# 2. Tag the merged commit and publish the release from it.
+git fetch origin && git checkout main && git pull
+git tag -a v0.2.0 -m "Orbit 0.2.0"
+git push origin v0.2.0
+gh release create v0.2.0 --title "Orbit 0.2.0" --generate-notes
+```
+
+`--generate-notes` writes the list from the pull requests merged since the previous tag.
+
+No APK is attached and no workflow builds one, on purpose: the only consumer is one
+television, which is flashed from a local build. The tag is what the About card's commit is
+checked against. If packages are wanted later, the step to add is `gh release upload`,
+not a new CI trigger.
 
 ## Dependency updates
 
