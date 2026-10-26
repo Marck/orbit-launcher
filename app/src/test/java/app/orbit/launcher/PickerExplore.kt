@@ -206,12 +206,19 @@ class PickerExplore : TvTest() {
     @Test
     fun bug7b_appPicker_firstRowPopOutClippedAtTop() {
         favorites(emptyList(), emptyList())
-        launch(AppPickerActivity::class.java)
+        val s = launch(AppPickerActivity::class.java)
         assertEquals("TiviMate", focused())
-        // Second row tile scaled 1.06x: 132px tall tile becomes ~140px. First row should too.
-        val first = boundsOf("TiviMate")
-        println("TV focused first-row tile bounds=$first height=${first.height}")
-        assertTrue("first-row focused tile should pop out above the grid top, bounds $first", first.top < 199f)
+        // The same tile, focused and then at rest. Compared against itself rather than against
+        // a pixel: a threshold here is really a record of where the grid happened to start, and
+        // it failed the moment anything was added above the grid.
+        val lit = boundsOf("TiviMate")
+        press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
+        val resting = boundsOf("TiviMate")
+        assertTrue(
+            "a focused first-row tile should sit higher than the same tile at rest, " +
+                "lit $lit resting $resting",
+            lit.top < resting.top,
+        )
     }
 
     /** App picker counts stored favorites that are not on the list; the input picker does not. */
@@ -289,12 +296,16 @@ class PickerExplore : TvTest() {
         assertEquals("Kodi", focused())
         assertEquals("Select to add or remove. 2 chosen.", chosenLine())
         press(s, KeyEvent.KEYCODE_DPAD_LEFT)
-        assertEquals("Netflix", focused()) // wrap to last
+        // The last tile is now the last factory app by name rather than the last app by name,
+        // since what the owner installed is offered before what came with the television.
+        assertEquals("YouTube", focused()) // wrap to last
         press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
         assertEquals("Kodi", focused()) // wrap to first
         press(s, KeyEvent.KEYCODE_DPAD_DOWN)
-        assertEquals("Help", focused())
-        press(s, KeyEvent.KEYCODE_DPAD_UP)
+        // Also moved by the new order: the second row starts somewhere else now.
+        assertEquals("Plex: Stream Movies & TV", focused())
+        // One press, not two. The second used to be a no-op against the top of the grid; it
+        // now reaches the filter buttons, which is the only thing that leads to them.
         press(s, KeyEvent.KEYCODE_DPAD_UP)
         assertEquals("Kodi", focused())
         press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
