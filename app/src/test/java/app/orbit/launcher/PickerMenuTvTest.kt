@@ -8,20 +8,23 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The hold menu on the Favorite apps screen.
+ * The hold menu on the two app grids, Favorite apps and All apps.
  *
- * That screen lists every app on the television with the favorites ticked, so it is the one
- * place an app that is not a favorite yet can be held. A press there already adds or removes,
- * so the menu is there for what a press cannot do: take the app off the set. Open and Move are
- * deliberately absent, Move because the order of the row is set in the row itself.
+ * Both list every app on the television with the favorites ticked, so they are where an app
+ * that is not a favorite yet can be held. A press already does each screen's own thing, adding
+ * or removing on one and opening on the other, so the menu is there for what no press reaches:
+ * taking the app off the set. Open and Move are deliberately absent, Move because the order of
+ * the row is set in the row itself.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -185,12 +188,43 @@ class PickerMenuTvTest : TvTest() {
     }
 
     @Test
-    fun `All apps still adds on a hold, without a menu`() {
-        // That screen opens an app on a press, so the hold has nothing else to mean there and
-        // is kept as the one-press way to build the row up.
+    fun `All apps raises the same menu`() {
+        // A hold used to favorite an app outright there. It now opens the menu, so a hold means
+        // one thing on both grids and uninstall is reachable from either.
         val s = menuOn("Plex", opening = true)
-        pump(600)
-        assertFalse("All apps should not raise the menu", shows("Add to favorites"))
+        waitFor("the menu to open", diagnose = { "focus: ${focused()}" }) { shows("Add to favorites") }
+        assertTrue(shows("Uninstall"))
+        assertFalse("the order of the row is set in the row itself", shows("Move"))
+        assertFalse("a press on this screen already opens the app", shows("Open"))
+        assertEquals(
+            "a hold alone should change nothing now that it opens a menu",
+            listOf(mine),
+            stored(FavoriteStore.APPS),
+        )
+        choose(s, "Add to favorites")
         assertEquals(listOf(mine, notYet), stored(FavoriteStore.APPS))
+    }
+
+    /** Whatever was asked to start, read from the activity as well as the application. */
+    private fun started(s: ActivityScenario<AppPickerActivity>): Intent? {
+        var mine: Intent? = null
+        s.onActivity { mine = shadowOf(it).peekNextStartedActivity() }
+        return mine ?: nextStarted()
+    }
+
+    @Test
+    fun `a hold on All apps does not open the app`() {
+        // The release of the hold used to fall through to the tile's press. On this screen that
+        // press starts the app, which would leave the menu up behind whatever just opened.
+        val s = menuOn("Plex", opening = true)
+        waitFor("the menu to open", diagnose = { "focus: ${focused()}" }) { shows("Add to favorites") }
+        assertEquals("a hold should start nothing", null, started(s))
+        // The same reading, proving it can see a launch at all: Back out and press OK instead.
+        press(s, KeyEvent.KEYCODE_BACK)
+        waitFor("the menu to close", diagnose = { "focus: ${focused()}" }) {
+            !shows("Add to favorites")
+        }
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
+        assertNotNull("a press on All apps opens the app", started(s))
     }
 }
