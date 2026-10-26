@@ -390,6 +390,25 @@ the harness renders on a desktop JVM rather than the panel. Those come as one pu
 request labelled `check-on-tv`, to be installed and driven by hand before merging:
 pop-out on focus, the hero, the pickers, and Back and Home.
 
+## Artwork, and why the second start is quicker
+
+Covers and backdrops are published at full size. On the set this was written for, one cover is
+1 to 2.4MB at 2000x3000, behind a provider that serves one at a time: nine of them finished
+between 7.9 and 32.7 seconds after being asked for together. Decoding is not what that waits
+for, measured at 0 to 1ms per picture. It is the bytes.
+
+So Orbit scales each picture down to the size it actually draws and keeps that small copy in
+`cacheDir`, where a later start reads it instead of the original. Measured on the same set, a
+tile comes back in 22 to 93ms. Only the first start after an install is slow.
+
+The store is capped at 24MB and anything unread for 30 days is dropped, which is also what
+forgets artwork for media you deleted: it stops being published, so it stops being read, so it
+leaves on its own. Files are named by a digest, so no server address or item id is written to
+disk. Replaced artwork is picked up by itself, because the media server puts a hash of the
+picture in its URI and a new picture is therefore a new URI.
+
+Clearing the app's cache in the TV's settings empties it, and costs one slow start.
+
 ## What survives a reset
 
 Favorites, their order, the chosen inputs, which apps supply backdrops and the profile

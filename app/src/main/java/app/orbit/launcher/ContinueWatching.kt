@@ -117,7 +117,7 @@ object ContinueWatching {
      */
     const val PERMISSION = "android.permission.READ_TV_LISTINGS"
 
-    private const val MAX_ROWS = 12
+    internal const val MAX_ROWS = 12
 
     /** A poster is a few hundred kilobytes. This is the ceiling, not the expectation. */
     private const val MAX_ARTWORK_BYTES = 8 * 1024 * 1024
@@ -138,6 +138,11 @@ object ContinueWatching {
 
     /** Every readable row, most recently engaged first. Call off the main thread. */
     fun all(context: Context): List<Resumable> {
+        // The one place that already runs off the main thread on every load, so the disk store
+        // is brought back inside its bounds here rather than on a thread of its own. It does
+        // this once per process and before the permission check, because files left by an
+        // earlier run have to age out whether or not the rows can be read this time.
+        ArtworkDisk.sweep(context)
         if (!granted(context)) return emptyList()
         ShotHooks.watchNext?.let { return it.take(MAX_ROWS) }
         return runCatching {
@@ -174,6 +179,13 @@ object ContinueWatching {
         // cover serves one at a time at around two and a half seconds each, so a miss here is
         // what the owner sees as the row filling in a tile at a time.
         ArtworkCache.get(uri, maxWidth)?.let { return@runCatching it }
+        // Scaled by an earlier run and kept at this very width. This is deliberately ahead of
+        // the fetch: reading tens of kilobytes off the set's own disk is the entire reason the
+        // tile was written, and the original is megabytes behind a provider that serialises.
+        ArtworkDisk.read(context, uri, maxWidth)?.let {
+            ArtworkCache.put(uri, maxWidth, it)
+            return@runCatching it
+        }
         val parsed = Uri.parse(uri)
         // Only the media server publishes a content URI its own provider can serve. Every other
         // app on this set publishes an https link to its own artwork, so that is fetched. Only
@@ -191,7 +203,12 @@ object ContinueWatching {
             BitmapFactory.Options().apply { inSampleSize = sample },
         )
             ?.let { narrowTo(it, maxWidth) }
-            ?.also { ArtworkCache.put(uri, maxWidth, it) }
+            ?.also {
+                ArtworkCache.put(uri, maxWidth, it)
+                // Only ever the scaled copy. The original is not worth the room and is not what
+                // is slow to read back.
+                ArtworkDisk.write(context, uri, maxWidth, it)
+            }
     }.getOrNull()
 
     /**

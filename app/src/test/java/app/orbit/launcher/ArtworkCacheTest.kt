@@ -50,12 +50,14 @@ class ArtworkCacheTest {
     @Before
     fun emptyCache() {
         ArtworkCache.clear()
+        ArtworkDisk.reset(context)
         ShotHooks.artwork = null
     }
 
     @After
     fun tearDown() {
         ArtworkCache.clear()
+        ArtworkDisk.reset(context)
         ShotHooks.artwork = null
     }
 
@@ -94,6 +96,9 @@ class ArtworkCacheTest {
         serveOnce(uri, png(200, 300))
         assertNotNull(ContinueWatching.poster(context, uri, maxWidth = PosterFetchPx))
         ArtworkCache.clear()
+        // The tile written to disk would answer this on its own, which is what it is for. It
+        // goes too, so what is left to come back is only the spent stream.
+        ArtworkDisk.reset(context)
         assertNull(
             "the stream was still readable, so the first test proves nothing",
             ContinueWatching.poster(context, uri, maxWidth = PosterFetchPx),
