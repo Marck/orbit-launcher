@@ -223,7 +223,7 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                             "choose by but the app: the TV's own rows carry no genre and no rating."
                     backdrops -> "Pictures come from $chosen app${if (chosen == 1) "" else "s"}. " +
                         "Select to add or remove."
-                    opening -> "Select to open. Hold OK to add to or remove from favorites."
+                    opening -> "Select to open. Hold OK to add to favorites or uninstall."
                     // Said here because a hold is the only way to reach the menu, and nothing
                     // on a tile shows that it is there. Uninstall is named rather than "more
                     // options", since adding and removing is what a press already does.
@@ -292,11 +292,6 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                 }
 
                 itemsIndexed(ordered, key = { _, app -> app.packageName }) { index, app ->
-                    // Holding OK favorites an app from All apps, so that screen is also a way to
-                    // build the row up; in the add tile's own grid a tap already does that.
-                    val quickToggle: (Rect) -> Unit = {
-                        FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName)
-                    }
                     val openMenu: (Rect) -> Unit = { anchor ->
                         menu = TileMenu(
                             key = FavoriteStore.APPS,
@@ -311,13 +306,10 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                             favorite = app.packageName in favorites,
                         )
                     }
-                    // Nothing to add or uninstall on the backdrops screen: a tile there is a
-                    // source of pictures, not an app the row holds.
-                    val hold: ((Rect) -> Unit)? = when {
-                        backdrops -> null
-                        opening -> quickToggle
-                        else -> openMenu
-                    }
+                    // The same menu on both app screens, so a hold means one thing wherever the
+                    // grid is reached from. Not on the backdrops screen: a tile there is a source
+                    // of pictures, not an app the row holds.
+                    val hold: ((Rect) -> Unit)? = if (backdrops) null else openMenu
                     PickerTile(
                         app = app,
                         favorite = app.packageName in favorites,
@@ -348,9 +340,10 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
             }
         }
 
-        // Open and Move are left out here. A press on a tile already adds or removes, so Open
-        // would be a second way to do the same thing, and the order of the row is set in the row
-        // itself. What is not reachable from anywhere else is taking an app off the television.
+        // Open and Move are left out here. A press on a tile already does the screen's own
+        // thing, opening on All apps and adding or removing on the other, so neither entry
+        // would be more than a second way to it, and the order of the row is set in the row
+        // itself. What no press reaches is taking an app off the television.
         menu?.let { target ->
             TileMenuSheet(
                 target = target,
