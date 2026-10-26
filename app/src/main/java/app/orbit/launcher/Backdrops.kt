@@ -96,6 +96,28 @@ internal fun pictureKeys(pictures: List<Picture>): List<String> {
 internal const val ShortDescriptionCap = 150
 
 /**
+ * The most of an app's text Orbit will carry.
+ *
+ * Nothing bounds what an app may publish. The short column is capped by the provider, but the
+ * long one is not, and neither is a title. Compose measures the whole string on every layout
+ * pass whatever is drawn of it, so one row with a novel in it would cost the launcher on every
+ * frame, and the hero's own row is measured more than once per frame because of IntrinsicSize.
+ *
+ * Both ceilings are well clear of anything real. The hero shows six lines at most, around 450
+ * characters at the width it has, and the longest description measured on this set was 348. No
+ * title comes close to 200.
+ */
+internal const val DescriptionCeiling = 600
+internal const val TitleCeiling = 200
+
+/**
+ * [text] held to [ceiling] characters, cut at a whole word so a bound Orbit imposed does not
+ * look like the mid-word cut it exists to tidy.
+ */
+internal fun bounded(text: String, ceiling: Int): String =
+    if (text.length <= ceiling) text else trimToWord(text, ceiling) ?: (text.take(ceiling) + "\u2026")
+
+/**
  * The fuller of the two descriptions a row can carry, tidied if it still arrived cut.
  *
  * An app publishes a short description and may publish a long one as well. Only the short one
@@ -111,7 +133,10 @@ internal const val ShortDescriptionCap = 150
 internal fun bestDescription(long: String?, short: String?): String? {
     val full = long?.trim()?.takeIf { it.isNotEmpty() }
     val brief = short?.trim()?.takeIf { it.isNotEmpty() }
-    if (full != null && (brief == null || full.length >= brief.length)) return full
+    // Only the long one needs holding: the short one is already capped by the provider.
+    if (full != null && (brief == null || full.length >= brief.length)) {
+        return bounded(full, DescriptionCeiling)
+    }
     val text = brief ?: return null
     if (text.length < ShortDescriptionCap) return text
     // Stopped at the cap. Anything that ends in its own punctuation finished on purpose.
@@ -382,7 +407,8 @@ object Backdrops {
                     Picture(
                         packageName = packageName,
                         uri = uri,
-                        title = cursor.getString(4)?.takeIf { it.isNotBlank() },
+                        title = cursor.getString(4)?.takeIf { it.isNotBlank() }
+                            ?.let { bounded(it, TitleCeiling) },
                         seasons = seasons,
                         description = bestDescription(
                             long = if (cursor.columnCount > LongDescriptionColumn) {
