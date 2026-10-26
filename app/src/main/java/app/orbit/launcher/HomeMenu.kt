@@ -129,12 +129,14 @@ internal fun TileMenuSheet(
         modifier = Modifier
             .fillMaxSize()
             .drawBehind {
-                // Only above and below: a grown tile already reaches into the gap beside it, and
-                // widening the hole would light the edge of its neighbour.
-                val pad = 2.dp.toPx()
-                val hole = target.anchor.let { Rect(it.left, it.top - pad, it.right, it.bottom + pad) }
+                // The tile exactly as it is drawn, and not a pixel more. The anchor is read
+                // after the pop-out scale, so it already covers the grown tile; the 2dp that
+                // used to be added above and below covered nothing and left four rows of
+                // undimmed artwork showing. Measured on the set over a bright backdrop, those
+                // rows came back at 104 against 19 for the scrim beside them, which is the
+                // light bar that appeared across the top of a tile and under its label.
                 clipPath(
-                    Path().apply { addRoundRect(RoundRect(hole, CornerRadius(12.dp.toPx()))) },
+                    Path().apply { addRoundRect(RoundRect(target.anchor, CornerRadius(12.dp.toPx()))) },
                     clipOp = ClipOp.Difference,
                 ) {
                     drawRect(Scrim)
