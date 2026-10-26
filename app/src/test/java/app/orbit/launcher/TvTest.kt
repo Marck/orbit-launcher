@@ -67,8 +67,19 @@ abstract class TvTest {
         return BitmapDrawable(context.resources, bmp)
     }
 
-    fun app(pkg: String, label: String, art: Drawable?, removable: Boolean = true, isBanner: Boolean = true) =
-        LaunchableApp(pkg, label, art, isBanner = isBanner, removable = removable)
+    fun app(
+        pkg: String,
+        label: String,
+        art: Drawable?,
+        removable: Boolean = true,
+        isBanner: Boolean = true,
+        factoryUpdated: Boolean = false,
+    ) = LaunchableApp(
+        pkg, label, art,
+        isBanner = isBanner,
+        removable = removable,
+        factoryUpdated = factoryUpdated,
+    )
 
     companion object {
         /**

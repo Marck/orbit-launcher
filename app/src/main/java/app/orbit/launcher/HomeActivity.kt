@@ -543,8 +543,13 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                         label = app.label,
                         anchor = anchor,
                         // Only set when the system would actually accept an uninstall, which
-                        // is what decides whether the entry is offered at all.
-                        packageName = app.packageName.takeIf { app.removable },
+                        // is what decides whether the entry is offered at all. An updated
+                        // factory app counts: the update can come off even though the app
+                        // cannot, and hiding the entry there was offering nothing on half the
+                        // apps on the television.
+                        packageName = app.packageName
+                            .takeIf { app.removable || app.factoryUpdated },
+                        updatesOnly = !app.removable && app.factoryUpdated,
                     )
                 },
                 onMove = { delta ->

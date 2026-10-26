@@ -62,6 +62,11 @@ internal data class TileMenu(
     /** The tile and its label on screen, for the menu to point at and to leave undimmed. */
     val anchor: Rect,
     val packageName: String? = null,
+    /**
+     * The update can come off but the app itself cannot, so the entry has to say so. Calling it
+     * "Uninstall" would promise to remove an app that is still going to be there afterwards.
+     */
+    val updatesOnly: Boolean = false,
 )
 
 internal class MenuItem(val label: String, val icon: ImageVector, val onClick: () -> Unit)
@@ -87,7 +92,15 @@ internal fun TileMenuSheet(
         add(MenuItem("Open", Glyphs.Input, onOpen))
         add(MenuItem("Move", Glyphs.Swap, onMove))
         add(MenuItem("Remove from favorites", Glyphs.HeartMinus, onRemove))
-        if (target.packageName != null) add(MenuItem("Uninstall", Icons.Outlined.Delete, onUninstall))
+        if (target.packageName != null) {
+            add(
+                MenuItem(
+                    if (target.updatesOnly) "Uninstall updates" else "Uninstall",
+                    Icons.Outlined.Delete,
+                    onUninstall,
+                )
+            )
+        }
     }
     val requesters = remember(items.size) { List(items.size) { FocusRequester() } }
     var current by remember { mutableIntStateOf(0) }
