@@ -284,8 +284,37 @@ object Backdrops {
             val named = picture.title?.trim()?.lowercase()
             picture.packageName in chosen && (named == null || named !in skip)
         }
-        val (told, bare) = mine.partition { !it.description.isNullOrBlank() }
+        val (told, bare) = distinct(mine).partition { !it.description.isNullOrBlank() }
         return (told.shuffled() + bare.shuffled()).take(MAX_PICTURES)
+    }
+
+    /**
+     * The same thing, kept once.
+     *
+     * An app publishes a programme into each of its own channels that it belongs to, so one
+     * film in both "recently added" and "favourites" arrives as two rows carrying the same
+     * title, the same artwork and the same way in. The row drew both of them, side by side,
+     * and the duplicates also ate places that something else could have had.
+     *
+     * Two tests of identity, because an app is free to fail either one. A row that points at
+     * the same thing is the same thing, whatever it says about itself. And a row that shows the
+     * same title over the same picture is the same thing as far as anyone watching can tell,
+     * whatever it points at. Nothing else is treated as a duplicate: two episodes that share a
+     * series cover have their own titles and both stay, which is why the picture alone is never
+     * enough on its own.
+     */
+    internal fun distinct(pictures: List<Picture>): List<Picture> {
+        val ways = HashSet<String>(pictures.size)
+        val shown = HashSet<String>(pictures.size)
+        return pictures.filter { picture ->
+            val way = picture.intentUri
+            val face = "${picture.title?.trim()?.lowercase().orEmpty()}\u0000${picture.uri}"
+            // Both are recorded even when the row is dropped, so a third copy cannot slip
+            // through on the test the second one failed.
+            val freshWay = way == null || ways.add(way)
+            val freshFace = shown.add(face)
+            freshWay && freshFace
+        }
     }
 
     /**
