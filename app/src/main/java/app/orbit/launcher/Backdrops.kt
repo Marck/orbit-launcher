@@ -169,7 +169,7 @@ object Backdrops {
     )
 
     /** Enough for a long sitting without reading the whole list into memory. */
-    private const val MAX = 60
+    internal const val MAX_PICTURES = 60
 
     /** Bumped on every change, so the home screen picks new sources up without rescanning. */
     var revision by mutableIntStateOf(0)
@@ -285,7 +285,7 @@ object Backdrops {
             picture.packageName in chosen && (named == null || named !in skip)
         }
         val (told, bare) = mine.partition { !it.description.isNullOrBlank() }
-        return (told.shuffled() + bare.shuffled()).take(MAX)
+        return (told.shuffled() + bare.shuffled()).take(MAX_PICTURES)
     }
 
     /**

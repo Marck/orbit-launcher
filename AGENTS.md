@@ -87,6 +87,20 @@ Verified on an Android 10 set. Re-verify on yours; do not assume.
   width and the row is then fixed at that height. Give the child a width in dp.
 - **A `LruCache` handed one entry bigger than its maximum evicts everything and then that
   entry too**, leaving the cache empty. Check the size before putting.
+- **`am kill` does not restart the launcher.** It only takes processes that are safe to kill,
+  and the home app visible on screen is not one of them: the memory cache went on answering,
+  so a run meant to measure a cold start measured nothing. `adb install -r` does restart the
+  process, and unlike `force-stop` it leaves the accessibility setting alone. That is the only
+  way found to get a real second start.
+- **The artwork provider serialises and the payloads are the cost.** One cover is 1 to 2.4MB at
+  2000x3000 and nine asked for together finished 7.9 to 32.7s after a common start, on nine
+  separate threads, while decoding measured 0 to 1ms each. Parallelism and decode tuning buy
+  nothing here. `ContentResolver.loadThumbnail` is not supported by it and fails in 15 to 59ms.
+- **The media server's artwork URI carries an image tag.** It is
+  `content://<authority>?src=<encoded url>&v=<constant>`, where the encoded url holds
+  `tag=<32 hex>` derived from the picture itself. So a cache keyed on the whole URI invalidates
+  on its own when artwork is replaced. The `v` parameter is the same for every item and is not
+  a per-picture version; do not mistake it for one.
 - **A screencap of 0 bytes means the panel is off**, around 8KB means asleep. Neither is a
   failure. Wake it with `keyevent 224`, and put it back with `keyevent 223` when you finish.
 

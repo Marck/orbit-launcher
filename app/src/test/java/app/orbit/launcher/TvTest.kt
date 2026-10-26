@@ -119,8 +119,10 @@ abstract class TvTest {
         ShotHooks.artwork = null
         // On unless a test driving the hero from the remote turns it off.
         ShotHooks.cycling = true
-        // Decoded pictures outlive a test, since the cache is one object in a shared process.
+        // Decoded pictures outlive a test, since the cache is one object in a shared process,
+        // and the written tiles outlive it on disk, where the process is shared too.
         ArtworkCache.clear()
+        ArtworkDisk.reset(context)
         // Every screen here has a clock on it, so without this each shot differs from the last
         // recording by the minute it happened to be taken in, and the date rolls over nightly
         // on top of that. Pinned to a fixed instant so a difference means the layout moved.
