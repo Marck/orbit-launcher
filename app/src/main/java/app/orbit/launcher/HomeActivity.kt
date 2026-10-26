@@ -629,7 +629,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                         switchTo(target.id, target.label)
                     }
                 },
-                onRemove = {
+                onFavorite = {
                     FavoriteStore.remove(context, target.key, target.id)
                     confirmation = "Removed from favorites"
                     closeMenu(target)

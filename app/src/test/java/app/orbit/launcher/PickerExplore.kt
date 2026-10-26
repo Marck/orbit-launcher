@@ -232,7 +232,11 @@ class PickerExplore : TvTest() {
         val inputLine = chosenLine()
         println("TV app picker: '$appLine'  input picker: '$inputLine'")
         assertEquals("Select to add or remove. 1 chosen.", inputLine)
-        assertEquals("only Kodi is ticked", "Select to add or remove. 1 chosen.", appLine)
+        assertEquals(
+            "only Kodi is ticked",
+            "Select to add or remove. 1 chosen. Hold OK to uninstall.",
+            appLine,
+        )
     }
 
     @Test
@@ -243,7 +247,7 @@ class PickerExplore : TvTest() {
         shot("bug4b-empty-apps")
         println("TV empty app picker line: '${chosenLine()}'")
         assertEquals("nothing is shown, so nothing should read as chosen",
-            "Select an app to add it to the row.", chosenLine())
+            "Select an app to add it to the row. Hold OK to uninstall.", chosenLine())
     }
 
     /**
@@ -294,7 +298,7 @@ class PickerExplore : TvTest() {
         favorites(listOf("org.xbmc.kodi", "ar.tvplayer.tv"), emptyList())
         val s = launch(AppPickerActivity::class.java)
         assertEquals("Kodi", focused())
-        assertEquals("Select to add or remove. 2 chosen.", chosenLine())
+        assertEquals("Select to add or remove. 2 chosen. Hold OK to uninstall.", chosenLine())
         press(s, KeyEvent.KEYCODE_DPAD_LEFT)
         // The last tile is now the last factory app by name rather than the last app by name,
         // since what the owner installed is offered before what came with the television.
@@ -312,12 +316,16 @@ class PickerExplore : TvTest() {
         val tiviBefore = boundsOf("TiviMate")
         press(s, KeyEvent.KEYCODE_DPAD_CENTER) // untick TiviMate
         assertEquals(listOf("org.xbmc.kodi"), stored(FavoriteStore.APPS))
-        assertEquals("Select to add or remove. 1 chosen.", chosenLine())
+        assertEquals("Select to add or remove. 1 chosen. Hold OK to uninstall.", chosenLine())
         press(s, KeyEvent.KEYCODE_DPAD_CENTER) // tick again: goes to the end
         assertEquals(listOf("org.xbmc.kodi", "ar.tvplayer.tv"), stored(FavoriteStore.APPS))
         assertEquals(tiviBefore.top, boundsOf("TiviMate").top, 1f) // no reshuffle
-        holdOk(s) // a held OK toggles exactly once
-        assertEquals(listOf("org.xbmc.kodi"), stored(FavoriteStore.APPS))
+        // A held OK raises the menu here rather than falling through to a tap on the way up,
+        // so nothing is toggled until an entry in it is chosen. What the menu offers, and what
+        // choosing from it does, is PickerMenuTvTest's.
+        holdOk(s)
+        assertEquals(listOf("org.xbmc.kodi", "ar.tvplayer.tv"), stored(FavoriteStore.APPS))
+        press(s, KeyEvent.KEYCODE_BACK)
         shot("ok-app-picker")
     }
 
