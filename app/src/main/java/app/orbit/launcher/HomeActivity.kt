@@ -368,7 +368,18 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     val bar by animateFloatAsState(if (barOpen) 1f else 0f, label = "topBar")
 
     LaunchedEffect(zone) {
-        if (barOpen) column.animateScrollTo(0)
+        when {
+            barOpen -> column.animateScrollTo(0)
+            // The inputs are the last row, so the bottom of the column is where they belong,
+            // and saying so is what stops the rows drifting while the owner moves along them.
+            // Left to itself, focus asks the column to fit each tile as it takes focus, and a
+            // tile is grown by [PopOut] while it has it, so every press asked for a little
+            // more room than the last press had left. Measured on the set stepping along the
+            // row: the whole column crept up 7px, then 3, then 1, then 1, twelve in all, which
+            // is that pop-out to the pixel. It settles at the bottom either way; this just puts
+            // it there at once instead of over four presses.
+            zone == Zone.INPUTS -> column.animateScrollTo(column.maxValue)
+        }
     }
 
     // There is nothing behind the home screen for Back to go to. Left to the system, Back would

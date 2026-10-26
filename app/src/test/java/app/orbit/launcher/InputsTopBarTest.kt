@@ -1,6 +1,8 @@
 package app.orbit.launcher
 
+import android.app.Application
 import android.content.Intent
+import android.graphics.Bitmap
 import android.provider.Settings
 import android.view.KeyEvent
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -9,6 +11,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,6 +19,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -51,6 +55,68 @@ class InputsTopBarTest : TvTest() {
         s.moveToState(Lifecycle.State.CREATED); pump(200)
         s.moveToState(Lifecycle.State.RESUMED); pump(1500)
         log("after return -> ${where()}")
+    }
+
+    /** Where a label sits on screen, for checking that it stays there. */
+    private fun topOf(text: String): Float =
+        rule.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().first().boundsInRoot.top
+
+    /**
+     * A home screen with a poster row, so the column is taller than the screen.
+     *
+     * Needed for the drift test below: a column that already fits cannot scroll, and so cannot
+     * creep either, whatever focus asks of it.
+     */
+    private fun tallHome(): ActivityScenario<HomeActivity> {
+        shadowOf(ApplicationProvider.getApplicationContext<Application>())
+            .grantPermissions(ContinueWatching.PERMISSION)
+        ShotHooks.watchNext = emptyList()
+        ShotHooks.artwork = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888)
+        ShotHooks.pictures = (1..6).map {
+            Picture(
+                packageName = "org.jellyfin.androidtv",
+                uri = "pic://cover/$it",
+                title = "Cover $it",
+                seasons = null,
+                description = "What cover $it is about.",
+                intentUri = null,
+                wide = false,
+            )
+        }
+        favorites(myApps, myInputs)
+        return home()
+    }
+
+    /** Focus on an input tile, walked there from where the screen opens. */
+    private fun ontoInputs(s: ActivityScenario<HomeActivity>) {
+        val labels = ShotHooks.inputs.orEmpty().map { it.label }
+        var guard = 0
+        while (guard++ < 10 && focused() !in labels) p(s, D)
+        drain()
+        assertTrue("never reached the inputs row, focus is ${where()}", focused() in labels)
+    }
+
+    @Test
+    fun ok_steppingAlongInputsLeavesTheRowsWhereTheyAre() {
+        tag = "drift"
+        // The column used to creep upwards as the owner moved along the inputs. Focus asks the
+        // column to fit each tile as it takes it, and a tile is grown by PopOut while it has
+        // focus, so every press asked for a little more room than the last press had left.
+        // Measured on the set before the fix, stepping along the row: the column went up 7px,
+        // then 3, then 1, then 1, twelve in all, which is that pop-out to the pixel.
+        val s = tallHome()
+        ontoInputs(s)
+        pump(600)
+
+        val settled = topOf("FAVORITE APPS")
+        log("settled at $settled")
+        repeat(4) {
+            p(s, R)
+            val now = topOf("FAVORITE APPS")
+            log("FAVORITE APPS at $now")
+            assertEquals("the rows moved while stepping along the inputs", settled, now, 0.5f)
+        }
     }
 
     private val U = KeyEvent.KEYCODE_DPAD_UP
