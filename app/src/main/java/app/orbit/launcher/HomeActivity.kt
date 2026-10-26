@@ -411,7 +411,12 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                     Modifier
                         .graphicsLayer {
                             alpha = bar
-                            clip = true
+                            // Only while it is moving. The collapse places the bar above its own
+                            // box and needs the overflow hidden, but at rest there is nothing
+                            // outside the bar to hide and the clip cut the top off the focus
+                            // ring, which is drawn wider than the glyph it surrounds and sits
+                            // flush against the safe margin.
+                            clip = bar < 1f
                         }
                         .layout { measurable, constraints ->
                             val placed = measurable.measure(constraints)
