@@ -270,7 +270,8 @@ object ContinueWatching {
     private fun build(c: Columns): Resumable? {
         if (c.int(TvContract.WatchNextPrograms.COLUMN_BROWSABLE) == 0) return null
         val packageName = c.text(TvContract.WatchNextPrograms.COLUMN_PACKAGE_NAME) ?: return null
-        val title = c.text(TvContract.WatchNextPrograms.COLUMN_TITLE) ?: return null
+        val title = c.text(TvContract.WatchNextPrograms.COLUMN_TITLE)
+            ?.let { bounded(it, TitleCeiling) } ?: return null
         val intentUri = c.text(TvContract.WatchNextPrograms.COLUMN_INTENT_URI) ?: return null
 
         return Resumable(

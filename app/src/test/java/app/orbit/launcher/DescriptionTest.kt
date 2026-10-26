@@ -79,4 +79,50 @@ class DescriptionTest {
         val short = "The full two sentence summary that the app put in the short column instead."
         assertEquals(short, bestDescription(long = "A tagline.", short = short))
     }
+
+    @Test
+    fun `an app cannot hand the hero a novel`() {
+        // Nothing caps the long column, and Compose measures the whole string on every layout
+        // pass whatever is drawn of it. The hero's own row is measured more than once a frame.
+        val novel = (1..400).joinToString(" ") { "word$it" }
+        val shown = bestDescription(long = novel, short = null)!!
+
+        assertTrue("it was not held at all: ${shown.length}", shown.length <= DescriptionCeiling + 1)
+        assertTrue("it does not say it was cut", shown.endsWith("…"))
+        assertTrue("it was cut part way through a word: ...${shown.takeLast(12)}", novel.startsWith(shown.removeSuffix("…")))
+    }
+
+    @Test
+    fun `the ceiling is clear of anything real`() {
+        // 348 characters is the longest description measured on this set. A ceiling below what
+        // apps actually publish would be a new truncation bug rather than a guard against one.
+        val longest = 348
+        assertTrue("the ceiling would cut real rows", DescriptionCeiling > longest)
+        assertTrue("the title ceiling is below a real title", TitleCeiling > 64)
+
+        val real = "x".repeat(longest)
+        assertEquals("a real length description was held back", real, bestDescription(long = real, short = null))
+    }
+
+    @Test
+    fun `a title an app made absurd is held too`() {
+        val absurd = (1..100).joinToString(" ") { "part$it" }
+        val held = bounded(absurd, TitleCeiling)
+
+        assertTrue("the title was not held: ${held.length}", held.length <= TitleCeiling + 1)
+        assertTrue(held.endsWith("…"))
+        // An ordinary title is passed through as it was written.
+        assertEquals("Monster: The Lizzie Borden Story", bounded("Monster: The Lizzie Borden Story", TitleCeiling))
+    }
+
+    @Test
+    fun `one very long word is still held, even with nowhere to cut`() {
+        // trimToWord gives up when there is no earlier word boundary, so the ceiling has to
+        // hold on its own or the guard would pass the whole string through.
+        val oneWord = "z".repeat(DescriptionCeiling * 3)
+        val held = bounded(oneWord, DescriptionCeiling)
+
+        assertTrue("a single word walked past the ceiling: ${held.length}", held.length <= DescriptionCeiling + 1)
+        assertTrue(held.endsWith("…"))
+    }
 }
