@@ -28,6 +28,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -143,6 +148,21 @@ internal fun PosterRow(
                 requester = row.requester(keys[index]),
                 onFocused = { row.took(keys[index], index) },
                 onClick = { onOpen(picture) },
+                // The row runs off both sides of the screen, so its ends are the one place
+                // where a press does nothing and gives no reason why. Both rows of tiles
+                // already come round; this row was the one that stopped dead. Only offered
+                // when there is somewhere else to go: with a single cover, wrapping onto
+                // itself would swallow the press and look like the same dead end.
+                onEdgeLeft = if (index == 0 && posters.size > 1) {
+                    { row.jumpTo(posters.lastIndex, keys[posters.lastIndex]) }
+                } else {
+                    null
+                },
+                onEdgeRight = if (index == posters.lastIndex && posters.size > 1) {
+                    { row.jumpTo(0, keys[0]) }
+                } else {
+                    null
+                },
             )
         }
     }
@@ -160,6 +180,10 @@ private fun PosterTile(
     picture: Picture,
     requester: FocusRequester?,
     onFocused: () -> Unit,
+    /** Set only on the first cover, and takes focus to the last one. */
+    onEdgeLeft: (() -> Unit)? = null,
+    /** Set only on the last cover, and takes focus to the first one. */
+    onEdgeRight: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -179,6 +203,23 @@ private fun PosterTile(
             .onFocusChanged {
                 focused = it.hasFocus
                 if (it.hasFocus) onFocused()
+            }
+            // Taken before the focus system sees it, which is the only way to answer a press
+            // that would otherwise find nothing in that direction and be dropped. Auto-repeat
+            // keeps sending downs, but the wrap moves focus off this tile and the next press
+            // lands on one with no edge of its own, so holding the key comes round once and
+            // then carries on along the row.
+            .onPreviewKeyEvent { event ->
+                val down = event.type == KeyEventType.KeyDown
+                when {
+                    event.key == Key.DirectionLeft && onEdgeLeft != null -> {
+                        if (down) onEdgeLeft(); true
+                    }
+                    event.key == Key.DirectionRight && onEdgeRight != null -> {
+                        if (down) onEdgeRight(); true
+                    }
+                    else -> false
+                }
             }
             // The clickable is the tile's only focus target. A focusable() in front of it would
             // make a second one, which is what broke the rows during the move to Compose.
