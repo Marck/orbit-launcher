@@ -50,21 +50,30 @@ object Glyphs {
     )
 
     /** An outlined heart with a minus beside it, for leaving the favorites. */
-    val HeartMinus: ImageVector = builder("HeartMinus")
-        // The heart shrunk into the top left, to leave the corner free for the minus.
+    val HeartMinus: ImageVector = heartWith("HeartMinus", MINUS)
+
+    /** The same heart with a plus, for joining them. Used where an app may not be a favorite yet. */
+    val HeartPlus: ImageVector = heartWith("HeartPlus", PLUS)
+
+    /** Material's own outlined heart. */
+    private const val HEART =
+        "M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5" +
+            "c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5" +
+            " 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5" +
+            " 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5" +
+            "c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"
+
+    private const val MINUS = "M15 18h8v2h-8z"
+
+    /** The minus with an upright through it, both centred on the same point. */
+    private const val PLUS = "M15 18h8v2h-8zM18 15h2v8h-2z"
+
+    private fun heartWith(name: String, sign: String): ImageVector = builder(name)
+        // The heart shrunk into the top left, to leave the corner free for the sign.
         .addGroup(scaleX = 0.82f, scaleY = 0.82f, translationY = 0.5f)
-        .addPath(
-            pathData = addPathNodes(
-                "M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5" +
-                    "c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5" +
-                    " 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5" +
-                    " 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5" +
-                    "c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"
-            ),
-            fill = SolidColor(Color.Black),
-        )
+        .addPath(pathData = addPathNodes(HEART), fill = SolidColor(Color.Black))
         .clearGroup()
-        .addPath(pathData = addPathNodes("M15 18h8v2h-8z"), fill = SolidColor(Color.Black))
+        .addPath(pathData = addPathNodes(sign), fill = SolidColor(Color.Black))
         .build()
 
     private fun glyph(name: String, path: String): ImageVector =

@@ -67,6 +67,12 @@ internal data class TileMenu(
      * "Uninstall" would promise to remove an app that is still going to be there afterwards.
      */
     val updatesOnly: Boolean = false,
+    /**
+     * Whether the app is a favorite as the menu opens, which decides whether the entry adds or
+     * removes. The rows only hold favorites, so it is only the picker that can open a menu on an
+     * app that is not one yet.
+     */
+    val favorite: Boolean = true,
 )
 
 internal class MenuItem(val label: String, val icon: ImageVector, val onClick: () -> Unit)
@@ -82,22 +88,33 @@ internal class MenuItem(val label: String, val icon: ImageVector, val onClick: (
 @Composable
 internal fun TileMenuSheet(
     target: TileMenu,
-    onOpen: () -> Unit,
-    onMove: () -> Unit,
-    onRemove: () -> Unit,
-    onUninstall: () -> Unit,
     onDismiss: () -> Unit,
+    onOpen: (() -> Unit)? = null,
+    onMove: (() -> Unit)? = null,
+    onFavorite: (() -> Unit)? = null,
+    onUninstall: (() -> Unit)? = null,
 ) {
+    // Each entry is offered only where it means something. The rows offer all four; the picker
+    // leaves Open and Move out, since a press there already opens or adds and the order of the
+    // row is not what that screen is for.
     val items = buildList {
-        add(MenuItem("Open", Glyphs.Input, onOpen))
-        add(MenuItem("Move", Glyphs.Swap, onMove))
-        add(MenuItem("Remove from favorites", Glyphs.HeartMinus, onRemove))
-        if (target.packageName != null) {
+        onOpen?.let { add(MenuItem("Open", Glyphs.Input, it)) }
+        onMove?.let { add(MenuItem("Move", Glyphs.Swap, it)) }
+        onFavorite?.let {
+            add(
+                MenuItem(
+                    if (target.favorite) "Remove from favorites" else "Add to favorites",
+                    if (target.favorite) Glyphs.HeartMinus else Glyphs.HeartPlus,
+                    it,
+                )
+            )
+        }
+        if (target.packageName != null) onUninstall?.let {
             add(
                 MenuItem(
                     if (target.updatesOnly) "Uninstall updates" else "Uninstall",
                     Icons.Outlined.Delete,
-                    onUninstall,
+                    it,
                 )
             )
         }
