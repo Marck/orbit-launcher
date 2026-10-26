@@ -270,7 +270,8 @@ abstract class TvTest {
      * nothing in Compose has focus. Focus may sit on an inner clickable; both are tried.
      */
     /** Every button the top bar can show, left to right. */
-    val topBarButtons = listOf("Search", "All apps", "All inputs", "Play Store", "Settings", "Profile")
+    val topBarButtons =
+        listOf("Search", "All apps", "All inputs", "Play Store", "Settings", "About", "Profile")
 
     /**
      * Walks up to the top bar and right to [name].

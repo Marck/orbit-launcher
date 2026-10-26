@@ -30,6 +30,26 @@ val signingKeystore: File = signingValue("storeFile")?.let(::File)?.takeIf(File:
     ?: committedKey
 val usingCommittedKey = signingKeystore == committedKey
 
+// The one place the version is written. Releases are cut by tagging the commit that carries
+// this value as v<version> and making a GitHub release from that tag; see the README. There is
+// no workflow behind it on purpose, since nothing here builds a package to attach.
+val orbitVersion = "0.2.0"
+
+/** One line of git output, or null outside a checkout, as in a source download. */
+fun git(vararg args: String): String? = runCatching {
+    val process = ProcessBuilder(listOf("git") + args)
+        .directory(rootProject.projectDir)
+        .redirectErrorStream(true)
+        .start()
+    val text = process.inputStream.bufferedReader().use { it.readText() }.trim()
+    if (process.waitFor() == 0) text.takeIf { it.isNotBlank() } else null
+}.getOrNull()
+
+// Recorded at build time so the set can say which commit it is running, which is the whole
+// point of the About card: a version alone cannot tell two builds of the same version apart.
+val gitSha = git("rev-parse", "--short=12", "HEAD") ?: "unknown"
+val gitModified = git("status", "--porcelain").orEmpty().isNotBlank()
+
 kotlin {
     compilerOptions {
         // The DSL that replaced kotlinOptions, which Kotlin 2.4 removed outright. Set here
@@ -46,10 +66,15 @@ android {
         applicationId = "app.orbit.launcher"
         minSdk = 29
         targetSdk = 35
-        // CI passes its run number, so each build installs over the one before it. A build here
-        // keeps 1 unless ORBIT_VERSION_CODE says otherwise.
-        versionCode = (System.getenv("ORBIT_VERSION_CODE") ?: "1").toInt()
-        versionName = "0.1.0"
+        // Derived from the version, so it rises with it and two builds of one version are
+        // the same number. CI can still pass its run number to tell nightly builds apart.
+        val (major, minor, patch) = orbitVersion.split(".").map(String::toInt)
+        versionCode = (System.getenv("ORBIT_VERSION_CODE")?.toInt())
+            ?: (major * 10_000 + minor * 100 + patch)
+        versionName = orbitVersion
+
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
+        buildConfigField("boolean", "GIT_MODIFIED", gitModified.toString())
     }
 
     signingConfigs {
@@ -88,6 +113,8 @@ android {
 
     buildFeatures {
         compose = true
+        // For the version and commit the About card reads.
+        buildConfig = true
     }
 
     lint {

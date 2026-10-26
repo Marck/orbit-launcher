@@ -49,6 +49,13 @@ object Glyphs {
         "M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z",
     )
 
+    /** An i in a ring, for what the build is. */
+    val Info: ImageVector = glyph(
+        "Info",
+        "M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2" +
+            " 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z",
+    )
+
     /** An outlined heart with a minus beside it, for leaving the favorites. */
     val HeartMinus: ImageVector = heartWith("HeartMinus", MINUS)
 

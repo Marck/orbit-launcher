@@ -91,6 +91,7 @@ internal fun TopBar(
     onFocused: (String) -> Unit,
     onLost: () -> Unit,
     onOpen: (Intent, String) -> Unit,
+    onAbout: () -> Unit,
 ) {
     val context = LocalContext.current
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -133,7 +134,7 @@ internal fun TopBar(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(date.format(now), color = Muted, fontSize = 12.sp, style = Legible)
         Spacer(Modifier.weight(1f))
-        Shortcuts(first, button, destinations, onOpen)
+        Shortcuts(first, button, destinations, onOpen, onAbout)
         Avatar(button)
         Spacer(Modifier.width(9.dp))
         Text(time.format(now), color = Color.White, fontSize = 16.sp, style = Legible)
@@ -186,6 +187,7 @@ internal fun Shortcuts(
     button: (String) -> Modifier,
     destinations: Destinations,
     onOpen: (Intent, String) -> Unit,
+    onAbout: () -> Unit,
 ) {
     val context = LocalContext.current
     val searchIntent = destinations.search
@@ -304,6 +306,17 @@ internal fun Shortcuts(
         Icon(
             imageVector = Icons.Filled.Settings,
             contentDescription = "Settings",
+            tint = Glyph,
+            modifier = Modifier.padding(4.dp),
+        )
+    }
+    Spacer(Modifier.width(9.dp))
+    // Next to the settings, since it is the same kind of thing: about the television rather
+    // than something to watch. It opens nothing outside Orbit, so it takes no intent.
+    TopBarButton(button("about"), onClick = onAbout) {
+        Icon(
+            imageVector = Glyphs.Info,
+            contentDescription = "About",
             tint = Glyph,
             modifier = Modifier.padding(4.dp),
         )

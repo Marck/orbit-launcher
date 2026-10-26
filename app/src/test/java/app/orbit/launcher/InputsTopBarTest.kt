@@ -359,6 +359,12 @@ class InputsTopBarTest : TvTest() {
         p(s, OK); assertEquals("test.allinputs", nextStarted()?.action)
         p(s, R); assertEquals("Play Store", focused()); p(s, OK); assertEquals("test.store", nextStarted()?.action)
         p(s, R); assertEquals("Settings", focused()); p(s, OK); assertEquals(Settings.ACTION_SETTINGS, nextStarted()?.action)
+        // About is Orbit's own card rather than a screen on the television, so unlike every
+        // other button here it starts nothing. AboutTvTest covers what it says.
+        p(s, R); assertEquals("About", focused()); p(s, OK); assertEquals(null, nextStarted())
+        // The card then takes the next key to close itself and hands focus back to the button,
+        // so reaching the avatar from here is two presses rather than one.
+        p(s, R); assertEquals("About", focused())
         p(s, R); assertEquals("Profile", focused()); p(s, OK)
         assertEquals(AvatarPickerActivity::class.java.name, nextStarted()?.component?.className)
     }
