@@ -57,6 +57,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.border
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -116,8 +119,17 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
     val publishers by produceState(initialValue = emptyList<String>(), backdrops, listings) {
         value = if (backdrops) withContext(Dispatchers.IO) { Backdrops.publishers(context) } else emptyList()
     }
-    val apps = remember(all, publishers, backdrops) {
+    val offered = remember(all, publishers, backdrops) {
         if (!backdrops) all else all.filter { it.packageName in publishers }
+    }
+    // The backdrops screen is already down to the handful of apps that publish anything, so a
+    // filter there would be three buttons over a list of four.
+    // Nor over an empty grid: three buttons reading (0) are not a filter, they are furniture,
+    // and being focusable they also took the focus that belonged to nothing at all.
+    val filtering = !backdrops && offered.isNotEmpty()
+    var filter by rememberSaveable { mutableStateOf(AppFilter.ALL) }
+    val apps = remember(offered, filter, filtering) {
+        if (!filtering) offered else offered.filter { filter.keeps(it) }
     }
     val revision = FavoriteStore.revision + Backdrops.revision
     val favorites = remember(revision, backdrops) {
@@ -130,7 +142,7 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
     // apps, and it must not rearrange the grid with the favorites as they have been toggled since.
     // Only the order is kept, so the tiles still show the fresh read's names and banners.
     val order = remember(apps.map { it.packageName }) {
-        FavoriteStore.arrange(apps, favorites) { it.packageName }.map { it.packageName }
+        inPickerOrder(apps, favorites).map { it.packageName }
     }
     val ordered = remember(order, apps) {
         val byName = apps.associateBy { it.packageName }
@@ -201,6 +213,16 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
             color = Muted,
             fontSize = 14.sp,
         )
+        if (filtering) {
+            Spacer(Modifier.height(14.dp))
+            FilterRow(
+                current = filter,
+                // Counted off the whole list, so a count never changes with the filter and the
+                // owner can see what is behind the other two before pressing them.
+                countOf = { kind -> offered.count { kind.keeps(it) } },
+                onPick = { filter = it },
+            )
+        }
         Spacer(Modifier.height(18.dp - PopRoom))
 
         LazyVerticalGrid(
@@ -281,6 +303,48 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                         else -> FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName)
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Three buttons over the grid, because a set has far more factory apps than installed ones and
+ * the ones nobody is looking for were sorted in among the rest by name.
+ *
+ * Focus reaches them by pressing up from the first row of tiles, since they are the thing above
+ * the grid in the same column.
+ */
+@Composable
+private fun FilterRow(
+    current: AppFilter,
+    countOf: (AppFilter) -> Int,
+    onPick: (AppFilter) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        AppFilter.entries.forEach { kind ->
+            var focused by remember { mutableStateOf(false) }
+            val chosen = kind == current
+            Box(
+                Modifier
+                    .onFocusChanged { focused = it.hasFocus }
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (chosen) Color.White else Color(0xFF2A3444))
+                    // Blue rather than white, so a button that is both chosen and focused still
+                    // reads as two different things at once.
+                    .border(
+                        width = if (focused) 2.dp else 0.dp,
+                        color = if (focused) Color(0xFF9FC3FF) else Color.Transparent,
+                        shape = RoundedCornerShape(18.dp),
+                    )
+                    .clickable { onPick(kind) }
+                    .padding(horizontal = 16.dp, vertical = 7.dp),
+            ) {
+                Text(
+                    "${kind.label} (${countOf(kind)})",
+                    color = if (chosen) Color(0xFF14181F) else Color.White,
+                    fontSize = 13.sp,
+                )
             }
         }
     }
