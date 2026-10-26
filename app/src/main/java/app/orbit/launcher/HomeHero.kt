@@ -505,7 +505,7 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
             index = (index + 1) % mine.size
         }
     }
-    val item = mine.getOrNull(index)
+    val atStep = mine.getOrNull(index)
 
     // Ambient pictures, for an app that serves nothing of its own. The wide ones out of the
     // single read the screen does for the hero and the poster row together.
@@ -519,8 +519,11 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     val pool = ambient.orEmpty()
     var ambientIndex by remember(ambient) { mutableIntStateOf(0) }
     var ambientStepped by remember(ambient) { mutableIntStateOf(0) }
-    LaunchedEffect(ambient, item != null, ambientStepped) {
-        if (item != null || pool.size < 2 || !ShotHooks.cycling) return@LaunchedEffect
+    // Whether there is a row at all, taken from the step rather than from the paired row below:
+    // this only asks "is the hero busy with something to carry on with", and the answer must
+    // not wait on a fetch.
+    LaunchedEffect(ambient, atStep != null, ambientStepped) {
+        if (atStep != null || pool.size < 2 || !ShotHooks.cycling) return@LaunchedEffect
         while (true) {
             delay(CycleMs)
             ambientIndex = (ambientIndex + 1) % pool.size
@@ -528,7 +531,10 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     }
 
     val picture = pool.getOrNull(ambientIndex)
-    val uri = item?.posterUri ?: picture?.uri
+    // The link to fetch comes from the step, not from what is on screen. Taking it from the
+    // paired row below would be a circle: the pair only moves on once the fetch lands, and the
+    // fetch would never start.
+    val uri = atStep?.posterUri ?: picture?.uri
     // The link this came back for, so a fetch still running can be told apart from one that
     // came back with nothing. Only the second is a reason to stop waiting for a picture.
     var fetched by remember { mutableStateOf<String?>(null) }
@@ -539,11 +545,6 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
         }
         fetched = uri
         value = decoded
-    }
-    // The row's own position where the app gave one, and what the TV was last seen playing
-    // where it did not. A "next episode" row never carries a position.
-    val progress = remember(item, Returns.count) {
-        item?.let { it.progress ?: PlaybackMemory.progressFor(context, it.packageName, it.title) }
     }
     // The safety net, in case a fetch never comes back at all.
     //
@@ -565,6 +566,16 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     //
     // Only once its picture is actually on screen, too: a title over a black rectangle is
     // worse than no hero at all, and some artwork never loads.
+    // The row the artwork on screen actually belongs to. The ambient pictures have been paired
+    // this way since they were added; the rows were not, so stepping through two episodes put
+    // the new title over the previous picture for as long as the fetch took.
+    val item = pairedWith(mine, atStep, fetched)
+    // The row's own position where the app gave one, and what the TV was last seen playing
+    // where it did not. A "next episode" row never carries a position. Follows the paired row,
+    // so a bar never belongs to a different episode than the title above it.
+    val progress = remember(item, Returns.count) {
+        item?.let { it.progress ?: PlaybackMemory.progressFor(context, it.packageName, it.title) }
+    }
     val shown = pictureFor(pool, fetched)?.takeIf { item == null && art != null }
     // Still looking: the rows have not been read yet, or one of them is being fetched. Rows can
     // only be read with the permission, so without it nothing is coming and nothing is waited
@@ -603,6 +614,29 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
  * Nothing when the pool no longer holds it, which is what a reshuffle or a new read leaves
  * behind. The hero then shows no picture rather than a name the artwork is not of.
  */
+/**
+ * The row the artwork on screen belongs to, which is not always the one the cycle has reached.
+ *
+ * The backdrop keeps the last bitmap it decoded while the next one is fetched, so the title has
+ * to be taken from what came back rather than from where the step has got to. Otherwise the two
+ * disagree for as long as the fetch takes, which on a cold row is long enough to read.
+ *
+ * [stepped] is the fallback rather than null, so nothing is held back on a first load, when no
+ * artwork has arrived and there is no previous pair to keep showing. A fetch that comes back
+ * with nothing still records what it was for, so a row whose picture will not load shows its
+ * own title over an empty backdrop rather than the one before it forever.
+ */
+internal fun pairedWith(
+    rows: List<Resumable>,
+    stepped: Resumable?,
+    fetched: String?,
+): Resumable? {
+    if (stepped == null) return null
+    // Already the pair, and the one to prefer when two rows of a series share a cover.
+    if (stepped.posterUri == fetched) return stepped
+    return rows.firstOrNull { it.posterUri != null && it.posterUri == fetched } ?: stepped
+}
+
 internal fun pictureFor(pool: List<Picture>, fetched: String?): Picture? =
     fetched?.let { uri -> pool.firstOrNull { it.uri == uri } }
 
