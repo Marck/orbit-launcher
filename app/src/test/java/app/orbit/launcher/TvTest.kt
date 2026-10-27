@@ -139,6 +139,9 @@ abstract class TvTest {
         // on top of that. Pinned to a fixed instant so a difference means the layout moved.
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
         ShotHooks.now = PINNED_CLOCK
+        // Cleared rather than pinned: every other class wants the real build, and a stamp left
+        // behind by one of them would be read by all the rest.
+        ShotHooks.build = null
         // Infinite marquee animations would make an auto-advancing clock never settle.
         rule.mainClock.autoAdvance = false
     }

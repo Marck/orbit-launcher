@@ -37,6 +37,14 @@ object ShotHooks {
     var now: Long? = null
 
     /**
+     * What the About card should say it was built from, or null for the real thing.
+     *
+     * The same reason as [now]: the commit and the date are different on every build, so a
+     * screenshot of that card would differ from the last one for no reason anybody changed.
+     */
+    var build: BuildStamp? = null
+
+    /**
      * Whether the hero moves on by itself.
      *
      * True everywhere but in a test that presses left or right. The hero steps on every

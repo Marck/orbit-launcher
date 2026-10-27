@@ -345,9 +345,11 @@ out, and to uninstall it. The rows show favorites only, so this is how an app th
 favorite gets opened.
 
 **About** says what is running: the version, whether it is a `stable` or a `debug` build,
-and the commit it was built from. Any key closes it. The commit is the useful part, since
-every build between two releases carries the same version; compare it with the repository
-to see whether the TV is up to date. A build made with uncommitted changes says so.
+the commit it was built from, which release that commit is, and the day it was built. Any
+key closes it. The commit is the useful part, since every build between two releases
+carries the same version; compare it with the repository to see whether the TV is up to
+date. A build from an untagged commit reads `between releases`, and one made with
+uncommitted changes says so too.
 
 ## Setting the profile picture
 

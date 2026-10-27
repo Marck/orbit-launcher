@@ -120,6 +120,10 @@ internal fun AboutCard(onDismiss: () -> Unit) {
             Text(BuildInfo.line(), color = Color.White, fontSize = 16.sp)
             Spacer(Modifier.height(14.dp))
             Text(BuildInfo.source(), color = Muted, fontSize = 13.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(BuildInfo.release(), color = Muted, fontSize = 13.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(BuildInfo.built(), color = Muted, fontSize = 13.sp)
             Spacer(Modifier.height(18.dp))
             Text("Any key to close", color = Muted, fontSize = 11.sp)
         }
