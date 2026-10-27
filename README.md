@@ -226,8 +226,13 @@ Hold OK on a tile, or press Menu, to open its menu:
 - **Move** starts a move: left and right change its place, OK keeps it, Back puts
   the order back.
 - **Remove from favorites** takes it out of the row. It stays installed.
-- **Uninstall**, for apps the system allows it on, hands over to the system, which
-  does the confirming. An app removed anywhere drops out of favorites by itself.
+- **Uninstall** hands over to the system, which does the confirming. An app removed
+  anywhere drops out of favorites by itself. On a factory app that has since updated
+  itself the entry reads **Uninstall updates**, because that is what the system will
+  actually do: the update comes off and the app stays.
+- **Manage** takes the place of Uninstall on a factory app that never updated, which
+  the system will not remove at all. It opens the TV's own page for the app, where it
+  can be turned off instead.
 
 At either end of a row or grid, left and right wrap around, so the far end is one
 press away rather than a long walk.

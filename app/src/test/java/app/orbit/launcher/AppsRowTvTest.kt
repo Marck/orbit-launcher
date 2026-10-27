@@ -189,7 +189,10 @@ class AppsRowTvTest : TvTest() {
         val s = home()
         press(s, R); press(s, R); press(s, MENU)
         assertFalse(has("Uninstall"))
-        repeat(4) { press(s, D) }; assertEquals("Remove from favorites", focused())
+        // Down past the end used to stop on the last entry, which was Remove from favorites.
+        // A factory app now ends on Manage, the television's own page for it, since there is
+        // nothing to uninstall and a menu of three where one is the row itself said little.
+        repeat(4) { press(s, D) }; assertEquals("Manage", focused())
         press(s, BACK); press(s, R); press(s, MENU)
         repeat(3) { press(s, D) }; drain(); press(s, OK)
         val i = nextStarted()

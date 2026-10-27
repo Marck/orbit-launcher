@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -54,6 +55,28 @@ import kotlin.math.roundToInt
 
 /** The menu a tile opens on a long press of OK, and the sheet it is drawn in. */
 
+/**
+ * What the system would accept for an app, which decides both whether the uninstall entry is
+ * offered and how it has to be worded.
+ */
+internal enum class Removal {
+    /** A factory app that never updated. It cannot be removed at all, so nothing is offered. */
+    NONE,
+
+    /** A factory app that has since updated itself: the update comes off, the app stays. */
+    UPDATES,
+
+    /** An app the owner installed, which goes entirely. */
+    WHOLE,
+}
+
+/** Which of the three [app] is. The rules themselves are AppRepository's; this names them. */
+internal fun removalFor(app: LaunchableApp): Removal = when {
+    app.removable -> Removal.WHOLE
+    app.factoryUpdated -> Removal.UPDATES
+    else -> Removal.NONE
+}
+
 /** What the long-press menu is acting on. */
 internal data class TileMenu(
     val key: String,
@@ -61,12 +84,13 @@ internal data class TileMenu(
     val label: String,
     /** The tile and its label on screen, for the menu to point at and to leave undimmed. */
     val anchor: Rect,
+    /** The app the tile stands for, or null for an input, which is not an app at all. */
     val packageName: String? = null,
     /**
-     * The update can come off but the app itself cannot, so the entry has to say so. Calling it
-     * "Uninstall" would promise to remove an app that is still going to be there afterwards.
+     * What can be taken off. The update coming off but not the app has to be said, since calling
+     * that "Uninstall" would promise to remove an app that is still going to be there afterwards.
      */
-    val updatesOnly: Boolean = false,
+    val removal: Removal = Removal.NONE,
     /**
      * Whether the app is a favorite as the menu opens, which decides whether the entry adds or
      * removes. The rows only hold favorites, so it is only the picker that can open a menu on an
@@ -93,6 +117,7 @@ internal fun TileMenuSheet(
     onMove: (() -> Unit)? = null,
     onFavorite: (() -> Unit)? = null,
     onUninstall: (() -> Unit)? = null,
+    onManage: (() -> Unit)? = null,
 ) {
     // Each entry is offered only where it means something. The rows offer all four; the picker
     // leaves Open and Move out, since a press there already opens or adds and the order of the
@@ -109,14 +134,19 @@ internal fun TileMenuSheet(
                 )
             )
         }
-        if (target.packageName != null) onUninstall?.let {
-            add(
-                MenuItem(
-                    if (target.updatesOnly) "Uninstall updates" else "Uninstall",
-                    Icons.Outlined.Delete,
-                    it,
-                )
-            )
+        if (target.packageName != null) when (target.removal) {
+            Removal.WHOLE -> onUninstall?.let {
+                add(MenuItem("Uninstall", Icons.Outlined.Delete, it))
+            }
+            Removal.UPDATES -> onUninstall?.let {
+                add(MenuItem("Uninstall updates", Icons.Outlined.Delete, it))
+            }
+            // Nothing can be taken off, so the entry would be a button that cannot work. The
+            // television's own page for the app can still turn it off, which is the nearest
+            // thing to removing one of the eighteen a set like this came with.
+            Removal.NONE -> onManage?.let {
+                add(MenuItem("Manage", Icons.Filled.Settings, it))
+            }
         }
     }
     val requesters = remember(items.size) { List(items.size) { FocusRequester() } }

@@ -53,6 +53,15 @@ object AppRepository {
             (flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
 
     /**
+     * The television's own page for an app: permissions, storage, and the switch that turns it
+     * off. The nearest thing to removing an app the set will not let go of.
+     */
+    fun manageIntent(packageName: String): Intent = Intent(
+        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.fromParts("package", packageName, null),
+    )
+
+    /**
      * Last loaded list, kept for the lifetime of the process.
      *
      * Reading every launcher activity and decoding its artwork takes long enough to see, and the

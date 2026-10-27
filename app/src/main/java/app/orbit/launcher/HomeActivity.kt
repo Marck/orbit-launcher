@@ -555,14 +555,10 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                         id = app.packageName,
                         label = app.label,
                         anchor = anchor,
-                        // Only set when the system would actually accept an uninstall, which
-                        // is what decides whether the entry is offered at all. An updated
-                        // factory app counts: the update can come off even though the app
-                        // cannot, and hiding the entry there was offering nothing on half the
-                        // apps on the television.
-                        packageName = app.packageName
-                            .takeIf { app.removable || app.factoryUpdated },
-                        updatesOnly = !app.removable && app.factoryUpdated,
+                        packageName = app.packageName,
+                        // Decides the last entry: uninstall, the update back off, or the
+                        // television's own page for an app that can be neither.
+                        removal = removalFor(app),
                     )
                 },
                 onMove = { delta ->
@@ -645,6 +641,10 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 onMove = {
                     closeMenu(target)
                     beginEdit(target.key, target.id)
+                },
+                onManage = {
+                    closeMenu(target)
+                    target.packageName?.let { context.startActivitySafely(AppRepository.manageIntent(it)) }
                 },
                 onUninstall = {
                     closeMenu(target)
