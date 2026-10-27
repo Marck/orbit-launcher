@@ -130,6 +130,29 @@ class PickerMenuTvTest : TvTest() {
     }
 
     @Test
+    fun `the screen says what the menu just did`() {
+        // The menu closes behind a choice, so the tick appears on a tile the owner may not be
+        // looking at any more. The rows say it out loud; this screen now does too.
+        val s = menuOn("Plex")
+        waitFor("the menu to open", diagnose = { "focus: ${focused()}" }) { shows("Add to favorites") }
+        choose(s, "Add to favorites")
+        waitFor("the confirmation", diagnose = { "focus: ${focused()}" }) { shows("Added to favorites") }
+
+        holdOk(s)
+        waitFor("the menu again", diagnose = { "focus: ${focused()}" }) { shows("Remove from favorites") }
+        choose(s, "Remove from favorites")
+        waitFor("the confirmation", diagnose = { "focus: ${focused()}" }) { shows("Removed from favorites") }
+    }
+
+    @Test
+    fun `the words follow the direction, not the other way round`() {
+        // Said by the store rather than guessed from what the menu was showing, so the two
+        // cannot disagree if a toggle lands differently than the menu was drawn.
+        assertTrue(FavoriteStore.toggle(context, FavoriteStore.APPS, notYet))
+        assertFalse(FavoriteStore.toggle(context, FavoriteStore.APPS, notYet))
+    }
+
+    @Test
     fun `adding from the menu puts the app in the row`() {
         val s = menuOn("Plex")
         waitFor("the menu to open", diagnose = { "focus: ${focused()}" }) { shows("Add to favorites") }
