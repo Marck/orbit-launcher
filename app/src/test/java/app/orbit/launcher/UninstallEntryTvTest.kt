@@ -94,13 +94,37 @@ class UninstallEntryTvTest : TvTest() {
     }
 
     @Test
-    fun `a factory app that was never updated offers neither`() {
-        // The system would raise its dialog for this one too and then fail, so offering it
-        // would be offering a button that cannot work.
-        menuOn("Help")
+    fun `a factory app that was never updated is offered the television's own page`() {
+        // The system would raise its dialog for this one too and then fail, so offering an
+        // uninstall would be offering a button that cannot work. Its own page can still turn
+        // the app off, which is the nearest thing to removing it.
+        val s = menuOn("Help")
         assertTrue("the menu should still be open", shows("Remove from favorites"))
         assertFalse(shows("Uninstall"))
         assertFalse(shows("Uninstall updates"))
+        assertTrue("nothing offered at all on a factory app", shows("Manage"))
+
+        @Suppress("UNCHECKED_CAST")
+        val scenario = s as androidx.test.core.app.ActivityScenario<HomeActivity>
+        var guard = 0
+        while (focused() != "Manage" && guard++ < 6) press(scenario, KeyEvent.KEYCODE_DPAD_DOWN)
+        assertEquals("never reached Manage", "Manage", focused())
+        press(scenario, KeyEvent.KEYCODE_DPAD_CENTER)
+        val started = nextStarted()
+        assertEquals(
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            started?.action,
+        )
+        assertEquals("package:$factory", started?.data.toString())
+    }
+
+    @Test
+    fun `an app that can be uninstalled is not also offered Manage`() {
+        // Two ways to the same app on one short menu, when the first already does what was
+        // asked. The entry is there to fill a menu that would otherwise offer nothing.
+        menuOn("Jellyfin")
+        assertTrue(shows("Uninstall"))
+        assertFalse(shows("Manage"))
     }
 
     @Test

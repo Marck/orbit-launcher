@@ -163,11 +163,19 @@ class PickerMenuTvTest : TvTest() {
     }
 
     @Test
-    fun `a factory app that never updated is offered neither`() {
-        menuOn("Help")
+    fun `a factory app that never updated is offered the television's own page`() {
+        val s = menuOn("Help")
         waitFor("the menu to open", diagnose = { "focus: ${focused()}" }) { shows("Add to favorites") }
         assertFalse(shows("Uninstall"))
         assertFalse(shows("Uninstall updates"))
+        assertTrue("nothing offered at all on a factory app", shows("Manage"))
+        choose(s, "Manage")
+        val started = started(s)
+        assertEquals(
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            started?.action,
+        )
+        assertEquals("package:$factory", started?.data.toString())
     }
 
     @Test

@@ -298,11 +298,10 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                             id = app.packageName,
                             label = app.label,
                             anchor = anchor,
-                            // The same rule the rows use: offered only where the system would
-                            // accept it, and worded for which of the two it would do.
-                            packageName = app.packageName
-                                .takeIf { app.removable || app.factoryUpdated },
-                            updatesOnly = !app.removable && app.factoryUpdated,
+                            packageName = app.packageName,
+                            // The same rule the rows use, so an app offers the same last entry
+                            // whichever screen it is held on.
+                            removal = removalFor(app),
                             favorite = app.packageName in favorites,
                         )
                     }
@@ -350,6 +349,10 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                 onFavorite = {
                     FavoriteStore.toggle(context, FavoriteStore.APPS, target.id)
                     closeMenu(target.id)
+                },
+                onManage = {
+                    closeMenu(target.id)
+                    target.packageName?.let { context.startActivitySafely(AppRepository.manageIntent(it)) }
                 },
                 onUninstall = {
                     closeMenu(target.id)
