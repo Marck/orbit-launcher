@@ -1,4 +1,5 @@
 import java.io.File
+import java.time.LocalDate
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -49,6 +50,16 @@ fun git(vararg args: String): String? = runCatching {
 // point of the About card: a version alone cannot tell two builds of the same version apart.
 val gitSha = git("rev-parse", "--short=12", "HEAD") ?: "unknown"
 val gitModified = git("status", "--porcelain").orEmpty().isNotBlank()
+// The release this build is, when it is one. A commit between two tags has none, which is worth
+// saying: it means the television is running something that was never released.
+val gitTag = git("tag", "--points-at", "HEAD")
+    .orEmpty()
+    .lineSequence()
+    .firstOrNull { it.startsWith("v") }
+    .orEmpty()
+// The day, not the minute. A build is identified by its commit; the date is only there to place
+// it, and a finer stamp would change a screenshot of the About card on every rebuild.
+val builtOn: String = LocalDate.now().toString()
 
 kotlin {
     compilerOptions {
@@ -75,6 +86,8 @@ android {
 
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
         buildConfigField("boolean", "GIT_MODIFIED", gitModified.toString())
+        buildConfigField("String", "GIT_TAG", "\"$gitTag\"")
+        buildConfigField("String", "BUILT_ON", "\"$builtOn\"")
     }
 
     signingConfigs {

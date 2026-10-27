@@ -32,6 +32,16 @@ class AboutTvTest : TvTest() {
         favorites(myApps, myInputs)
     }
 
+    /** A build that is not this one, so the card is shown to read what it is given. */
+    private val pinned = BuildStamp(
+        version = "9.9.9",
+        channel = "stable",
+        commit = "0123456789ab",
+        modified = false,
+        tag = "v9.9.9",
+        builtOn = "2026-01-02",
+    )
+
     private fun shows(text: String): Boolean =
         rule.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().isNotEmpty()
@@ -49,7 +59,34 @@ class AboutTvTest : TvTest() {
         assertTrue("no version on the card", shows(BuildInfo.version))
         assertTrue("no channel on the card", shows(BuildInfo.channel))
         assertTrue("no commit on the card", shows(BuildInfo.commit))
+    }
+
+    @Test
+    fun `the card reads off the build it is given`() {
+        // Pinned, so the shot does not differ from the last one on every commit and every day.
+        ShotHooks.build = pinned
+        opened()
+        assertTrue(shows("9.9.9 stable"))
+        assertTrue(shows("0123456789ab"))
+        assertTrue(shows("released as v9.9.9"))
+        assertTrue(shows("built 2026-01-02"))
         shot("about")
+    }
+
+    @Test
+    fun `an untagged build says it was never released`() {
+        // The useful half of the tag: a television running something between two releases.
+        ShotHooks.build = pinned.copy(tag = "")
+        opened()
+        assertTrue(shows("between releases"))
+        assertFalse(shows("released as"))
+    }
+
+    @Test
+    fun `changes on top of the commit are said out loud`() {
+        ShotHooks.build = pinned.copy(modified = true)
+        opened()
+        assertTrue(shows("with changes on top"))
     }
 
     @Test
