@@ -31,10 +31,13 @@ object FavoriteStore {
             ?.filter { it.isNotBlank() }
             .orEmpty()
 
-    fun toggle(context: Context, key: String, id: String) {
+    /** Adds or takes out, and says which it did, so the caller can say so to the owner. */
+    fun toggle(context: Context, key: String, id: String): Boolean {
         val current = favorites(context, key).toMutableList()
-        if (!current.remove(id)) current += id
+        val added = !current.remove(id)
+        if (added) current += id
         write(context, key, current)
+        return added
     }
 
     fun remove(context: Context, key: String, id: String) {

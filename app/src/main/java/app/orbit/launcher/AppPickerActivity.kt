@@ -163,6 +163,24 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf<TileMenu?>(null) }
+    // What just happened, said once and then gone, as the rows do it. The menu closes behind a
+    // choice, so without this the only sign that anything happened is a tick appearing on a
+    // tile the owner is no longer looking at.
+    var confirmation by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(confirmation) {
+        if (confirmation == null) return@LaunchedEffect
+        delay(2600)
+        confirmation = null
+    }
+    // The app an uninstall was started for. Noticed by it leaving the list rather than by
+    // watching the uninstaller, which can be cancelled or can fail without saying so.
+    var removing by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(all) {
+        val gone = removing ?: return@LaunchedEffect
+        if (all.isEmpty() || all.any { it.packageName == gone }) return@LaunchedEffect
+        removing = null
+        confirmation = "It's gone now"
+    }
 
     // Focus starts on the first tile, and only until a tile has had it. A list that lands later
     // must not pull the cursor back to the start, unless the tile under it is no longer there.
@@ -347,7 +365,8 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
             TileMenuSheet(
                 target = target,
                 onFavorite = {
-                    FavoriteStore.toggle(context, FavoriteStore.APPS, target.id)
+                    val favorite = FavoriteStore.toggle(context, FavoriteStore.APPS, target.id)
+                    confirmation = if (favorite) "Added to favorites" else "Removed from favorites"
                     closeMenu(target.id)
                 },
                 onManage = {
@@ -356,6 +375,9 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                 },
                 onUninstall = {
                     closeMenu(target.id)
+                    // Only the whole app leaves the list. An update coming off puts the factory
+                    // version back, so there would be nothing to notice and nothing to say.
+                    removing = target.packageName.takeIf { target.removal == Removal.WHOLE }
                     target.packageName?.let { pkg ->
                         context.startActivitySafely(
                             Intent(Intent.ACTION_DELETE, Uri.fromParts("package", pkg, null))
@@ -365,6 +387,8 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                 onDismiss = { closeMenu(target.id) },
             )
         }
+
+        confirmation?.let { Confirmation(it) }
     }
 }
 
