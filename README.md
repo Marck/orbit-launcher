@@ -5,7 +5,8 @@ a hero for what you were last watching, a scrolling row of favorite apps, and a 
 of TV inputs.
 
 Status: in use on the author's set. Favorites, reordering, the input row, the pickers,
-the profile picture and the hero all work.
+the profile picture, the hero, the per-tile menu with uninstall, and the About card all
+work.
 
 It was written for one Android TV set and nothing about it is specific to that set beyond
 what is written down here. It needs no account, no server and no network service of its
@@ -15,8 +16,8 @@ own, and it sends nothing anywhere.
 
 Four steps. The whole thing takes about ten minutes, and every one of them is reversible.
 
-**1. Build and install it.** You need a JDK (17 or newer) and the Android SDK. There are no
-prebuilt releases, so you build it yourself:
+**1. Build and install it.** You need a JDK (17 or newer) and the Android SDK. The releases
+on GitHub are tags and notes only, with no APK attached, so you build it yourself:
 
 ```bash
 export JAVA_HOME=/path/to/jdk
@@ -48,7 +49,8 @@ outvoted and has to be disabled instead. There is a documented way back.
 |---|---|
 | Favorite apps | The grid glyph in the top bar, or the `+` tile at the end of the apps row |
 | Reorder a tile | Focus it, hold OK, then left and right. OK keeps it, Back puts it back |
-| Remove a tile | Focus it, hold OK, then Remove |
+| Remove a tile | Focus it, hold OK, then Remove from favorites |
+| Uninstall an app | Focus it, hold OK, then Uninstall. Works from the apps row and from All apps |
 | TV inputs | The `+` tile at the end of the inputs row |
 | Which apps may fill the hero | The picture glyph in the top bar |
 | Profile picture | The avatar glyph in the top bar |
@@ -113,7 +115,8 @@ CI builds the release APK, runs Android lint and the unit tests on every pull re
 every push to `main`; it can also be started by hand. New lint errors fail the build; the
 ones already there are listed in `app/lint-baseline.xml`. Each run gets its own
 `versionCode` from `ORBIT_VERSION_CODE`, so every CI build installs over the one before
-it. A build here keeps `versionCode` 1, so pass the variable to install over a CI build.
+it. A build here derives `versionCode` from `orbitVersion` instead, so 0.3.1 is 301; pass
+the variable if you need a local build to install over a CI build with a higher number.
 
 ### Signing
 
@@ -337,9 +340,9 @@ The service reads nothing from notifications or screen content. Its only capabil
 
 ## Top bar
 
-Left of the profile picture sit small buttons: the TV's own search, All apps, its inputs
-panel, the Play Store, Settings and About. Press up from the rows to reach them. A button
-is left out when the TV has nothing for it to open.
+Left of the profile picture sit small buttons, in this order: the TV's own search,
+Backdrops, All apps, its inputs panel, the Play Store, Settings and About. Press up from
+the rows to reach them. A button is left out when the TV has nothing for it to open.
 
 **All apps** opens the same grid as the add tile, but selecting an app there opens it.
 Holding OK, or pressing Menu, raises a menu offering to add it to the favorites or take it
@@ -395,18 +398,36 @@ Versions are [semver](https://semver.org). The version lives in one place, `orbi
 in `app/build.gradle.kts`, and `versionCode` is derived from it, so there is nothing to
 keep in step by hand.
 
-To cut a release:
+The bump has to be its own commit, and that commit is the one tagged. Tagging a commit that
+still carries the old `orbitVersion` gives an APK whose version and tag disagree, which is
+exactly what the About card exists to catch.
 
 ```bash
 # 1. Bump orbitVersion in app/build.gradle.kts, then open a PR and merge it as usual.
 # 2. Tag the merged commit and publish the release from it.
 git fetch origin && git checkout main && git pull
-git tag -a v0.2.0 -m "Orbit 0.2.0"
-git push origin v0.2.0
-gh release create v0.2.0 --title "Orbit 0.2.0" --generate-notes
+git tag -a v0.3.1 -m "Orbit 0.3.1"
+git push origin v0.3.1
+gh release create v0.3.1 --title "Orbit 0.3.1" --generate-notes
 ```
 
 `--generate-notes` writes the list from the pull requests merged since the previous tag.
+Do not pass `--target`: with the tag already pushed it is redundant, and a short sha there
+is rejected with `Release.target_commitish is invalid`.
+
+Then build the APK the release names and put it on the TV, from a **clean** checkout of the
+tagged commit: an uncommitted edit makes the About card read `with changes on top`, because
+the build records whether the tree was dirty.
+
+```bash
+./gradlew --no-daemon :app:assembleRelease
+"$ANDROID_HOME"/build-tools/35.0.0/aapt2 dump badging \
+  app/build/outputs/apk/release/app-release.apk | head -1   # versionName matches the tag
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+Check it landed by opening About in the top bar: it should name the version, the commit and
+`released as <tag>`.
 
 No APK is attached and no workflow builds one, on purpose: the only consumer is one
 television, which is flashed from a local build. The tag is what the About card's commit is
