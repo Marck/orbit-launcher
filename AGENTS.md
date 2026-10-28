@@ -101,6 +101,12 @@ Verified on an Android 10 set. Re-verify on yours; do not assume.
   `tag=<32 hex>` derived from the picture itself. So a cache keyed on the whole URI invalidates
   on its own when artwork is replaced. The `v` parameter is the same for every item and is not
   a per-picture version; do not mistake it for one.
+- **`adb shell input keyevent --longpress` is not a held key.** It sends a fresh DOWN with
+  `repeatCount` 0 and no `FLAG_LONG_PRESS`, then a flagged DOWN, then UP. Anything that tells a
+  deliberate press from a key being held, as the row edges do, sees the press half and never the
+  hold. Measured on the set: one `--longpress` right from the last tile moved two tiles, because
+  the first DOWN wrapped and the second moved on. Test holds in the harness and leave the feel
+  of it to whoever has the remote.
 - **A screencap of 0 bytes means the panel is off**, around 8KB means asleep. Neither is a
   failure. Wake it with `keyevent 224`, and put it back with `keyevent 223` when you finish.
 

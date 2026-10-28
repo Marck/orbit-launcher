@@ -16,9 +16,12 @@ HDMI-CEC, and the system's own dialogs. Those still need the set.
 
 ## Pieces
 - `ShotHooks` (main source, test-only doubles): `apps`, `inputs`, `store`, `storeIcon`,
-  `allInputs`, `defaultHome`. AppRepository/InputRepository return these when set, and
-  `AppRepository.launchIntent` answers for the fake apps so launches show in `nextStarted()`.
-  Robolectric has no real launcher apps or TvInputManager, so without them rows are empty.
+  `allInputs`, `search`, `defaultHome` for the rows and the top bar; `watchNext`, `pictures`,
+  `artwork`, `cycling` for the hero; `now` to pin the clock and `build` to pin the whole build
+  stamp, so the About card and anything dated is deterministic in a screenshot.
+  AppRepository/InputRepository return these when set, and `AppRepository.launchIntent`
+  answers for the fake apps so launches show in `nextStarted()`. Robolectric has no real
+  launcher apps or TvInputManager, so without them rows are empty.
 - `TvTest` (test source): base class with the fixture, `favorites()`, `stored()`, `pump()`,
   `launch()`, `press()`, `key()`, `holdOk()`, `shot()`, `focused()`, `nextStarted()`.
 - `HomeShots`: worked examples (menu, move, hold OK, absent inputs...).
@@ -59,13 +62,21 @@ HDMI-CEC, and the system's own dialogs. Those still need the set.
     records where focus is for moves made while a remote key is being handled.
 
 ## The suites
-- `AppsRowTvTest`, `InputsTopBarTest`, `VerifyBackHomeTest`: the home screen (rows, top bar,
-  notice, Back and Home). `bug_*`/`bugN_*` tests are the bug-hunt repros; they fail on code
-  before PR #11 and pass with it.
-- `PickerExplore`: the app and input pickers (fixed by PR #12; the "chosen" count by #8).
+Around forty classes; these are the ones worth knowing by name.
+- `AppsRowTvTest`, `InputsTopBarTest`, `VerifyBackHomeTest`, `HomeReachTest`: the home screen
+  (rows, top bar, notice, Back and Home). `bug_*`/`bugN_*` tests are the bug-hunt repros; they
+  fail on code before PR #11 and pass with it.
+- `PickerExplore`, `PickerMenuTvTest`: the pickers, and the hold-OK menu on All apps.
+- `UninstallEntryTvTest`: which removal entry a tile offers, which depends on whether the app
+  is removable, a factory app that updated, or a plain factory app.
+- `TileKeysTest`: the key rules on their own, including the edge case where a held key stops
+  at the end of a row and a fresh press comes round. A real remote is the only way to feel
+  that one; `adb shell input keyevent --longpress` cannot reproduce a held key.
+- `AboutTvTest`: the About card, against a pinned `ShotHooks.build`.
 - `AvatarFlowTest`, `VerifyAvatar`: the avatar picker (PR #9) and, in its `b*` tests, the home
   button service (PR #13).
-- `VerifyFixes`: the favorites prune (PR #8).
+- `BannerTest`: rasterises a drawable and checks its colours, the shape to copy for anything
+  visual.
 - `HomeShots`, `TvTestSmoke`: screenshots and a smoke test.
 Screenshots go to `app/build/tv-shots/`.
 
