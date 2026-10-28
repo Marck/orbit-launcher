@@ -130,6 +130,49 @@ class TileKeysTest {
     }
 
     @Test
+    fun holdingRightAtTheEndStopsThereRatherThanComingRound() {
+        // Held down to run along the row, the key used to carry past the last tile and start
+        // again, so aiming at the end by holding the key overshot it every time.
+        assertEquals(TileAction.EdgeRight, send(TileKey.RIGHT, KeyPhase.DOWN, edgeRight = true))
+        assertEquals(
+            "a repeat at the end should stop, not wrap",
+            TileAction.Swallow,
+            send(TileKey.RIGHT, KeyPhase.DOWN, now = 1_050, repeatCount = 1, edgeRight = true),
+        )
+        assertEquals(
+            TileAction.Swallow,
+            send(TileKey.RIGHT, KeyPhase.DOWN, now = 1_100, repeatCount = 2, edgeRight = true),
+        )
+        // The system's own long-press flag counts as held too, for a remote that sends one.
+        assertEquals(
+            TileAction.Swallow,
+            send(TileKey.RIGHT, KeyPhase.DOWN, now = 1_150, longPress = true, edgeRight = true),
+        )
+    }
+
+    @Test
+    fun holdingLeftAtTheStartStopsThereToo() {
+        assertEquals(TileAction.EdgeLeft, send(TileKey.LEFT, KeyPhase.DOWN, edgeLeft = true))
+        assertEquals(
+            TileAction.Swallow,
+            send(TileKey.LEFT, KeyPhase.DOWN, now = 1_050, repeatCount = 1, edgeLeft = true),
+        )
+    }
+
+    @Test
+    fun aPressOfItsOwnAfterAHoldStillComesRound() {
+        // What the owner does after the row has stopped at the end: let go, press again.
+        send(TileKey.RIGHT, KeyPhase.DOWN, edgeRight = true)
+        send(TileKey.RIGHT, KeyPhase.DOWN, now = 1_050, repeatCount = 1, edgeRight = true)
+        send(TileKey.RIGHT, KeyPhase.UP, now = 1_200, edgeRight = true)
+        assertEquals(
+            "a fresh press at the end should come round",
+            TileAction.EdgeRight,
+            send(TileKey.RIGHT, KeyPhase.DOWN, downTime = 2_000, now = 2_000, edgeRight = true),
+        )
+    }
+
+    @Test
     fun whileMovingLeftAndRightMoveTheTile() {
         assertEquals(Pair(TileAction.Move(-1), TileAction.Swallow), tap(TileKey.LEFT, editing = true))
         assertEquals(Pair(TileAction.Move(1), TileAction.Swallow), tap(TileKey.RIGHT, editing = true))

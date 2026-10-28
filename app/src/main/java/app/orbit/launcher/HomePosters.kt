@@ -205,18 +205,19 @@ private fun PosterTile(
                 if (it.hasFocus) onFocused()
             }
             // Taken before the focus system sees it, which is the only way to answer a press
-            // that would otherwise find nothing in that direction and be dropped. Auto-repeat
-            // keeps sending downs, but the wrap moves focus off this tile and the next press
-            // lands on one with no edge of its own, so holding the key comes round once and
-            // then carries on along the row.
+            // that would otherwise find nothing in that direction and be dropped. Only a press
+            // of its own comes round: held down to run along the row, the key stops at the end
+            // instead of carrying past it, the same as the rows above. The press is still
+            // swallowed either way, so the row stops dead rather than letting focus escape.
             .onPreviewKeyEvent { event ->
                 val down = event.type == KeyEventType.KeyDown
+                val wrap = down && !event.isHeld()
                 when {
                     event.key == Key.DirectionLeft && onEdgeLeft != null -> {
-                        if (down) onEdgeLeft(); true
+                        if (wrap) onEdgeLeft(); true
                     }
                     event.key == Key.DirectionRight && onEdgeRight != null -> {
-                        if (down) onEdgeRight(); true
+                        if (wrap) onEdgeRight(); true
                     }
                     else -> false
                 }
