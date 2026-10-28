@@ -34,7 +34,7 @@ val usingCommittedKey = signingKeystore == committedKey
 // The one place the version is written. Releases are cut by tagging the commit that carries
 // this value as v<version> and making a GitHub release from that tag; see the README. There is
 // no workflow behind it on purpose, since nothing here builds a package to attach.
-val orbitVersion = "0.3.0"
+val orbitVersion = "0.3.1"
 
 /** One line of git output, or null outside a checkout, as in a source download. */
 fun git(vararg args: String): String? = runCatching {
