@@ -235,7 +235,9 @@ Hold OK on a tile, or press Menu, to open its menu:
   can be turned off instead.
 
 At either end of a row or grid, left and right wrap around, so the far end is one
-press away rather than a long walk.
+press away rather than a long walk. Only on a press of its own: hold the key to run
+along the row and it stops at the end instead of carrying past it, so the last tile
+can be aimed at. Let go and press again to come round.
 
 ## Back, Home and coming back
 

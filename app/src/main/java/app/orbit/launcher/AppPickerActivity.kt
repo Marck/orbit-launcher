@@ -478,12 +478,16 @@ private fun PickerTile(
                     val down = event.type == KeyEventType.KeyDown
                     val up = event.type == KeyEventType.KeyUp
                     val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
+                    // Only a press of its own comes round, as in the rows: holding the key to
+                    // run along the grid stops at the end rather than starting again, so the
+                    // last tile can be aimed at without overshooting it.
+                    val wrap = down && !event.isHeld()
                     when {
                         event.key == Key.DirectionLeft && onEdgeLeft != null -> {
-                            if (down) onEdgeLeft(); true
+                            if (wrap) onEdgeLeft(); true
                         }
                         event.key == Key.DirectionRight && onEdgeRight != null -> {
-                            if (down) onEdgeRight(); true
+                            if (wrap) onEdgeRight(); true
                         }
                         onHold == null -> false
                         up && event.key == Key.Menu -> { onHold(spot.rect()); true }

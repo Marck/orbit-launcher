@@ -1,6 +1,7 @@
 package app.orbit.launcher
 
 import android.content.Intent
+import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.hasText
@@ -198,6 +199,34 @@ class AppsRowTvTest : TvTest() {
         val i = nextStarted()
         assertEquals(Intent.ACTION_DELETE, i?.action)
         assertEquals("package:org.jellyfin.androidtv", i?.data.toString())
+    }
+
+    /** Right held down, as a remote sends it: one press, then auto-repeats, then the release. */
+    private fun holdRight(s: ActivityScenario<HomeActivity>, repeats: Int) {
+        val down = SystemClock.uptimeMillis()
+        key(s, KeyEvent.ACTION_DOWN, R, down)
+        pump(300)
+        repeat(repeats) { n ->
+            key(s, KeyEvent.ACTION_DOWN, R, down, repeat = n + 1)
+            pump(200)
+        }
+        key(s, KeyEvent.ACTION_UP, R, down)
+        pump(400)
+    }
+
+    @Test fun ok_holdingRightStopsAtTheEndAndAPressComesRound() {
+        // Holding the key to run along the row used to carry past the last tile and start
+        // again, so the end could not be aimed at: it was always overshot. The row now stops
+        // there, and coming round is a press of its own.
+        favorites(myApps, myInputs)
+        val s = home()
+        val first = focused()
+        // More repeats than there are tiles, so the row would certainly have come round.
+        holdRight(s, repeats = myApps.size + 4)
+        assertEquals("holding right should stop on the add tile at the end", "+", focused())
+
+        press(s, R)
+        assertEquals("a press of its own at the end should come round", first, focused())
     }
 
     @Test fun ok_removeFavoriteAndLastFavorite() {

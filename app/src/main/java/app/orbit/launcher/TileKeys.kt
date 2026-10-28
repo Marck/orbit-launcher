@@ -77,9 +77,13 @@ class TileKeys {
             editing && ok -> if (up) TileAction.EndEdit(false) else TileAction.Swallow
             editing && key == TileKey.BACK -> if (up) TileAction.EndEdit(true) else TileAction.Swallow
             editing -> TileAction.Swallow
-            // At either end, left and right jump to the other end rather than stopping dead.
-            down && key == TileKey.LEFT && edgeLeft -> TileAction.EdgeLeft
-            down && key == TileKey.RIGHT && edgeRight -> TileAction.EdgeRight
+            // At either end, left and right jump to the other end rather than stopping dead,
+            // but only on a press of their own. Held down to run along the row, the key used
+            // to carry straight past the end and start again, so aiming at the last tile by
+            // holding the key overshot it and there was no way to stop short. Held, the row
+            // now stops at the end; let go and press again to come round.
+            down && key == TileKey.LEFT && edgeLeft && !held -> TileAction.EdgeLeft
+            down && key == TileKey.RIGHT && edgeRight && !held -> TileAction.EdgeRight
             key == TileKey.LEFT && edgeLeft -> TileAction.Swallow
             key == TileKey.RIGHT && edgeRight -> TileAction.Swallow
             up && key == TileKey.MENU -> TileAction.Menu
