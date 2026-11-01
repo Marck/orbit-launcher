@@ -65,7 +65,8 @@ Verified on an Android 10 set. Re-verify on yours; do not assume.
 - **`adb shell content query` cannot read `android.media.tv`.** It returns "No result found"
   for every table, including ones with over a thousand rows, because `com.android.shell` does
   not hold `READ_TV_LISTINGS` and cannot be granted it. The output is indistinguishable from
-  an empty table. To see the provider, query it **from inside the app** and log counts.
+  an empty table. To see the provider, query it **from inside the app** and log counts. The
+  probe in the debug source set does exactly that; see the README.
 - **`adb shell input keyevent 3` is not the home button.** It is injected into the input
   pipeline and does not take the path the physical remote takes. It will tell you home works
   when it does not. There is no substitute for someone pressing the button.

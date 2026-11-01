@@ -392,6 +392,45 @@ protected content on screen. Check what is in front first:
 adb shell dumpsys activity | grep -m1 ResumedActivity
 ```
 
+## Seeing what an app publishes
+
+An app only appears in the hero or the poster row once it publishes to the TV's own provider,
+which most apps do only after they have been opened and signed into. "This app shows nothing"
+and "this app publishes nothing" look identical from the outside, and
+`adb shell content query` cannot tell them apart either: it answers "No result found" for every
+`android.media.tv` table, however full, because the shell user cannot hold `READ_TV_LISTINGS`.
+
+Debug builds carry a probe that counts the rows from inside the app, where the permission is
+held. It is not in the release APK at all.
+
+```bash
+./gradlew assembleDebug && adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am broadcast -a app.orbit.launcher.PROBE
+adb logcat -d -s OrbitProbe
+```
+
+```
+watch-next: 23 rows from 2 apps
+  org.example.server 18 (next 16, continue 2)
+  com.example.player 5 (continue 5)
+preview: 1181 rows from 7 apps
+  com.example.store 1130
+channels: nothing published
+```
+
+Package names and counts, and nothing else: no titles, no descriptions, no artwork or intent
+URIs, no row ids. That is what makes the output safe to paste into an issue, and `ProbeTest`
+holds it to that shape rather than trusting it.
+
+Run it before and after signing into an app to see whether signing in is what was missing.
+Note that another platform's version of the same app proves nothing here: an Apple TV fills
+its top shelf through `TVTopShelfProvider`, which the tvOS build implements and the Android
+build knows nothing about.
+
+The receiver is exported, because a broadcast from the shell arrives as another uid, and
+guarded by `android.permission.DUMP` so that it is the shell rather than any installed app.
+That is the same guard `androidx.profileinstaller` uses for the same reason.
+
 ## Releasing
 
 Versions are [semver](https://semver.org). The version lives in one place, `orbitVersion`
