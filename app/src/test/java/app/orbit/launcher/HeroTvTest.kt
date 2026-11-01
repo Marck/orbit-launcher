@@ -338,6 +338,22 @@ class HeroTvTest : TvTest() {
     }
 
     @Test
+    fun `left and right stay on the hero, which has nothing beside it`() {
+        // The hero is the full width of the screen, so there is no neighbour either way. Left
+        // and right used to hand focus to the top bar, which is up, and on the clock, with no
+        // cycle to step through, that made the hero impossible to sit still on.
+        val s = launch(HomeActivity::class.java)
+        press(s, KeyEvent.KEYCODE_DPAD_UP)
+        // The hint is drawn only while the clock holds focus, so it is the focus assertion.
+        says("Press OK to choose backdrops")
+
+        press(s, KeyEvent.KEYCODE_DPAD_LEFT)
+        says("Press OK to choose backdrops")
+        press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
+        says("Press OK to choose backdrops")
+    }
+
+    @Test
     fun `a picture that will not load does not hold the hero empty`() {
         // Artwork that cannot be loaded: nothing opens a pic:// link in a test. The wait ends
         // when the fetch comes back with nothing, rather than after a guessed number of
