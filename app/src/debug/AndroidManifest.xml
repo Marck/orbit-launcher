@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug only. Nothing here is merged into the release APK, which is what ships to the TV. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Counts what each app publishes to the TV provider. Exported because a broadcast
+             from the shell arrives as another uid, and held to DUMP so that it is the shell
+             and the system rather than any installed app: adb holds DUMP, which is what lets
+             it run dumpsys at all. See Probe.kt. -->
+        <receiver
+            android:name=".ProbeReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="app.orbit.launcher.PROBE" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>
