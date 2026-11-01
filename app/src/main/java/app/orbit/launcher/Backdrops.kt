@@ -218,35 +218,43 @@ object Backdrops {
     fun allowed(context: Context): (String) -> Boolean {
         val allowance = allowance(context)
         val favorites = FavoriteStore.favorites(context, FavoriteStore.APPS).toSet()
+        // The app list already knows this for anything with a launcher entry. Asking it first
+        // keeps the answer the same as the one the rest of the screen uses, and leaves the
+        // package manager for a publisher that has no entry of its own, such as the TV's own
+        // recommendation service.
+        val known = AppRepository.load(context).associate { it.packageName to !it.removable }
         return { packageName ->
             allowance.allows(
                 packageName,
-                factory = AppRepository.factory(context, packageName),
+                factory = known[packageName] ?: AppRepository.factory(context, packageName),
                 favorite = packageName in favorites,
             )
         }
     }
 
-    /** Flips one publisher, recording the decision so the default no longer applies to it. */
-    fun toggle(context: Context, packageName: String) {
+    /**
+     * Records a decision about one publisher, so the default no longer applies to it.
+     *
+     * The caller says which way, rather than this working out the current state: the picker
+     * already knows it, and deciding it again here would mean reading the package manager on
+     * the key press. It also kept the two answers from drifting apart, which they did once,
+     * when the picker had the television's own app out and this had it in, so selecting it
+     * turned off an app that was already off.
+     */
+    fun choose(context: Context, packageName: String, on: Boolean) {
         val allowance = allowance(context)
-        val wasOn = allowance.allows(
-            packageName,
-            factory = AppRepository.factory(context, packageName),
-            favorite = packageName in FavoriteStore.favorites(context, FavoriteStore.APPS).toSet(),
-        )
-        val off = allowance.off.toMutableSet()
-        val on = allowance.on.toMutableSet()
-        if (wasOn) {
-            off += packageName
-            on -= packageName
+        val excluded = allowance.off.toMutableSet()
+        val included = allowance.on.toMutableSet()
+        if (on) {
+            included += packageName
+            excluded -= packageName
         } else {
-            on += packageName
-            off -= packageName
+            excluded += packageName
+            included -= packageName
         }
         prefs(context).edit {
-            putString(KEY_OFF, off.joinToString(SEPARATOR))
-            putString(KEY_ON, on.joinToString(SEPARATOR))
+            putString(KEY_OFF, excluded.joinToString(SEPARATOR))
+            putString(KEY_ON, included.joinToString(SEPARATOR))
         }
         revision++
     }

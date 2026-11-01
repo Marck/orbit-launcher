@@ -366,7 +366,14 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                         onHold = hold,
                     ) {
                         when {
-                            backdrops -> Backdrops.toggle(context, app.packageName)
+                            backdrops ->
+                                // favorites holds what is in rotation on this screen, so the
+                                // decision sent is the opposite of what the tile shows now.
+                                Backdrops.choose(
+                                    context,
+                                    app.packageName,
+                                    on = app.packageName !in favorites,
+                                )
                             opening -> AppRepository.launch(context, app.packageName)
                             else -> FavoriteStore.toggle(context, FavoriteStore.APPS, app.packageName)
                         }

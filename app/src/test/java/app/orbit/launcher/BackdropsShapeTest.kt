@@ -325,8 +325,8 @@ class BackdropsShapeTest {
 
     @Test
     fun `a source turned off in the picker offers neither shape`() {
-        // One toggle is enough now: it was in rotation by default, so this takes it out.
-        Backdrops.toggle(context, "server")
+        // In rotation by default, so saying so explicitly is what takes it out.
+        Backdrops.choose(context, "server", on = false)
         ShotHooks.pictures = listOf(
             picture("Wide one", wide = true),
             picture("Cover one", wide = false),
