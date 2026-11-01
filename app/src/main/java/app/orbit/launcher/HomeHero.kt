@@ -874,11 +874,10 @@ internal fun Clock(focused: Boolean) {
         }
     }
     val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-    val day = remember { SimpleDateFormat("EEEE d MMMM", Locale.getDefault()) }
     Column {
+        // The time alone. The date is already at the top left of the screen, and printing it
+        // again two lines under itself read as a mistake rather than as emphasis.
         Text(time.format(now), color = OnSurface, fontSize = 48.sp, fontWeight = FontWeight.Light)
-        Spacer(Modifier.height(2.dp))
-        Text(day.format(now), color = Muted, fontSize = 13.sp)
         // Only once it is in focus, so a hero standing quietly does not nag, and so OK here
         // never opens a screen the owner was given no reason to expect.
         if (focused) {
