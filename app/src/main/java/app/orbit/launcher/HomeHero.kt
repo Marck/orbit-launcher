@@ -266,9 +266,13 @@ internal fun Hero(
                         val ok = event.key == Key.DirectionCenter || event.key == Key.Enter
                         val back = event.key == Key.DirectionLeft
                         val on = event.key == Key.DirectionRight
-                        // Only while there is a cycle to step through. With one picture, or
-                        // none, right still leaves for the top bar the way it always has.
-                        val cycling = (back || on) && watching.entries > 1
+                        val sideways = back || on
+                        // Stepping needs something to step through. Either way the key stays
+                        // here: the hero is the full width of the screen and there is nothing
+                        // beside it, so left and right used to hand focus to the top bar,
+                        // which is up. On the clock, with nothing to step, that made the
+                        // hero impossible to sit still on.
+                        val cycling = sideways && watching.entries > 1
                         val press = event.nativeKeyEvent.downTime
                         when {
                             // Held as well as tapped, so the owner can run through a long list
@@ -279,6 +283,9 @@ internal fun Hero(
                             }
                             // The release too, or it would move focus after the step.
                             cycling && event.type == KeyEventType.KeyUp -> true
+                            // Nothing to step through, so the key does nothing at all rather
+                            // than leaving for a neighbour the hero does not have.
+                            sideways -> true
                             ok && event.type == KeyEventType.KeyDown && event.isHeld() -> {
                                 if (heldPress != press) {
                                     heldPress = press
@@ -576,18 +583,50 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     val progress = remember(item, Returns.count) {
         item?.let { it.progress ?: PlaybackMemory.progressFor(context, it.packageName, it.title) }
     }
-    val shown = pictureFor(pool, fetched)?.takeIf { item == null && art != null }
+    val landed = pictureFor(pool, fetched)?.takeIf { item == null && art != null }
+
+    // The last ambient picture that actually reached the screen, kept while the next one is
+    // being fetched.
+    //
+    // Without it the hero emptied out every time the cursor moved between an app with
+    // something to carry on with and one without: the link changes, the fetch starts again,
+    // and for as long as it took there was nothing to show. On a row of eight apps where one
+    // publishes rows, that was the clock flashing up between every pair of backdrops. The
+    // clock is for having no artwork at all, not for the moment between two pictures.
+    var held by remember { mutableStateOf<Pair<Picture, ImageBitmap>?>(null) }
+    LaunchedEffect(landed, art) {
+        val bitmap = art
+        if (landed != null && bitmap != null) held = landed to bitmap
+    }
+
+    // Links whose artwork came back with nothing, tried once each. A picture that will not
+    // load should hand over to the next rather than stop the cycle, but a pool where every
+    // one of them fails has to end somewhere, or the hero would turn over for ever showing
+    // nothing.
+    val failed = remember(pool) { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(uri, fetched, art, item) {
+        if (item != null || uri == null || fetched != uri || art != null) return@LaunchedEffect
+        failed.value = failed.value + uri
+        if (pool.size > 1 && failed.value.size < pool.size) {
+            ambientIndex = (ambientIndex + 1) % pool.size
+        }
+    }
+
+    val shown = landed ?: held?.first?.takeIf { item == null }
     // Still looking: the rows have not been read yet, or one of them is being fetched. Rows can
     // only be read with the permission, so without it nothing is coming and nothing is waited
     // for. On a cold start this runs to a few seconds, which was long enough to watch the hero
     // offer a way back and then take it away again, the thing it was taken out for.
-    val looking = ambient == null || (picture != null && art == null && fetched != uri)
+    val looking = stillLooking(ambient != null, uri, fetched)
     val settling = item == null && granted && shown == null && looking && !waited
+    // What the backdrop draws: the picture for the row or the ambient one on screen, falling
+    // back to the one held from before so the screen does not go black between two of them.
+    val backdrop = if (item != null) art else art ?: held?.second
     // Whichever cycle is the live one. Only one ever is: a programme to carry on with takes
     // the hero, and the ambient pictures only run when there is none.
     val entries = if (item != null) mine.size else pool.size
     return Watching(
-        item, progress, shown, settling, art, granted, asked,
+        item, progress, shown, settling, backdrop, granted, asked,
         ask = { ask.launch(ContinueWatching.PERMISSION) },
         entries = entries,
         step = { by ->
@@ -639,6 +678,21 @@ internal fun pairedWith(
 
 internal fun pictureFor(pool: List<Picture>, fetched: String?): Picture? =
     fetched?.let { uri -> pool.firstOrNull { it.uri == uri } }
+
+/**
+ * Whether the hero is waiting on a picture, as against having none to wait for.
+ *
+ * Whether a bitmap is in hand is not the question, and asking it was the bug: `produceState`
+ * keeps the last value while the next one is produced, so the artwork of the link before this
+ * one still counted as loaded. Moving the cursor off an app with something to carry on with
+ * then read as "nothing is coming", and the hero dropped to the clock with the previous
+ * picture still behind it. Along a row of eight apps where one publishes rows, that was the
+ * clock flashing up between every pair of backdrops.
+ *
+ * What settles it is whether the fetch that has come back is the one for the link now wanted.
+ */
+internal fun stillLooking(rowsRead: Boolean, wanted: String?, fetched: String?): Boolean =
+    !rowsRead || (wanted != null && wanted != fetched)
 
 /**
  * The programme's own artwork, bled in from the right and faded out towards the middle and the
