@@ -48,6 +48,18 @@ object AppRepository {
         (flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0
 
     /** A factory app that has since been updated, so the update can be taken off again. */
+    /**
+     * Whether the television came with this app, for a package that may have no launcher entry
+     * of its own and so is not in the list the rows are built from. Reads the package manager,
+     * so call it off the main thread.
+     *
+     * An app that cannot be found is treated as the owner's rather than the maker's: being
+     * wrong the other way would silently drop a source with nothing to say why.
+     */
+    internal fun factory(context: Context, packageName: String): Boolean = runCatching {
+        !removable(context.packageManager.getApplicationInfo(packageName, 0).flags)
+    }.getOrDefault(false)
+
     internal fun factoryUpdated(flags: Int): Boolean =
         !removable(flags) &&
             (flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0

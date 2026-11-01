@@ -43,9 +43,9 @@ class BackdropsShapeTest {
         )
 
     private fun sourcedToServer() {
-        // Chooses by hand, so the test does not depend on what is in the favorites.
-        Backdrops.toggle(context, "server")
-        assertTrue("server" in Backdrops.sources(context))
+        // Nothing to choose any more: a publisher supplies pictures unless it was turned off
+        // or the television came with it, and Robolectric has no such package installed.
+        assertTrue("server should be in rotation by default", Backdrops.allowed(context)("server"))
     }
 
     @After
@@ -324,9 +324,8 @@ class BackdropsShapeTest {
     }
 
     @Test
-    fun `no chosen source means neither shape is offered`() {
-        // Chosen, then unchosen, so the stored set is empty rather than never written.
-        Backdrops.toggle(context, "server")
+    fun `a source turned off in the picker offers neither shape`() {
+        // One toggle is enough now: it was in rotation by default, so this takes it out.
         Backdrops.toggle(context, "server")
         ShotHooks.pictures = listOf(
             picture("Wide one", wide = true),

@@ -141,8 +141,22 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
         if (!filtering) offered else offered.filter { filter.keeps(it) }
     }
     val revision = FavoriteStore.revision + Backdrops.revision
-    val favorites = remember(revision, backdrops) {
-        if (backdrops) Backdrops.sources(context).toList()
+    // Worked out off the main thread, because the default for a publisher the owner has not
+    // decided on depends on whether the television came with the app, which the package
+    // manager has to be asked.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val inRotation by produceState(emptyList<String>(), backdrops, publishers, revision) {
+        value = if (!backdrops) {
+            emptyList()
+        } else {
+            withContext(Dispatchers.IO) {
+                val allows = Backdrops.allowed(context)
+                publishers.filter(allows)
+            }
+        }
+    }
+    val favorites = remember(revision, backdrops, inRotation) {
+        if (backdrops) inRotation
         else FavoriteStore.favorites(context, FavoriteStore.APPS)
     }
     // Deliberately keyed on the apps alone, so toggling a favorite does not reshuffle the grid
@@ -236,11 +250,15 @@ private fun PickerScreen(opening: Boolean, backdrops: Boolean = false) {
                     // The rows these come from carry no genre and no age rating at all, so the app
                     // is the only thing there is to choose by. Said plainly rather than offering a
                     // genre list that would quietly match nothing.
+                    // Said here because the list is shorter than the owner's app list and
+                    // nothing on screen explains the gap. An app appears once it publishes
+                    // rows of its own, which most do only after being opened at least once.
                     backdrops && chosen == 0 ->
-                        "Pick which apps supply the pictures behind the hero. There is nothing to " +
-                            "choose by but the app: the TV's own rows carry no genre and no rating."
+                        "No app is supplying pictures. Select one to turn it back on. Only apps " +
+                            "that publish rows to the TV's own home screen can appear here."
                     backdrops -> "Pictures come from $chosen app${if (chosen == 1) "" else "s"}. " +
-                        "Select to add or remove."
+                        "Select one to turn it off. Only apps that publish rows to the TV's own " +
+                        "home screen appear here, and most publish none until opened once."
                     opening -> "Select to open. Hold OK to add to favorites or uninstall."
                     // Said here because a hold is the only way to reach the menu, and nothing
                     // on a tile shows that it is there. Uninstall is named rather than "more

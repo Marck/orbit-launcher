@@ -113,7 +113,7 @@ class HeroHeightTest : TvTest() {
             Picture(source, "pic://ambient", title, seasons, description, year, runtime)
         )
         ShotHooks.artwork = Bitmap.createBitmap(160, 90, Bitmap.Config.ARGB_8888)
-        Backdrops.toggle(ApplicationProvider.getApplicationContext(), source)
+        // No choosing: a publisher is in rotation unless it was turned off in the picker.
         launch(HomeActivity::class.java)
     }
 
