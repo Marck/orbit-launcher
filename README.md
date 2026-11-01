@@ -405,9 +405,14 @@ held. It is not in the release APK at all.
 
 ```bash
 ./gradlew assembleDebug && adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am broadcast -a app.orbit.launcher.PROBE
+adb shell am broadcast -n app.orbit.launcher/.ProbeReceiver -a app.orbit.launcher.PROBE
 adb logcat -d -s OrbitProbe
 ```
+
+The component has to be named. Without `-n` the broadcast is implicit, and since Android 8 an
+implicit broadcast is not delivered to a receiver declared in the manifest: the send reports
+`result=0` with no error, and the only sign of what happened is
+`BroadcastQueue: Background execution not allowed` in the full log.
 
 ```
 watch-next: 23 rows from 2 apps

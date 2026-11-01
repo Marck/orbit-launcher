@@ -111,7 +111,12 @@ internal object Probe {
 }
 
 /**
- * Runs [Probe] on `adb shell am broadcast -a app.orbit.launcher.PROBE`.
+ * Runs [Probe] on
+ * `adb shell am broadcast -n app.orbit.launcher/.ProbeReceiver -a app.orbit.launcher.PROBE`.
+ *
+ * The component has to be named. An implicit broadcast has not reached a manifest receiver
+ * since Android 8, and the send looks like it worked: `result=0`, no error, nothing in the
+ * app's log, and `Background execution not allowed` buried in the system log.
  *
  * Exported, because a broadcast from the shell arrives as another uid, and guarded by
  * `android.permission.DUMP` so that it is the shell and the system rather than any installed
