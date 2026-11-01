@@ -107,7 +107,7 @@ class BackdropsDistinctTest {
                 picture("Film $n", "pic://server/$n", way = "intent://server/item/$n"),
             )
         }
-        val picked = Backdrops.pick(found, setOf("server"), emptySet())
+        val picked = Backdrops.pick(found, emptySet())
         assertEquals(3, picked.size)
         assertEquals(3, picked.map { it.title }.toSet().size)
     }

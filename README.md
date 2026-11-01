@@ -52,7 +52,7 @@ outvoted and has to be disabled instead. There is a documented way back.
 | Remove a tile | Focus it, hold OK, then Remove from favorites |
 | Uninstall an app | Focus it, hold OK, then Uninstall. Works from the apps row and from All apps |
 | TV inputs | The `+` tile at the end of the inputs row |
-| Which apps may fill the hero | The picture glyph in the top bar |
+| Stop an app filling the hero | The picture glyph in the top bar. Everything publishing is on by default |
 | Profile picture | The avatar glyph in the top bar |
 
 Nothing is configured in a file, and nothing you pick is stored anywhere but the TV.
@@ -167,8 +167,12 @@ The top of the screen shows the most truthful thing Orbit can say, in this order
    https link to its own artwork, which is the one thing Orbit uses the network for. It
    asks for the picture and sends nothing. A picture that will not load is not offered at
    all, so a title never appears over a black rectangle. Those rows carry no genre and
-   no age rating on this set, so there is nothing to pick by but the app, and holding OK
-   on the hero chooses which apps supply them. Anything already in Watch Next is left out,
+   no age rating on this set, so there is nothing to pick by but the app, and the picture
+   glyph in the top bar is where apps are turned off. Supplying is opt out: an app that
+   publishes pictures is in, because an app only publishes once it has been opened and is
+   almost always one the owner installed. The exception is an app the television came with,
+   which stays out unless it is ticked or made a favourite: those rows are the maker's shop
+   front rather than anything the owner chose. Anything already in Watch Next is left out,
    so an ambient picture never repeats what the hero offers elsewhere.
 
    A picture that says what it is comes first. Of the 1359 rows on one set, 162 carry a

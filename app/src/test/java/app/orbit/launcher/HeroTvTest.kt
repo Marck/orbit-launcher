@@ -282,8 +282,8 @@ class HeroTvTest : TvTest() {
     @Test
     fun `a picture from an app that is not installed is not claimed to be on anything named`() {
         ShotHooks.pictures = listOf(Picture("com.gone.away", "pic://gone", "A Title", null, "About."))
-        // Chosen by hand, since the default sources are the owner's own favourite apps.
-        Backdrops.toggle(context, "com.gone.away")
+        // Nothing to choose: an app that is not installed is not one the television came with,
+        // so it is in rotation and the question is only what the hero calls it.
         launch(HomeActivity::class.java)
         says("ALSO ON THIS TV")
         says("A Title")

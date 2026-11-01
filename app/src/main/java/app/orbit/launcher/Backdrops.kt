@@ -6,6 +6,7 @@ import android.media.tv.TvContract
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 
 /**
  * Ambient artwork, for when the app in focus has nothing to carry on with.
@@ -176,31 +177,85 @@ object Backdrops {
         private set
 
     /**
-     * The apps chosen to supply pictures.
+     * What the owner has decided about each publisher, and what holds for the rest.
      *
-     * Until the owner chooses, their own favourite apps are used. Those are the apps they put
-     * on the screen themselves, so a picture from one is far likelier to be something of theirs
-     * than a streaming service's promotion wall, which is the only other thing on offer.
+     * Publishing is opt out. An app that publishes pictures is in, because an app only
+     * publishes once it has been opened and it is almost always something the owner installed
+     * on purpose. The list the picker shows is short enough already without a second gate.
+     *
+     * The exception is an app the television came with. Those are shop fronts, and their rows
+     * are advertising rather than anything the owner chose. They stay out until the owner
+     * either ticks one in the picker or makes it a favourite, which is the clearest statement
+     * there is that an app is theirs rather than the maker's.
      */
-    fun sources(context: Context): Set<String> {
-        val prefs = prefs(context)
-        if (!prefs.getBoolean(KEY_CHOSEN, false)) {
-            return FavoriteStore.favorites(context, FavoriteStore.APPS).toSet()
+    internal data class Allowance(val off: Set<String>, val on: Set<String>) {
+        fun allows(packageName: String, factory: Boolean, favorite: Boolean): Boolean = when {
+            packageName in off -> false
+            packageName in on -> true
+            else -> !factory || favorite
         }
-        return prefs.getString(KEY_SOURCES, null)
-            ?.split(SEPARATOR)
-            ?.filter { it.isNotBlank() }
-            ?.toSet()
-            .orEmpty()
     }
 
-    fun toggle(context: Context, packageName: String) {
-        val next = sources(context).toMutableSet()
-        if (!next.remove(packageName)) next += packageName
-        prefs(context).edit()
-            .putBoolean(KEY_CHOSEN, true)
-            .putString(KEY_SOURCES, next.joinToString(SEPARATOR))
-            .apply()
+    /** The owner's explicit decisions, with the old chosen-apps list retired on the way past. */
+    internal fun allowance(context: Context): Allowance {
+        val prefs = prefs(context)
+        // The allow list that came before this was frozen the moment the picker was first used,
+        // so every app installed afterwards was silently left out. Nothing is carried over from
+        // it: the new default is what the owner asked for, and the picker is where it is changed.
+        if (prefs.contains(KEY_CHOSEN) || prefs.contains(KEY_SOURCES)) {
+            prefs.edit { remove(KEY_CHOSEN).remove(KEY_SOURCES) }
+        }
+        return Allowance(off = prefs.read(KEY_OFF), on = prefs.read(KEY_ON))
+    }
+
+    private fun android.content.SharedPreferences.read(key: String): Set<String> =
+        getString(key, null)?.split(SEPARATOR)?.filter { it.isNotBlank() }?.toSet().orEmpty()
+
+    /**
+     * Whether a package may supply pictures, with the factory and favourite answers already
+     * looked up. Call off the main thread: it reads the package manager.
+     */
+    fun allowed(context: Context): (String) -> Boolean {
+        val allowance = allowance(context)
+        val favorites = FavoriteStore.favorites(context, FavoriteStore.APPS).toSet()
+        // The app list already knows this for anything with a launcher entry. Asking it first
+        // keeps the answer the same as the one the rest of the screen uses, and leaves the
+        // package manager for a publisher that has no entry of its own, such as the TV's own
+        // recommendation service.
+        val known = AppRepository.load(context).associate { it.packageName to !it.removable }
+        return { packageName ->
+            allowance.allows(
+                packageName,
+                factory = known[packageName] ?: AppRepository.factory(context, packageName),
+                favorite = packageName in favorites,
+            )
+        }
+    }
+
+    /**
+     * Records a decision about one publisher, so the default no longer applies to it.
+     *
+     * The caller says which way, rather than this working out the current state: the picker
+     * already knows it, and deciding it again here would mean reading the package manager on
+     * the key press. It also kept the two answers from drifting apart, which they did once,
+     * when the picker had the television's own app out and this had it in, so selecting it
+     * turned off an app that was already off.
+     */
+    fun choose(context: Context, packageName: String, on: Boolean) {
+        val allowance = allowance(context)
+        val excluded = allowance.off.toMutableSet()
+        val included = allowance.on.toMutableSet()
+        if (on) {
+            included += packageName
+            excluded -= packageName
+        } else {
+            excluded += packageName
+            included -= packageName
+        }
+        prefs(context).edit {
+            putString(KEY_OFF, excluded.joinToString(SEPARATOR))
+            putString(KEY_ON, included.joinToString(SEPARATOR))
+        }
         revision++
     }
 
@@ -252,12 +307,11 @@ object Backdrops {
      * Call off the main thread.
      */
     fun all(context: Context): List<Picture> {
-        val chosen = sources(context)
-        if (chosen.isEmpty()) return emptyList()
-        ShotHooks.pictures?.let { shot -> return shot.filter { it.packageName in chosen } }
+        val allows = allowed(context)
+        ShotHooks.pictures?.let { shot -> return shot.filter { allows(it.packageName) } }
         return runCatching {
             val found = mutableListOf<Picture>()
-            read(context) { picture -> if (picture.packageName in chosen) found += picture }
+            read(context) { picture -> if (allows(picture.packageName)) found += picture }
             found
         }.getOrDefault(emptyList())
     }
@@ -267,10 +321,10 @@ object Backdrops {
      * is what costs, and on this set these are picking over 117 rows rather than 1359.
      */
     fun wide(found: List<Picture>, context: Context, except: Set<String> = emptySet()): List<Picture> =
-        pick(found.filter { it.wide }, sources(context), except)
+        pick(found.filter { it.wide }, except)
 
     fun covers(found: List<Picture>, context: Context, except: Set<String> = emptySet()): List<Picture> =
-        pick(found.filter { !it.wide }, sources(context), except)
+        pick(found.filter { !it.wide }, except)
 
     /**
      * The rows that may be shown, in the order they should be: from a chosen app, not already
@@ -278,11 +332,13 @@ object Backdrops {
      *
      * Separate from the reading so it can be checked without a TV provider behind it.
      */
-    fun pick(found: List<Picture>, chosen: Set<String>, except: Set<String>): List<Picture> {
+    fun pick(found: List<Picture>, except: Set<String>): List<Picture> {
+        // What may be shown was settled when the rows were read, in [all]. Filtering again here
+        // would read the package manager on the main thread for no answer it does not have.
         val skip = except.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
         val mine = found.filter { picture ->
             val named = picture.title?.trim()?.lowercase()
-            picture.packageName in chosen && (named == null || named !in skip)
+            named == null || named !in skip
         }
         val (told, bare) = distinct(mine).partition { !it.description.isNullOrBlank() }
         return (told.shuffled() + bare.shuffled()).take(MAX_PICTURES)
@@ -464,6 +520,10 @@ object Backdrops {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private const val PREFS = "orbit.backdrops"
+    private const val KEY_OFF = "off"
+    private const val KEY_ON = "on"
+
+    /** Retired. Read once so it can be removed, never written. */
     private const val KEY_SOURCES = "sources"
     private const val KEY_CHOSEN = "chosen"
     private const val SEPARATOR = "\n"
