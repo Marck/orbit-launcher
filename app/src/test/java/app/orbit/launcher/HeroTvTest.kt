@@ -321,6 +321,23 @@ class HeroTvTest : TvTest() {
     }
 
     @Test
+    fun `the clock says the time and leaves the date to the top bar`() {
+        // The top bar already carries the day and the month. Printing it again two lines
+        // under itself read as a fault rather than as emphasis.
+        ShotHooks.now = PINNED_CLOCK
+        val at = java.util.Date(PINNED_CLOCK)
+        val locale = java.util.Locale.getDefault()
+        val time = java.text.SimpleDateFormat("HH:mm", locale).format(at)
+        val longDate = java.text.SimpleDateFormat("EEEE d MMMM", locale).format(at)
+
+        launch(HomeActivity::class.java)
+
+        // Both halves, so this cannot pass by the clock failing to draw at all.
+        says(time)
+        silentAbout(longDate)
+    }
+
+    @Test
     fun `a picture that will not load does not hold the hero empty`() {
         // Artwork that cannot be loaded: nothing opens a pic:// link in a test. The wait ends
         // when the fetch comes back with nothing, rather than after a guessed number of
