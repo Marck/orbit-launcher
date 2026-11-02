@@ -274,7 +274,7 @@ abstract class TvTest {
      */
     /** Every button the top bar can show, left to right. */
     val topBarButtons =
-        listOf("Search", "All apps", "All inputs", "Play Store", "Settings", "About", "Profile")
+        listOf("Search", "All apps", "All inputs", "Play Store", "Settings", "Orbit settings", "Profile")
 
     /**
      * Walks up to the top bar and right to [name].

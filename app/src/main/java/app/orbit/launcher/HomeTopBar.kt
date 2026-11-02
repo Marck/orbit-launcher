@@ -91,7 +91,7 @@ internal fun TopBar(
     onFocused: (String) -> Unit,
     onLost: () -> Unit,
     onOpen: (Intent, String) -> Unit,
-    onAbout: () -> Unit,
+    onOrbitSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -134,7 +134,7 @@ internal fun TopBar(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(date.format(now), color = Muted, fontSize = 12.sp, style = Legible)
         Spacer(Modifier.weight(1f))
-        Shortcuts(first, button, destinations, onOpen, onAbout)
+        Shortcuts(first, button, destinations, onOpen, onOrbitSettings)
         Avatar(button)
         Spacer(Modifier.width(9.dp))
         Text(time.format(now), color = Color.White, fontSize = 16.sp, style = Legible)
@@ -187,7 +187,7 @@ internal fun Shortcuts(
     button: (String) -> Modifier,
     destinations: Destinations,
     onOpen: (Intent, String) -> Unit,
-    onAbout: () -> Unit,
+    onOrbitSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val searchIntent = destinations.search
@@ -217,11 +217,11 @@ internal fun Shortcuts(
         Spacer(Modifier.width(9.dp))
     }
 
-    // Beside search, because the only other way in was holding OK on the artwork, which says
-    // nowhere that it exists. Always offered: with nothing ticked there are no backdrops, and
-    // with no backdrops the hero has nothing to hold OK on, which made it a one-way door.
+    // Favorites are what the rows show, so without this an app that is not a favorite could not
+    // be opened from Orbit at all.
+    // Holds the left edge, and the shared requester with it, when the TV has no search.
     TopBarButton(
-        button("backdrops")
+        button("apps")
             .then(if (searchIntent == null) Modifier.focusRequester(first) else Modifier)
             .then(
                 if (searchIntent == null) {
@@ -230,28 +230,6 @@ internal fun Shortcuts(
                     Modifier
                 }
             ),
-        onClick = {
-            context.openScreen(
-                Intent(context, AppPickerActivity::class.java)
-                    .putExtra(AppPickerActivity.EXTRA_BACKDROPS, true)
-            )
-        },
-    ) {
-        Icon(
-            imageVector = Glyphs.Picture,
-            contentDescription = "Backdrops",
-            tint = Glyph,
-            modifier = Modifier.padding(4.dp),
-        )
-    }
-    Spacer(Modifier.width(9.dp))
-
-    // Favorites are what the rows show, so without this an app that is not a favorite could not
-    // be opened from Orbit at all.
-    // No left edge of its own any more: Backdrops always sits to its left, so cancelling left
-    // here would strand focus on it.
-    TopBarButton(
-        button("apps"),
         onClick = {
             context.openScreen(
                 Intent(context, AppPickerActivity::class.java)
@@ -311,12 +289,13 @@ internal fun Shortcuts(
         )
     }
     Spacer(Modifier.width(9.dp))
-    // Next to the settings, since it is the same kind of thing: about the television rather
-    // than something to watch. It opens nothing outside Orbit, so it takes no intent.
-    TopBarButton(button("about"), onClick = onAbout) {
+    // Beside the television's settings, because it is the same kind of thing for the other
+    // half: that one is the set, this one is the launcher. What is running moved in here as
+    // a section, and the backdrop picker with it.
+    TopBarButton(button("orbit"), onClick = onOrbitSettings) {
         Icon(
-            imageVector = Glyphs.Info,
-            contentDescription = "About",
+            imageVector = Glyphs.Sliders,
+            contentDescription = "Orbit settings",
             tint = Glyph,
             modifier = Modifier.padding(4.dp),
         )

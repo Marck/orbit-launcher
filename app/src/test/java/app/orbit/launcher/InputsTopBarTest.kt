@@ -334,18 +334,8 @@ class InputsTopBarTest : TvTest() {
         tag = "ok2"
         favorites(myApps, myInputs)
         val s = home()
-        toTopBar(s, "Backdrops")
-        assertEquals("Backdrops", focused())
-        drain()
-        p(s, OK)
-        val picker = nextStarted()
-        assertEquals(AppPickerActivity::class.java.name, picker?.component?.className)
-        // The same screen the apps button opens, but asked for the backdrop sources.
-        assertTrue(
-            "opens the backdrop picker",
-            picker?.getBooleanExtra(AppPickerActivity.EXTRA_BACKDROPS, false) == true,
-        )
-        p(s, R); assertEquals("All apps", focused())
+        toTopBar(s, "All apps")
+        assertEquals("All apps", focused())
         drain()
         p(s, OK)
         val apps = nextStarted()
@@ -359,12 +349,12 @@ class InputsTopBarTest : TvTest() {
         p(s, OK); assertEquals("test.allinputs", nextStarted()?.action)
         p(s, R); assertEquals("Play Store", focused()); p(s, OK); assertEquals("test.store", nextStarted()?.action)
         p(s, R); assertEquals("Settings", focused()); p(s, OK); assertEquals(Settings.ACTION_SETTINGS, nextStarted()?.action)
-        // About is Orbit's own card rather than a screen on the television, so unlike every
-        // other button here it starts nothing. AboutTvTest covers what it says.
-        p(s, R); assertEquals("About", focused()); p(s, OK); assertEquals(null, nextStarted())
-        // The card then takes the next key to close itself and hands focus back to the button,
-        // so reaching the avatar from here is two presses rather than one.
-        p(s, R); assertEquals("About", focused())
+        // Orbit's own settings, as against the television's, which is the button before it.
+        // SettingsTvTest covers what is in there.
+        p(s, R); assertEquals("Orbit settings", focused())
+        drain()
+        p(s, OK)
+        assertEquals(SettingsActivity::class.java.name, nextStarted()?.component?.className)
         p(s, R); assertEquals("Profile", focused()); p(s, OK)
         assertEquals(AvatarPickerActivity::class.java.name, nextStarted()?.component?.className)
     }
@@ -380,23 +370,22 @@ class InputsTopBarTest : TvTest() {
         p(s, L); assertEquals("Search", focused())
         drain()
         p(s, OK); assertEquals("test.search", nextStarted()?.action)
-        p(s, R); assertEquals("Backdrops", focused())
         p(s, R); assertEquals("All apps", focused())
         // And back along the row: nothing cancels left between them.
-        p(s, L); assertEquals("Backdrops", focused())
         p(s, L); assertEquals("Search", focused())
     }
 
     @Test
-    fun ok_noSearchLeavesBackdropsHoldingTheEdge() {
+    fun ok_noSearchLeavesAllAppsHoldingTheEdge() {
         tag = "nosearch"
         ShotHooks.search = null
         favorites(myApps, myInputs)
         val s = home()
         assertEquals(0, rule.onAllNodes(hasContentDescription("Search"), true).fetchSemanticsNodes().size)
-        toTopBar(s, "Backdrops")
-        assertEquals("Backdrops", focused())
-        p(s, L); assertEquals("Backdrops", focused())
+        // All apps is leftmost without search, so it takes the edge the search button held.
+        toTopBar(s, "All apps")
+        assertEquals("All apps", focused())
+        p(s, L); assertEquals("All apps", focused())
     }
 
     @Test

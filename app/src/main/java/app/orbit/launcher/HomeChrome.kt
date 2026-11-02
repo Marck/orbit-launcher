@@ -79,57 +79,6 @@ internal fun Confirmation(text: String) {
     }
 }
 
-/**
- * What is running on this television: the version, whether it is a release build, and the commit
- * it was made from.
- *
- * The commit is the part that matters. Two builds of one version are told apart by nothing else,
- * which is the question whenever something has been merged and the set has not been updated.
- *
- * There is nothing here to act on, so any key closes it rather than only Back.
- */
-@Composable
-internal fun AboutCard(onDismiss: () -> Unit) {
-    val requester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { requester.focusWhenReady() }
-    // The press that opened this can arrive here as a release, which would shut it again before
-    // it was read. Only a key that goes down while the card is up counts, as the menu does.
-    var armed by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Scrim)
-            .focusRequester(requester)
-            .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown) armed = true
-                if (armed && event.type == KeyEventType.KeyUp) onDismiss()
-                true
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xF21E2838))
-                .padding(horizontal = 36.dp, vertical = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("Orbit", color = Color.White, fontSize = 24.sp)
-            Spacer(Modifier.height(8.dp))
-            Text(BuildInfo.line(), color = Color.White, fontSize = 16.sp)
-            Spacer(Modifier.height(14.dp))
-            Text(BuildInfo.source(), color = Muted, fontSize = 13.sp)
-            Spacer(Modifier.height(4.dp))
-            Text(BuildInfo.release(), color = Muted, fontSize = 13.sp)
-            Spacer(Modifier.height(4.dp))
-            Text(BuildInfo.built(), color = Muted, fontSize = 13.sp)
-            Spacer(Modifier.height(18.dp))
-            Text("Any key to close", color = Muted, fontSize = 11.sp)
-        }
-    }
-}
-
 @Composable
 internal fun Notice(
     title: String,

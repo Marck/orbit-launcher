@@ -1,6 +1,9 @@
 package app.orbit.launcher
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 /**
@@ -74,6 +77,18 @@ internal val PosterRowHeight = RowTop + PosterH * FocusScale + 4.dp
  * row in, the screen is full and there is nothing left to share out.
  */
 internal val HeroGap = 30.dp
+
+/**
+ * The colour Orbit marks its own things in, as the owner set it in the settings screen.
+ *
+ * Read through the store's revision, so choosing a colour redraws every screen holding one
+ * rather than only the one that changed it.
+ */
+internal val Accent: Color
+    @Composable get() {
+        val context = LocalContext.current
+        return remember(ThemeStore.revision) { ThemeStore.accent(context).color }
+    }
 
 internal val Surface = Color(0xFF14181F)
 internal val OnSurface = Color(0xFFDDE5F0)

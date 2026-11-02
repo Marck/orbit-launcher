@@ -248,7 +248,7 @@ internal fun Hero(
                     .width(3.dp)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (focused) Color(0xFF7FD4FF) else Color.Transparent)
+                    .background(if (focused) Accent else Color.Transparent)
             )
             Spacer(Modifier.width(13.dp))
 
@@ -936,7 +936,7 @@ internal fun Clock(focused: Boolean) {
         // never opens a screen the owner was given no reason to expect.
         if (focused) {
             Spacer(Modifier.height(8.dp))
-            Text("Press OK to choose backdrops", color = Color(0xFF7FD4FF), fontSize = 12.sp)
+            Text("Press OK to choose backdrops", color = Accent, fontSize = 12.sp)
         }
     }
 }
@@ -947,7 +947,7 @@ internal fun HeroLabel(text: String) {
     // been, and a label that wraps pushes the title down the screen.
     Text(
         text,
-        color = Color(0xFF7FD4FF),
+        color = Accent,
         fontSize = 11.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
