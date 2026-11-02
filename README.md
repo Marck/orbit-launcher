@@ -52,7 +52,8 @@ outvoted and has to be disabled instead. There is a documented way back.
 | Remove a tile | Focus it, hold OK, then Remove from favorites |
 | Uninstall an app | Focus it, hold OK, then Uninstall. Works from the apps row and from All apps |
 | TV inputs | The `+` tile at the end of the inputs row |
-| Stop an app filling the hero | The picture glyph in the top bar. Everything publishing is on by default |
+| Stop an app filling the hero | Orbit settings, Pictures. Everything publishing is on by default |
+| Orbit's colour | Orbit settings, Visual |
 | Profile picture | The avatar glyph in the top bar |
 
 Nothing is configured in a file, and nothing you pick is stored anywhere but the TV.
@@ -344,8 +345,8 @@ The service reads nothing from notifications or screen content. Its only capabil
 
 ## Top bar
 
-Left of the profile picture sit small buttons, in this order: the TV's own search,
-Backdrops, All apps, its inputs panel, the Play Store, Settings and About. Press up from
+Left of the profile picture sit small buttons, in this order: the TV's own search, All
+apps, its inputs panel, the Play Store, the TV's settings and Orbit's own. Press up from
 the rows to reach them. A button is left out when the TV has nothing for it to open.
 
 **All apps** opens the same grid as the add tile, but selecting an app there opens it.
@@ -353,12 +354,20 @@ Holding OK, or pressing Menu, raises a menu offering to add it to the favorites 
 out, and to uninstall it. The rows show favorites only, so this is how an app that is not a
 favorite gets opened.
 
-**About** says what is running: the version, whether it is a `stable` or a `debug` build,
-the commit it was built from, which release that commit is, and the day it was built. Any
-key closes it. The commit is the useful part, since every build between two releases
-carries the same version; compare it with the repository to see whether the TV is up to
-date. A build from an untagged commit reads `between releases`, and one made with
-uncommitted changes says so too.
+**Orbit settings** is the sliders, next to the gear. The gear is the television's settings;
+the sliders are the launcher's, and nothing in them leaves the set. Three sections:
+
+- **Visual** picks the colour Orbit marks its own things in: the bar beside the hero, the
+  line naming a picture, the hints. The surfaces stay near black whichever is chosen,
+  because the panel is usually in a dark room. New installs are drawn in `Sky`, which is
+  the pale blue Orbit has always used.
+- **Pictures** reaches the backdrop picker, which used to have a glyph of its own.
+- **About** says what is running: the version, whether it is a `stable` or a `debug` build,
+  the commit it was built from, which release that commit is, and the day it was built. The
+  commit is the useful part, since every build between two releases carries the same
+  version; compare it with the repository to see whether the TV is up to date. A build from
+  an untagged commit reads `between releases`, and one made with uncommitted changes says
+  so too.
 
 ## Setting the profile picture
 

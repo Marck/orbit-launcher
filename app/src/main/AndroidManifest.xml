@@ -67,6 +67,11 @@
             android:theme="@style/Theme.Orbit" />
 
         <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Orbit" />
+
+        <activity
             android:name=".AvatarPickerActivity"
             android:exported="false"
             android:theme="@style/Theme.Orbit" />
