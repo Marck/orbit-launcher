@@ -8,6 +8,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -676,6 +677,23 @@ internal fun pairedWith(
     return rows.firstOrNull { it.posterUri != null && it.posterUri == fetched } ?: stepped
 }
 
+/**
+ * What the hero says when there is nothing to watch, from the owner's own Home Assistant.
+ *
+ * Empty when it is not set up, when nothing was chosen for the hero, or when the server
+ * cannot be reached, which are three different things to the owner and the same thing here:
+ * the hero goes back to saying the time, as it always did.
+ *
+ * Call off the main thread.
+ */
+internal fun heroReadings(context: Context): List<HaEntity> {
+    val wanted = HomeAssistantStore.chosen(context, HaSlot.HERO)
+    if (wanted.isEmpty()) return emptyList()
+    val states = HomeAssistant.states(context) ?: return emptyList()
+    // In the order they were chosen, not the order the server happens to answer in.
+    return wanted.mapNotNull { id -> states.firstOrNull { it.entityId == id } }
+}
+
 internal fun pictureFor(pool: List<Picture>, fetched: String?): Picture? =
     fetched?.let { uri -> pool.firstOrNull { it.uri == uri } }
 
@@ -928,10 +946,33 @@ internal fun Clock(focused: Boolean) {
         }
     }
     val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val context = LocalContext.current
+    // Whatever the owner put in the hero, read again whenever the screen comes back rather
+    // than kept live: this is the state with nothing to watch, and a launcher holding a
+    // socket open to say what the hall temperature is would be a poor trade.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val readings by produceState(
+        initialValue = emptyList<HaEntity>(),
+        HomeAssistantStore.revision,
+        Returns.count,
+    ) {
+        value = withContext(Dispatchers.IO) { heroReadings(context) }
+    }
     Column {
         // The time alone. The date is already at the top left of the screen, and printing it
         // again two lines under itself read as a mistake rather than as emphasis.
         Text(time.format(now), color = OnSurface, fontSize = 48.sp, fontWeight = FontWeight.Light)
+        if (readings.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                readings.forEach { entity ->
+                    Column {
+                        Text(entity.reading, color = OnSurface, fontSize = 19.sp)
+                        Text(entity.name, color = Muted, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
         // Only once it is in focus, so a hero standing quietly does not nag, and so OK here
         // never opens a screen the owner was given no reason to expect.
         if (focused) {

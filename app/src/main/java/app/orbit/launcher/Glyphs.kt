@@ -57,6 +57,18 @@ object Glyphs {
     )
 
     /**
+     * The reorder handle, in front of a row that can be moved.
+     *
+     * Material's own drag handle. There is nothing to drag with a remote, but it is the shape
+     * everyone already reads as "this one can be moved", and without it nothing on the row
+     * said so.
+     */
+    val Reorder: ImageVector = glyph(
+        "Reorder",
+        "M20 9H4v2h16V9zM4 15h16v-2H4v2z",
+    )
+
+    /**
      * Sliders, for Orbit's own settings.
      *
      * Not a second gear: the television's settings already have one in the same row, and two

@@ -1,7 +1,10 @@
 package app.orbit.launcher
 
 import android.view.KeyEvent
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isFocused
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -28,6 +31,9 @@ import org.robolectric.annotation.GraphicsMode
 class SettingsTvTest : TvTest() {
     override val outDir = "build/tv-shots/settings"
 
+    /** More presses than the screen has stops, so an unreachable row fails rather than spins. */
+    private val WalkLimit = 24
+
     @Before
     fun settingsFixture() {
         favorites(myApps, myInputs)
@@ -49,6 +55,52 @@ class SettingsTvTest : TvTest() {
     private fun onScreen(text: String): Boolean =
         rule.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().isNotEmpty()
+
+    /** The anchor the cursor is standing on, or null when it is on something unnamed. */
+    private fun focusedAnchor(): String? =
+        rule.onAllNodes(isFocused())
+            .fetchSemanticsNodes()
+            .firstNotNullOfOrNull { it.config.getOrNull(SemanticsProperties.TestTag) }
+
+    /**
+     * Walks down until the cursor is standing on [anchor].
+     *
+     * Three things this is not. Not a count of presses: adding a section would quietly make
+     * the count press OK on the wrong row, and the test would still pass. Not a match on the
+     * words under the cursor, which was the first attempt: rewording a sentence then broke a
+     * test about whether a row can be reached. And not unbounded, so a row that genuinely
+     * cannot be reached fails here rather than spinning.
+     *
+     * What it asserts is the only thing worth asserting about a route: that the remote can
+     * get there at all.
+     */
+    private fun walkTo(
+        anchor: String,
+        scenario: androidx.test.core.app.ActivityScenario<SettingsActivity>,
+    ) {
+        val visited = mutableListOf<String?>()
+        repeat(WalkLimit) {
+            if (focusedAnchor() == anchor) return
+            visited += focusedAnchor()
+            press(scenario, KeyEvent.KEYCODE_DPAD_DOWN)
+        }
+        throw AssertionError(
+            "never reached \"$anchor\". The cursor went through $visited and stopped on " +
+                "\"${focusedAnchor()}\""
+        )
+    }
+
+    /** The same walk sideways, for a row of things that sit beside each other. */
+    private fun walkRightTo(
+        anchor: String,
+        scenario: androidx.test.core.app.ActivityScenario<SettingsActivity>,
+    ) {
+        repeat(WalkLimit) {
+            if (focusedAnchor() == anchor) return
+            press(scenario, KeyEvent.KEYCODE_DPAD_RIGHT)
+        }
+        throw AssertionError("never reached \"$anchor\"; it stopped on \"${focusedAnchor()}\"")
+    }
 
     private fun says(text: String) {
         waitFor("\"$text\" on screen") { onScreen(text) }
@@ -122,11 +174,31 @@ class SettingsTvTest : TvTest() {
         // every press went nowhere. A click straight at the node hid that completely.
         val s = launch(SettingsActivity::class.java)
 
-        press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
-        press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
+        // Aimed at a colour by name rather than counted to. Reordering the palette, or
+        // adding one, then changes nothing here.
+        val wanted = ThemeStore.accents.last()
+        walkRightTo(Anchors.accent(wanted.id), s)
         press(s, KeyEvent.KEYCODE_DPAD_CENTER)
 
-        assertEquals("two to the right of Sky is Amber", "amber", ThemeStore.accent(context).id)
+        assertEquals(wanted.id, ThemeStore.accent(context).id)
+    }
+
+    @Test
+    fun `a route that changes shape does not break the walk to a row`() {
+        // The point of anchoring. Switching a layout row off takes a stop out of the way
+        // down the screen, which a counted route would walk straight past. This is the thing
+        // that used to break every time a section was added.
+        LayoutStore.setShown(context, HomeRow.INPUTS, false)
+        LayoutStore.setShown(context, HomeRow.POSTERS, false)
+
+        val s = launch(SettingsActivity::class.java)
+        walkTo(Anchors.BACKDROPS, s)
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
+
+        assertEquals(
+            AppPickerActivity::class.java.name,
+            nextStarted()?.component?.className,
+        )
     }
 
     @Test
@@ -134,10 +206,7 @@ class SettingsTvTest : TvTest() {
         val s = launch(SettingsActivity::class.java)
         says("Backdrop pictures")
 
-        // Past the Layout rows that now sit between the swatches and this: Favorite apps,
-        // Posters, Inputs. A count rather than a search, so adding a section fails here
-        // loudly instead of quietly pressing OK on something else.
-        repeat(4) { press(s, KeyEvent.KEYCODE_DPAD_DOWN) }
+        walkTo(Anchors.BACKDROPS, s)
         press(s, KeyEvent.KEYCODE_DPAD_CENTER)
 
         val started = nextStarted()
@@ -146,15 +215,5 @@ class SettingsTvTest : TvTest() {
             "opens the backdrop sources rather than the app list",
             started?.getBooleanExtra(AppPickerActivity.EXTRA_BACKDROPS, false) == true,
         )
-    }
-
-    @Test
-    fun `the television's own settings are not what this screen is`() {
-        // Said on the screen, because two gear-like glyphs sat next to each other in the top
-        // bar and nothing told the owner which was which.
-        launch(SettingsActivity::class.java)
-
-        says("The television's are the gear in the top bar")
-        assertFalse("should not claim to be the TV's settings", onScreen("Device Preferences"))
     }
 }

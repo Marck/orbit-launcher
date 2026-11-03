@@ -36,13 +36,26 @@ enum class HomeRow {
 object LayoutStore {
 
     /** The order Orbit shipped with, and what an install that never chooses still gets. */
-    internal val default = listOf(HomeRow.FAVORITES, HomeRow.POSTERS, HomeRow.INPUTS)
+    internal val default = listOf(
+        // Directly under the hero, because it is news and it is only there when there is
+        // some. Everything below it keeps its place on the days nothing happens.
+        HomeRow.NOTIFICATIONS,
+        HomeRow.POSTERS,
+        HomeRow.FAVORITES,
+        HomeRow.INPUTS,
+    )
 
     /** Cannot be switched off, so the screen always has something to launch from. */
     internal val required = setOf(HomeRow.FAVORITES)
 
-    /** Not offered yet, because nothing publishes to it. */
-    internal val unbuilt = setOf(HomeRow.NOTIFICATIONS)
+    /**
+     * Rows with nothing behind them yet, left out of the settings screen.
+     *
+     * Empty now that the notifications row has a source. Kept, because the next row to be
+     * built will want it and the rule is worth keeping written down: a row that can never
+     * appear is worse than one that is not offered.
+     */
+    internal val unbuilt = emptySet<HomeRow>()
 
     /** The rows the settings screen lists, in order, whether shown or not. */
     internal fun offered(context: Context): List<HomeRow> =
@@ -58,9 +71,13 @@ object LayoutStore {
             ?.split(SEPARATOR)
             ?.mapNotNull { name -> HomeRow.entries.firstOrNull { it.name == name } }
             .orEmpty()
+        // Nothing stored is not the same as an empty order: it means the owner has never
+        // said, so the shipped order applies. Reading it off the enum instead, as this did,
+        // quietly made the declaration order the default and left [default] as a comment.
+        val base = stored.ifEmpty { default }
         // Appended rather than dropped: a row this version knows about and the stored order
         // does not is new, and a new row has to appear somewhere or it is unreachable.
-        return stored + HomeRow.entries.filterNot { it in stored }
+        return base + HomeRow.entries.filterNot { it in base }
     }
 
     /** Whether a row is drawn at all. Having nothing to put in it is a separate question. */

@@ -72,6 +72,16 @@
             android:theme="@style/Theme.Orbit" />
 
         <activity
+            android:name=".HassSetupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Orbit" />
+
+        <activity
+            android:name=".HassEntitiesActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Orbit" />
+
+        <activity
             android:name=".AvatarPickerActivity"
             android:exported="false"
             android:theme="@style/Theme.Orbit" />
