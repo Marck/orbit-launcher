@@ -54,6 +54,12 @@ fixes that passed their own tests.
 - **Rendering is not running.** A vector with bad path data draws nothing and the build
   passes. `BannerTest` rasterises the drawable and checks the colours that should be in it,
   which is the shape to copy for anything visual.
+- **Aim at an anchor, never count presses.** A test that walks a screen with a remote has to
+  know when it has arrived. A count of presses is the worst way: adding a section silently
+  makes it press OK on the wrong thing and it still passes. Matching the words under the
+  cursor is the second worst, because rewording a sentence then breaks a test about whether a
+  row can be reached. Give the focusable thing a name in `Anchors` and walk until the focused
+  node carries it, bounded so an unreachable one fails rather than spins.
 - **Do not let a test encode a guess.** Assert the relationship or the ceiling, never an
   exact number you assumed. Several tests here deliberately assert "A is larger than B" or
   "this fits inside that" for exactly this reason.

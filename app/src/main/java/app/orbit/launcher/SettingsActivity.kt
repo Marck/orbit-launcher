@@ -44,6 +44,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -112,6 +113,7 @@ private fun SettingsScreen() {
         Entry(
             label = "Backdrop pictures",
             detail = "Which apps supply the artwork behind the hero",
+            anchor = Anchors.BACKDROPS,
             onClick = {
                 context.openScreen(
                     Intent(context, AppPickerActivity::class.java)
@@ -142,12 +144,14 @@ private fun SettingsScreen() {
             // Deliberately not the address. It is the owner's own server, and a screen that
             // prints it is a screen that prints it into every photograph of the television.
             detail = if (hassReady) "Saved on this television" else "Address and access token",
+            anchor = Anchors.HASS_CONNECTION,
             onClick = { context.openScreen(Intent(context, HassSetupActivity::class.java)) },
         )
         if (hassReady) {
             Entry(
                 label = "What to show",
                 detail = "Pick from what your Home Assistant has, and where each one goes",
+                anchor = Anchors.HASS_WHAT_TO_SHOW,
                 onClick = { context.openScreen(Intent(context, HassEntitiesActivity::class.java)) },
             )
         }
@@ -199,6 +203,7 @@ private fun Swatches(first: FocusRequester) {
                             }
                         )
                         .then(if (index == 0) Modifier.focusRequester(first) else Modifier)
+                        .testTag(Anchors.accent(accent.id))
                         .onFocusChanged { focused = it.isFocused }
                         // No focusable() in front: clickable brings its own focus node, and
                         // two of them means the one holding focus is not the one that acts.
@@ -242,6 +247,7 @@ private fun Rows() {
                 Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (focused) Color(0xFF1E2838) else Color.Transparent)
+                    .testTag(Anchors.layoutRow(row))
                     .onFocusChanged { focused = it.isFocused }
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -310,12 +316,13 @@ internal fun rowLabel(row: HomeRow): String = when (row) {
 
 /** A row that opens something else, with what it is for underneath. */
 @Composable
-private fun Entry(label: String, detail: String, onClick: () -> Unit) {
+private fun Entry(label: String, detail: String, anchor: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(if (focused) Color(0xFF1E2838) else Color.Transparent)
+            .testTag(anchor)
             .onFocusChanged { focused = it.isFocused }
             // As above: the clickable is the only focus target this row has.
             .clickable(interactionSource = null, indication = null, onClick = onClick)
