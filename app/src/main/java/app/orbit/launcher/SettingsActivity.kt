@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,10 @@ class SettingsActivity : ComponentActivity() {
 private fun SettingsScreen() {
     val context = LocalContext.current
     val first = remember { FocusRequester() }
+    // Nothing here is reachable until something holds focus. A television has no pointer to
+    // place it, and Compose does not hand it out on its own, so the screen opened and every
+    // key on the remote did nothing at all. The picker has asked for it since it was written.
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Column(
         Modifier
             .fillMaxSize()
@@ -150,7 +155,8 @@ private fun Swatches(first: FocusRequester) {
                         )
                         .then(if (index == 0) Modifier.focusRequester(first) else Modifier)
                         .onFocusChanged { focused = it.isFocused }
-                        .focusable()
+                        // No focusable() in front: clickable brings its own focus node, and
+                        // two of them means the one holding focus is not the one that acts.
                         .clickable(interactionSource = null, indication = null) {
                             ThemeStore.choose(context, accent.id)
                         }
@@ -175,7 +181,7 @@ private fun Entry(label: String, detail: String, onClick: () -> Unit) {
             .clip(RoundedCornerShape(8.dp))
             .background(if (focused) Color(0xFF1E2838) else Color.Transparent)
             .onFocusChanged { focused = it.isFocused }
-            .focusable()
+            // As above: the clickable is the only focus target this row has.
             .clickable(interactionSource = null, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
