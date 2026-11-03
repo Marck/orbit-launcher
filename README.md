@@ -503,16 +503,19 @@ exactly what the About card exists to catch.
 
 ```bash
 # 1. Bump orbitVersion in app/build.gradle.kts, then open a PR and merge it as usual.
-# 2. Tag the merged commit and publish the release from it.
+# 2. Tag the merged commit. Pushing the tag publishes the release.
 git fetch origin && git checkout main && git pull
 git tag -a v0.3.1 -m "Orbit 0.3.1"
 git push origin v0.3.1
-gh release create v0.3.1 --title "Orbit 0.3.1" --generate-notes
 ```
 
-`--generate-notes` writes the list from the pull requests merged since the previous tag.
-Do not pass `--target`: with the tag already pushed it is redundant, and a short sha there
-is rejected with `Release.target_commitish is invalid`.
+Pushing the tag is the whole of it. `.github/workflows/release.yml` watches for `v*` and
+publishes the release, with notes generated from the pull requests merged since the previous
+tag. A tag that already has a release is left alone, so running it again is safe.
+
+To cut one by hand instead, `gh release create <tag> --generate-notes`. Do not pass
+`--target`: with the tag already pushed it is redundant, and a short sha there is rejected
+with `Release.target_commitish is invalid`.
 
 Then build the APK the release names and put it on the TV, from a **clean** checkout of the
 tagged commit: an uncommitted edit makes the About card read `with changes on top`, because
