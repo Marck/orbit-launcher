@@ -1,7 +1,7 @@
 package app.orbit.launcher
 
+import android.view.KeyEvent
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -116,12 +116,26 @@ class SettingsTvTest : TvTest() {
     }
 
     @Test
-    fun `the backdrop picker is reached from here, now that the top bar no longer offers it`() {
-        launch(SettingsActivity::class.java)
+    fun `the remote can reach the colours, which is what a focusable screen means`() {
+        // Driven with the keys a remote sends, not with performClick. The screen rendered
+        // perfectly and could not be used at all: nothing asked for focus when it opened, so
+        // every press went nowhere. A click straight at the node hid that completely.
+        val s = launch(SettingsActivity::class.java)
+
+        press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
+        press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
+
+        assertEquals("two to the right of Sky is Amber", "amber", ThemeStore.accent(context).id)
+    }
+
+    @Test
+    fun `the backdrop picker is reached with the remote, now the top bar no longer offers it`() {
+        val s = launch(SettingsActivity::class.java)
         says("Backdrop pictures")
 
-        rule.onAllNodes(hasText("Backdrop pictures", substring = true), useUnmergedTree = true)[0]
-            .performClick()
+        press(s, KeyEvent.KEYCODE_DPAD_DOWN)
+        press(s, KeyEvent.KEYCODE_DPAD_CENTER)
 
         val started = nextStarted()
         assertEquals(AppPickerActivity::class.java.name, started?.component?.className)
