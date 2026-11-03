@@ -1,0 +1,39 @@
+name: Release
+
+# A tag is the only trigger. Tags are rare and this job is seconds, so it costs about
+# nothing, and it removes the one manual step that was easy to forget after a version bump.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # The whole history, because the notes are built from what was merged since the last
+      # tag and a shallow clone cannot see that far.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Only if the tag has no release yet, so re-running this never fails on a release that
+      # was already cut by hand.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already has a release, leaving it alone"
+            exit 0
+          fi
+          gh release create "$TAG" --title "Orbit ${TAG#v}" --generate-notes
