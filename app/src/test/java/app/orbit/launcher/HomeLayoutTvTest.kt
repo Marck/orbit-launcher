@@ -51,10 +51,14 @@ class HomeLayoutTvTest : TvTest() {
             appsFirst < inputsFirst,
         )
 
-        // Two places up, which puts the inputs at the top of the screen.
+        // Two places up, which puts the inputs above the apps.
         LayoutStore.move(context, HomeRow.INPUTS, -1)
         LayoutStore.move(context, HomeRow.INPUTS, -1)
-        assertEquals(HomeRow.INPUTS, LayoutStore.rows(context).first())
+        val order = LayoutStore.rows(context)
+        assertTrue(
+            "the inputs should now be above the apps in the order: $order",
+            order.indexOf(HomeRow.INPUTS) < order.indexOf(HomeRow.FAVORITES),
+        )
 
         launch(HomeActivity::class.java)
         waitFor("the rows to be drawn again") { seen("FAVORITE APPS") && seen("INPUTS") }

@@ -1,7 +1,10 @@
 package app.orbit.launcher
 
 import android.view.KeyEvent
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isFocused
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -49,6 +52,33 @@ class SettingsTvTest : TvTest() {
     private fun onScreen(text: String): Boolean =
         rule.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().isNotEmpty()
+
+    /** What the cursor is on, by the words under it, so a route is never counted out. */
+    private fun focusedText(): String =
+        // The merged tree, so a focused row carries the words of the labels inside it. Read
+        // unmerged, the row that takes focus has no text of its own and this came back empty.
+        rule.onAllNodes(isFocused())
+            .fetchSemanticsNodes()
+            .flatMap { node ->
+                node.config.getOrNull(SemanticsProperties.Text)?.map { it.text }.orEmpty()
+            }
+            .joinToString(" ")
+
+    /**
+     * Walks down until the words are under the cursor.
+     *
+     * A count of presses would have to be corrected every time a section is added, and the
+     * correction is invisible: the test still passes, having pressed OK on whatever happened
+     * to be in the right place. Walking until it is actually there tests reachability, which
+     * is the claim.
+     */
+    private fun walkDownTo(text: String, scenario: androidx.test.core.app.ActivityScenario<SettingsActivity>) {
+        repeat(12) {
+            if (focusedText().contains(text)) return
+            press(scenario, KeyEvent.KEYCODE_DPAD_DOWN)
+        }
+        throw AssertionError("never reached \"$text\" with the cursor; it stopped on \"${focusedText()}\"")
+    }
 
     private fun says(text: String) {
         waitFor("\"$text\" on screen") { onScreen(text) }
@@ -126,7 +156,13 @@ class SettingsTvTest : TvTest() {
         press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
         press(s, KeyEvent.KEYCODE_DPAD_CENTER)
 
-        assertEquals("two to the right of Sky is Amber", "amber", ThemeStore.accent(context).id)
+        // The third swatch, whatever the palette is tuned to. Naming the colour here would
+        // make retuning the palette look like a broken remote.
+        assertEquals(
+            "two to the right of the first swatch is the third",
+            ThemeStore.accents[2].id,
+            ThemeStore.accent(context).id,
+        )
     }
 
     @Test
@@ -134,10 +170,7 @@ class SettingsTvTest : TvTest() {
         val s = launch(SettingsActivity::class.java)
         says("Backdrop pictures")
 
-        // Past the Layout rows that now sit between the swatches and this: Favorite apps,
-        // Posters, Inputs. A count rather than a search, so adding a section fails here
-        // loudly instead of quietly pressing OK on something else.
-        repeat(4) { press(s, KeyEvent.KEYCODE_DPAD_DOWN) }
+        walkDownTo("Backdrop pictures", s)
         press(s, KeyEvent.KEYCODE_DPAD_CENTER)
 
         val started = nextStarted()
@@ -146,15 +179,5 @@ class SettingsTvTest : TvTest() {
             "opens the backdrop sources rather than the app list",
             started?.getBooleanExtra(AppPickerActivity.EXTRA_BACKDROPS, false) == true,
         )
-    }
-
-    @Test
-    fun `the television's own settings are not what this screen is`() {
-        // Said on the screen, because two gear-like glyphs sat next to each other in the top
-        // bar and nothing told the owner which was which.
-        launch(SettingsActivity::class.java)
-
-        says("The television's are the gear in the top bar")
-        assertFalse("should not claim to be the TV's settings", onScreen("Device Preferences"))
     }
 }

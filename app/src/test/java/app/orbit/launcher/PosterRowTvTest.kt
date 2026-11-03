@@ -79,6 +79,10 @@ class PosterRowTvTest : TvTest() {
         shadowOf(ApplicationProvider.getApplicationContext<Application>())
             .grantPermissions(ContinueWatching.PERMISSION)
         favorites(listOf(server) + myApps.filter { it != server }, myInputs)
+        // These tests are about the poster row, not about where it sits, so the apps row is
+        // put above it and kept there. The shipped order has the posters first, and one
+        // press down from the apps row then lands on the inputs.
+        LayoutStore.move(context, HomeRow.FAVORITES, -1)
         ShotHooks.watchNext = emptyList()
         ShotHooks.pictures = emptyList()
         ShotHooks.artwork = poster()

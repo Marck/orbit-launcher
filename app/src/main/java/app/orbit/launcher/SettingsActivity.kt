@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -84,11 +85,7 @@ private fun SettingsScreen() {
     ) {
         Text("Orbit settings", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.height(4.dp))
-        Text(
-            "Orbit's own settings. The television's are the gear in the top bar.",
-            color = Muted,
-            fontSize = 13.sp,
-        )
+        Text("Orbit's own settings.", color = Muted, fontSize = 13.sp)
 
         Section("Visual")
         Text(
@@ -104,8 +101,7 @@ private fun SettingsScreen() {
         Section("Layout")
         Text(
             "The rows of the home screen, top to bottom. Left and right move one, OK turns " +
-                "it off. Favorite apps stays, since a launcher with nothing to launch is not " +
-                "one.",
+                "it off.",
             color = Muted,
             fontSize = 13.sp,
         )
@@ -123,6 +119,38 @@ private fun SettingsScreen() {
                 )
             },
         )
+
+        Section("Home Assistant")
+        val hassReady = remember(HomeAssistantStore.revision) {
+            HomeAssistantStore.configured(context)
+        }
+        Text(
+            if (hassReady) {
+                "Connected to your own Home Assistant. Orbit only reads from it, and nothing " +
+                    "it reads leaves this television."
+            } else {
+                "Show readings from your own Home Assistant in the hero and in a " +
+                    "notifications row. Orbit only reads, and needs the address and a " +
+                    "long-lived token."
+            },
+            color = Muted,
+            fontSize = 13.sp,
+        )
+        Spacer(Modifier.height(10.dp))
+        Entry(
+            label = if (hassReady) "Connection" else "Set up Home Assistant",
+            // Deliberately not the address. It is the owner's own server, and a screen that
+            // prints it is a screen that prints it into every photograph of the television.
+            detail = if (hassReady) "Saved on this television" else "Address and access token",
+            onClick = { context.openScreen(Intent(context, HassSetupActivity::class.java)) },
+        )
+        if (hassReady) {
+            Entry(
+                label = "What to show",
+                detail = "Pick from what your Home Assistant has, and where each one goes",
+                onClick = { context.openScreen(Intent(context, HassEntitiesActivity::class.java)) },
+            )
+        }
 
         Section("About")
         // The same four lines the card showed, so what is on the television can still be
@@ -189,6 +217,9 @@ private fun Swatches(first: FocusRequester) {
     }
 }
 
+/** Wide enough for the longest row name, so every state word starts at the same place. */
+private val RowNameWidth = 150.dp
+
 /**
  * The home screen's rows, as a list in the order they are drawn in.
  *
@@ -238,12 +269,23 @@ private fun Rows() {
                         .background(if (focused) Accent else Color.Transparent)
                 )
                 Spacer(Modifier.width(11.dp))
+                // In front of every row, so the column of labels after it lines up whatever
+                // each row is called. Nothing on the row said it could be moved before.
+                Icon(
+                    imageVector = Glyphs.Reorder,
+                    contentDescription = "Move",
+                    tint = if (focused) Accent else Muted,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
                 Text(
                     rowLabel(row),
                     color = if (shown) Color.White else Muted,
                     fontSize = 16.sp,
+                    // One width for every label, so the on and off words line up down the
+                    // list instead of stepping in and out with the length of the name.
+                    modifier = Modifier.width(RowNameWidth),
                 )
-                Spacer(Modifier.width(12.dp))
                 Text(
                     when {
                         required -> "always on"

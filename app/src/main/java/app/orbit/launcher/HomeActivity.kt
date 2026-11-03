@@ -250,6 +250,16 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     val heroFocus = remember { FocusRequester() }
     var refocusTop by remember { mutableIntStateOf(0) }
     val rows = remember(LayoutStore.revision) { LayoutStore.rows(context) }
+    // Read again when the screen comes back rather than held live. Nothing here is urgent
+    // enough to justify a launcher keeping a connection open to a server.
+    @Suppress("ProduceStateDoesNotAssignValue")
+    val notable by produceState(
+        initialValue = emptyList<HaEntity>(),
+        HomeAssistantStore.revision,
+        Returns.count,
+    ) {
+        value = withContext(Dispatchers.IO) { notableReadings(context) }
+    }
     // Asks the apps row to go back to its first tile, for Home and Back.
     var toFirst by remember { mutableIntStateOf(0) }
     // Saved with the activity, so focus comes back to the same place after it is recreated.
@@ -595,6 +605,10 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                     )
                 }
                 },
+                HomeRow.NOTIFICATIONS to {
+                    RowLabel("NOTIFICATIONS")
+                    NotificationsRow(notable)
+                },
                 HomeRow.INPUTS to {
                 RowLabel(if (editing != null && editingKey == FavoriteStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
                 InputsRow(
@@ -623,7 +637,17 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
                 )
                 },
             )
+            // Whether a row has anything to draw, asked out here so an empty one costs no
+            // gap either. Writing the emptiness check inside each block left the spacer
+            // behind it, which put a hole where the poster row used to be.
+            val filled = mapOf(
+                HomeRow.FAVORITES to true,
+                HomeRow.POSTERS to posters.isNotEmpty(),
+                HomeRow.NOTIFICATIONS to notable.isNotEmpty(),
+                HomeRow.INPUTS to true,
+            )
             rows.forEach { row ->
+                if (filled[row] != true) return@forEach
                 blocks[row]?.let { block ->
                     block()
                     // Smaller than it looks: a row already ends in room for its tile labels.

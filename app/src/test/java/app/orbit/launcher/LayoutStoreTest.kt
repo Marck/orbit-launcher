@@ -27,10 +27,14 @@ class LayoutStoreTest {
     }
 
     @Test
-    fun `the notifications row is known but not offered, since nothing fills it yet`() {
-        assertTrue(HomeRow.NOTIFICATIONS in LayoutStore.ordered(context))
-        assertFalse(HomeRow.NOTIFICATIONS in LayoutStore.offered(context))
-        assertFalse(HomeRow.NOTIFICATIONS in LayoutStore.rows(context))
+    fun `the notifications row is offered now that something fills it`() {
+        assertTrue(HomeRow.NOTIFICATIONS in LayoutStore.offered(context))
+        assertTrue(HomeRow.NOTIFICATIONS in LayoutStore.rows(context))
+    }
+
+    @Test
+    fun `notifications sit directly under the hero, where news belongs`() {
+        assertEquals(HomeRow.NOTIFICATIONS, LayoutStore.rows(context).first())
     }
 
     @Test
@@ -38,7 +42,7 @@ class LayoutStoreTest {
         LayoutStore.move(context, HomeRow.INPUTS, -1)
 
         assertEquals(
-            listOf(HomeRow.FAVORITES, HomeRow.INPUTS, HomeRow.POSTERS),
+            listOf(HomeRow.NOTIFICATIONS, HomeRow.POSTERS, HomeRow.INPUTS, HomeRow.FAVORITES),
             LayoutStore.rows(context),
         )
     }
@@ -47,7 +51,7 @@ class LayoutStoreTest {
     fun `a row at the end stays there rather than coming round`() {
         // Wrapping would read as a mistake in a list this short, where the list is a picture
         // of the screen.
-        LayoutStore.move(context, HomeRow.FAVORITES, -1)
+        LayoutStore.move(context, HomeRow.NOTIFICATIONS, -1)
         assertEquals(LayoutStore.default, LayoutStore.rows(context))
 
         LayoutStore.move(context, HomeRow.INPUTS, 1)
@@ -57,7 +61,10 @@ class LayoutStoreTest {
     @Test
     fun `a row switched off is not drawn, and comes back when switched on`() {
         LayoutStore.setShown(context, HomeRow.POSTERS, false)
-        assertEquals(listOf(HomeRow.FAVORITES, HomeRow.INPUTS), LayoutStore.rows(context))
+        assertEquals(
+            listOf(HomeRow.NOTIFICATIONS, HomeRow.FAVORITES, HomeRow.INPUTS),
+            LayoutStore.rows(context),
+        )
 
         LayoutStore.setShown(context, HomeRow.POSTERS, true)
         assertEquals(LayoutStore.default, LayoutStore.rows(context))
@@ -73,12 +80,13 @@ class LayoutStoreTest {
     }
 
     @Test
-    fun `moving a row keeps the ones that are not offered`() {
+    fun `moving a row keeps every other row`() {
         LayoutStore.move(context, HomeRow.INPUTS, -1)
 
-        assertTrue(
-            "notifications should keep its place for when it has a source",
-            HomeRow.NOTIFICATIONS in LayoutStore.ordered(context),
+        assertEquals(
+            "no row should be lost by moving another",
+            HomeRow.entries.toSet(),
+            LayoutStore.ordered(context).toSet(),
         )
     }
 
@@ -90,7 +98,12 @@ class LayoutStoreTest {
 
         val rows = LayoutStore.rows(context)
 
-        assertEquals(listOf(HomeRow.INPUTS, HomeRow.FAVORITES, HomeRow.POSTERS), rows)
+        // What was stored, then whatever this version knows that it did not, in the order
+        // the rows are declared in.
+        assertEquals(
+            listOf(HomeRow.INPUTS, HomeRow.FAVORITES, HomeRow.POSTERS, HomeRow.NOTIFICATIONS),
+            rows,
+        )
     }
 
     @Test

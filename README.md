@@ -365,6 +365,7 @@ the sliders are the launcher's, and nothing in them leaves the set. Three sectio
 - **Layout** is the rows of the home screen, top to bottom. Left and right move the row
   under the cursor, OK turns it off. Favorite apps cannot be turned off, because a launcher
   with nothing to launch is not one and both Back and Home aim at that row.
+- **Home Assistant** connects Orbit to your own Home Assistant, read only. See below.
 - **Pictures** reaches the backdrop picker, which used to have a glyph of its own.
 - **About** says what is running: the version, whether it is a `stable` or a `debug` build,
   the commit it was built from, which release that commit is, and the day it was built. The
@@ -372,6 +373,43 @@ the sliders are the launcher's, and nothing in them leaves the set. Three sectio
   version; compare it with the repository to see whether the TV is up to date. A build from
   an untagged commit reads `between releases`, and one made with uncommitted changes says
   so too.
+
+## Home Assistant
+
+Orbit can show readings from your own Home Assistant. It only ever reads, and nothing it
+reads leaves the television.
+
+Set it up in Orbit settings, Home Assistant. It needs two things, both typed on the set:
+
+- the address, such as `http://homeassistant.local:8123`;
+- a long-lived access token, from your Home Assistant profile page.
+
+Both are stored on the television and nowhere else. The token is written and never read
+back: once saved, the field says there is one rather than showing it, because a credential
+in large type on a television is a credential in every photograph of that television. The
+address is not printed on any screen for the same reason.
+
+Pasting is easier than typing. The Google TV phone app has a keyboard that sends text to
+the set, which is how a long token gets in without being typed on a remote.
+
+**What to show** then lists everything your Home Assistant will tell Orbit about, grouped by
+what kind of thing it is: readings, open and closed, climate, weather, cameras, people,
+lights. Nothing is hardcoded about any particular system. OK moves an entity between two
+places and back to neither:
+
+| Where | What it does |
+|---|---|
+| In the hero | Shown under the clock, in the state where there is nothing to watch. Space that was otherwise blank |
+| In notifications | A row that exists only while one of its entities has something to say |
+
+A notifications row that is always there is just another row, so it is drawn only when one
+of the chosen entities is in a state that is not the normal state of a house. Off, closed,
+locked, normal, home, unavailable and unknown are all read as quiet. The row is for reading
+rather than operating, so it does not take focus; controls are a separate piece of work.
+
+If Home Assistant is not set up, is unreachable, or answers with nothing, Orbit shows
+exactly what it shows without it. A home screen that depends on a server being up is not a
+home screen.
 
 ## Setting the profile picture
 
