@@ -134,7 +134,10 @@ class SettingsTvTest : TvTest() {
         val s = launch(SettingsActivity::class.java)
         says("Backdrop pictures")
 
-        press(s, KeyEvent.KEYCODE_DPAD_DOWN)
+        // Past the Layout rows that now sit between the swatches and this: Favorite apps,
+        // Posters, Inputs. A count rather than a search, so adding a section fails here
+        // loudly instead of quietly pressing OK on something else.
+        repeat(4) { press(s, KeyEvent.KEYCODE_DPAD_DOWN) }
         press(s, KeyEvent.KEYCODE_DPAD_CENTER)
 
         val started = nextStarted()

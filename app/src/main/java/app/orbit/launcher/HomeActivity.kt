@@ -249,6 +249,7 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
     val topBarFocus = remember { FocusRequester() }
     val heroFocus = remember { FocusRequester() }
     var refocusTop by remember { mutableIntStateOf(0) }
+    val rows = remember(LayoutStore.revision) { LayoutStore.rows(context) }
     // Asks the apps row to go back to its first tile, for Home and Back.
     var toFirst by remember { mutableIntStateOf(0) }
     // Saved with the activity, so focus comes back to the same place after it is recreated.
@@ -378,7 +379,11 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             // row: the whole column crept up 7px, then 3, then 1, then 1, twelve in all, which
             // is that pop-out to the pixel. It settles at the bottom either way; this just puts
             // it there at once instead of over four presses.
-            zone == Zone.INPUTS -> column.animateScrollTo(column.maxValue)
+            // Only when they really are the last row. They were always the last one when
+            // this was written; the owner can move them now, and scrolling to the bottom of
+            // the column for a row in the middle would throw the screen past it.
+            zone == Zone.INPUTS && rows.lastOrNull() == HomeRow.INPUTS ->
+                column.animateScrollTo(column.maxValue)
         }
     }
 
@@ -530,86 +535,101 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             }
             // "Favorite apps" is what the picker that fills this row calls itself, and what
             // the row actually holds: the apps the owner put here, not every app on the set.
-            RowLabel(
-                if (editing != null && editingKey == FavoriteStore.APPS) {
-                    "FAVORITE APPS - MOVING, OK TO KEEP"
-                } else {
-                    "FAVORITE APPS"
-                }
-            )
-            AppsRow(
-                noticeFocus = noticeFocus.takeIf { !homeOpensOrbit && !noticeDismissed },
-                apps = favoriteApps,
-                // A TV always has some app installed, so an empty list means not read yet.
-                ready = apps.isNotEmpty(),
-                held = menu?.takeIf { it.key == FavoriteStore.APPS }?.id,
-                refocus = refocusApps,
-                toFirst = toFirst,
-                active = zone == Zone.APPS && menu == null,
-                onFocused = { moveTo(Zone.APPS) },
-                onTile = { focusedApp = it },
-                editing = editing.takeIf { editingKey == FavoriteStore.APPS },
-                onOpen = { app -> openApp(app.packageName, app.label) },
-                onMenu = { app, anchor ->
-                    menu = TileMenu(
-                        key = FavoriteStore.APPS,
-                        id = app.packageName,
-                        label = app.label,
-                        anchor = anchor,
-                        packageName = app.packageName,
-                        // Decides the last entry: uninstall, the update back off, or the
-                        // television's own page for an app that can be neither.
-                        removal = removalFor(app),
-                    )
-                },
-                onMove = { delta ->
-                    editing?.let {
-                        FavoriteStore.move(context, FavoriteStore.APPS, it, delta, favoriteApps.map { a -> a.packageName })
+            // The rows the owner asked for, in the order they asked for. Emitted from a map
+            // rather than written one after another, so the order lives in one place and the
+            // screen cannot disagree with the settings that describe it.
+            val blocks: Map<HomeRow, @Composable () -> Unit> = mapOf(
+                HomeRow.FAVORITES to {
+                RowLabel(
+                    if (editing != null && editingKey == FavoriteStore.APPS) {
+                        "FAVORITE APPS - MOVING, OK TO KEEP"
+                    } else {
+                        "FAVORITE APPS"
                     }
-                },
-                onEndEdit = { revert -> endEdit(revert) },
-            )
-            // Smaller than it looks: the apps row already ends in room for its tile labels.
-            Spacer(Modifier.height(12.dp))
-            // Named after the app the covers came from when they all came from one, and after
-            // what they are when they did not. The old fixed "POSTERS" was justified by the
-            // covers mostly coming from a shop front, which measuring the set disproved.
-            if (posters.isNotEmpty()) {
-                RowLabel(posterRowLabel(posters, apps))
-                PosterRow(
-                    posters = posters,
-                    refocus = refocusLibrary,
-                    active = zone == Zone.LIBRARY && menu == null,
-                    onFocused = { moveTo(Zone.LIBRARY) },
-                    onOpen = { picture -> context.openPicture(picture) },
                 )
-                Spacer(Modifier.height(12.dp))
-            }
-            RowLabel(if (editing != null && editingKey == FavoriteStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
-            InputsRow(
-                inputs = favoriteInputs,
-                ready = inputs != null,
-                held = menu?.takeIf { it.key == FavoriteStore.INPUTS }?.id,
-                refocus = refocusInputs,
-                active = zone == Zone.INPUTS && menu == null,
-                onFocused = { moveTo(Zone.INPUTS) },
-                editing = editing.takeIf { editingKey == FavoriteStore.INPUTS },
-                onOpen = { input -> switchTo(input.id, input.label) },
-                onMenu = { input, anchor ->
-                    menu = TileMenu(
-                        key = FavoriteStore.INPUTS,
-                        id = input.id,
-                        label = input.label,
-                        anchor = anchor,
+                AppsRow(
+                    noticeFocus = noticeFocus.takeIf { !homeOpensOrbit && !noticeDismissed },
+                    apps = favoriteApps,
+                    // A TV always has some app installed, so an empty list means not read yet.
+                    ready = apps.isNotEmpty(),
+                    held = menu?.takeIf { it.key == FavoriteStore.APPS }?.id,
+                    refocus = refocusApps,
+                    toFirst = toFirst,
+                    active = zone == Zone.APPS && menu == null,
+                    onFocused = { moveTo(Zone.APPS) },
+                    onTile = { focusedApp = it },
+                    editing = editing.takeIf { editingKey == FavoriteStore.APPS },
+                    onOpen = { app -> openApp(app.packageName, app.label) },
+                    onMenu = { app, anchor ->
+                        menu = TileMenu(
+                            key = FavoriteStore.APPS,
+                            id = app.packageName,
+                            label = app.label,
+                            anchor = anchor,
+                            packageName = app.packageName,
+                            // Decides the last entry: uninstall, the update back off, or the
+                            // television's own page for an app that can be neither.
+                            removal = removalFor(app),
+                        )
+                    },
+                    onMove = { delta ->
+                        editing?.let {
+                            FavoriteStore.move(context, FavoriteStore.APPS, it, delta, favoriteApps.map { a -> a.packageName })
+                        }
+                    },
+                    onEndEdit = { revert -> endEdit(revert) },
+                )
+                },
+                HomeRow.POSTERS to {
+                // Named after the app the covers came from when they all came from one, and after
+                // what they are when they did not. The old fixed "POSTERS" was justified by the
+                // covers mostly coming from a shop front, which measuring the set disproved.
+                if (posters.isNotEmpty()) {
+                    RowLabel(posterRowLabel(posters, apps))
+                    PosterRow(
+                        posters = posters,
+                        refocus = refocusLibrary,
+                        active = zone == Zone.LIBRARY && menu == null,
+                        onFocused = { moveTo(Zone.LIBRARY) },
+                        onOpen = { picture -> context.openPicture(picture) },
                     )
+                }
                 },
-                onMove = { delta ->
-                    editing?.let {
-                        FavoriteStore.move(context, FavoriteStore.INPUTS, it, delta, favoriteInputs.map { i -> i.id })
-                    }
+                HomeRow.INPUTS to {
+                RowLabel(if (editing != null && editingKey == FavoriteStore.INPUTS) "INPUTS - MOVING, OK TO KEEP" else "INPUTS")
+                InputsRow(
+                    inputs = favoriteInputs,
+                    ready = inputs != null,
+                    held = menu?.takeIf { it.key == FavoriteStore.INPUTS }?.id,
+                    refocus = refocusInputs,
+                    active = zone == Zone.INPUTS && menu == null,
+                    onFocused = { moveTo(Zone.INPUTS) },
+                    editing = editing.takeIf { editingKey == FavoriteStore.INPUTS },
+                    onOpen = { input -> switchTo(input.id, input.label) },
+                    onMenu = { input, anchor ->
+                        menu = TileMenu(
+                            key = FavoriteStore.INPUTS,
+                            id = input.id,
+                            label = input.label,
+                            anchor = anchor,
+                        )
+                    },
+                    onMove = { delta ->
+                        editing?.let {
+                            FavoriteStore.move(context, FavoriteStore.INPUTS, it, delta, favoriteInputs.map { i -> i.id })
+                        }
+                    },
+                    onEndEdit = { revert -> endEdit(revert) },
+                )
                 },
-                onEndEdit = { revert -> endEdit(revert) },
             )
+            rows.forEach { row ->
+                blocks[row]?.let { block ->
+                    block()
+                    // Smaller than it looks: a row already ends in room for its tile labels.
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
             // The bottom of the safe area. Without it the labels under the inputs row sit in the
             // strip a TV may crop off.
             Spacer(Modifier.height(SafeV))
