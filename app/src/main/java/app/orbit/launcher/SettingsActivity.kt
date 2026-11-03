@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,6 +37,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -94,6 +100,17 @@ private fun SettingsScreen() {
         )
         Spacer(Modifier.height(10.dp))
         Swatches(first)
+
+        Section("Layout")
+        Text(
+            "The rows of the home screen, top to bottom. Left and right move one, OK turns " +
+                "it off. Favorite apps stays, since a launcher with nothing to launch is not " +
+                "one.",
+            color = Muted,
+            fontSize = 13.sp,
+        )
+        Spacer(Modifier.height(10.dp))
+        Rows()
 
         Section("Pictures")
         Entry(
@@ -170,6 +187,83 @@ private fun Swatches(first: FocusRequester) {
             }
         }
     }
+}
+
+/**
+ * The home screen's rows, as a list in the order they are drawn in.
+ *
+ * Left and right move the row under the cursor, which is the gesture a tile already uses for
+ * a move, without the hold: there is nothing beside a row in a list this narrow, so the keys
+ * are free and a mode to enter would be ceremony. OK turns a row off.
+ */
+@Composable
+private fun Rows() {
+    val context = LocalContext.current
+    val offered = remember(LayoutStore.revision) { LayoutStore.offered(context) }
+    Column {
+        // Keyed on the row, so the cursor follows the row it is moving rather than staying
+        // at the place in the list the row has just left.
+        offered.forEach { row -> key(row) {
+            val shown = remember(LayoutStore.revision, row) { LayoutStore.shown(context, row) }
+            val required = row in LayoutStore.required
+            var focused by remember { mutableStateOf(false) }
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (focused) Color(0xFF1E2838) else Color.Transparent)
+                    .onFocusChanged { focused = it.isFocused }
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        // Left and right, not up and down: up and down are how the cursor
+                        // gets from one row of this list to the next, and taking them would
+                        // trap it on whichever row it landed on.
+                        when (event.key) {
+                            Key.DirectionLeft -> LayoutStore.move(context, row, -1)
+                            Key.DirectionRight -> LayoutStore.move(context, row, 1)
+                            else -> return@onPreviewKeyEvent false
+                        }
+                        true
+                    }
+                    .clickable(interactionSource = null, indication = null) {
+                        LayoutStore.setShown(context, row, !shown)
+                    }
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .width(3.dp)
+                        .height(26.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (focused) Accent else Color.Transparent)
+                )
+                Spacer(Modifier.width(11.dp))
+                Text(
+                    rowLabel(row),
+                    color = if (shown) Color.White else Muted,
+                    fontSize = 16.sp,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    when {
+                        required -> "always on"
+                        shown -> "on"
+                        else -> "off"
+                    },
+                    color = if (shown && !required) Accent else Muted,
+                    fontSize = 12.sp,
+                )
+            }
+        } }
+    }
+}
+
+/** What a row is called on screen, which is what its label says on the home screen. */
+internal fun rowLabel(row: HomeRow): String = when (row) {
+    HomeRow.FAVORITES -> "Favorite apps"
+    HomeRow.POSTERS -> "Posters"
+    HomeRow.INPUTS -> "Inputs"
+    HomeRow.NOTIFICATIONS -> "Notifications"
 }
 
 /** A row that opens something else, with what it is for underneath. */

@@ -54,6 +54,7 @@ outvoted and has to be disabled instead. There is a documented way back.
 | TV inputs | The `+` tile at the end of the inputs row |
 | Stop an app filling the hero | Orbit settings, Pictures. Everything publishing is on by default |
 | Orbit's colour | Orbit settings, Visual |
+| Row order, and which rows show | Orbit settings, Layout |
 | Profile picture | The avatar glyph in the top bar |
 
 Nothing is configured in a file, and nothing you pick is stored anywhere but the TV.
@@ -361,6 +362,9 @@ the sliders are the launcher's, and nothing in them leaves the set. Three sectio
   line naming a picture, the hints. The surfaces stay near black whichever is chosen,
   because the panel is usually in a dark room. New installs are drawn in `Sky`, which is
   the pale blue Orbit has always used.
+- **Layout** is the rows of the home screen, top to bottom. Left and right move the row
+  under the cursor, OK turns it off. Favorite apps cannot be turned off, because a launcher
+  with nothing to launch is not one and both Back and Home aim at that row.
 - **Pictures** reaches the backdrop picker, which used to have a glyph of its own.
 - **About** says what is running: the version, whether it is a `stable` or a `debug` build,
   the commit it was built from, which release that commit is, and the day it was built. The
