@@ -473,6 +473,8 @@ internal class Watching(
      * before the timer fired would be followed straight away by one nobody asked for.
      */
     val step: (by: Int) -> Unit = {},
+    /** Where in that cycle the hero is, counted from what is on screen rather than the step. */
+    val at: Int = 0,
 )
 
 /**
@@ -626,10 +628,15 @@ internal fun rememberWatching(focusedApp: String?, library: List<Picture>?): Wat
     // Whichever cycle is the live one. Only one ever is: a programme to carry on with takes
     // the hero, and the ambient pictures only run when there is none.
     val entries = if (item != null) mine.size else pool.size
+    // From what is drawn, not from the step: the pair only moves once its picture lands, and
+    // the dots under the hero should move with the picture rather than ahead of it.
+    val at = (if (item != null) mine.indexOf(item) else shown?.let { pool.indexOf(it) } ?: -1)
+        .takeIf { it >= 0 } ?: if (item != null) index else ambientIndex
     return Watching(
         item, progress, shown, settling, backdrop, granted, asked,
         ask = { ask.launch(ContinueWatching.PERMISSION) },
         entries = entries,
+        at = at,
         step = { by ->
             if (item != null) {
                 if (mine.size > 1) {

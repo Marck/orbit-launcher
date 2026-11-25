@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -490,7 +491,13 @@ private fun HomeScreen(events: SharedFlow<HomeEvent>) {
             // fitted. With the posters in, the content is taller than the screen, so there is
             // no slack to hand out and the gap is the one the hero wants rather than whatever
             // is left over.
-            Spacer(Modifier.height(HeroGap))
+            // The dots sit in the gap the rows already keep under the hero, so nothing moves
+            // when they come and go.
+            Box(Modifier.fillMaxWidth().height(HeroGap), contentAlignment = Alignment.Center) {
+                if (watching.item != null || watching.picture != null) {
+                    HeroDots(count = watching.entries, at = watching.at)
+                }
+            }
             if (!homeOpensOrbit && !noticeDismissed) {
                 Notice(
                     title = if (reach == HomeReach.IGNORED) {
