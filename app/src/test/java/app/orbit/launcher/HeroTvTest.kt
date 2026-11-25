@@ -7,6 +7,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.view.KeyEvent
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasTestTag
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
@@ -450,6 +453,49 @@ class HeroTvTest : TvTest() {
         assertEquals("left did not step the hero back", before, heroTitle(titles))
         // And neither key took focus off the hero.
         assertFalse("a step took focus out of the hero: ${focused()}", focused() in topBarButtons)
+    }
+
+    /** What the dots under the hero say, "2 of 3", or null while there are none. */
+    private fun dots(): String? =
+        rule.onAllNodes(hasTestTag(HeroDotsTag), useUnmergedTree = true).fetchSemanticsNodes()
+            .firstOrNull()?.config?.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull()
+
+    @Test
+    fun `dots under the hero count the heroes and follow the step`() {
+        ShotHooks.cycling = false
+        val titles = listOf("First Ambient", "Second Ambient", "Third Ambient")
+        ShotHooks.pictures = titles.map { picture(it, description = "What $it is about.") }
+        val s = launch(HomeActivity::class.java)
+        ontoHero(s)
+        waitFor("the dots", diagnose = { "dots: ${dots()}" }) { dots() != null }
+        val before = dots()!!
+        assertTrue("not one dot per hero: $before", before.endsWith(" of 3"))
+        val title = heroTitle(titles)
+
+        press(s, KeyEvent.KEYCODE_DPAD_RIGHT)
+        waitFor("the dots to move on", diagnose = { "dots: ${dots()}" }) { dots() != before }
+        // Counted from the picture on screen, so they move with the title, not ahead of it.
+        assertTrue("the dots moved but the picture did not", heroTitle(titles) != title)
+        val number = before.substringBefore(" ").toInt()
+        assertEquals("the dots did not move one on", "${number % 3 + 1} of 3", dots())
+
+        // In the gap the rows already keep, so the rows do not move for them.
+        val hero = rule.onAllNodes(hasTestTag(HeroTag), useUnmergedTree = true)
+            .fetchSemanticsNodes().first().boundsInRoot
+        val strip = rule.onAllNodes(hasTestTag(HeroDotsTag), useUnmergedTree = true)
+            .fetchSemanticsNodes().first().boundsInRoot
+        val gap = with(rule.density) { HeroGap.toPx() }
+        assertTrue("dots $strip are not in the gap under the hero $hero",
+            strip.top >= hero.bottom && strip.bottom <= hero.bottom + gap)
+        shot("dots")
+    }
+
+    @Test
+    fun `a single hero has no dots`() {
+        ShotHooks.pictures = listOf(picture("Only Ambient", description = "About."))
+        launch(HomeActivity::class.java)
+        says("Only Ambient")
+        assertNull("dots for a single hero: ${dots()}", dots())
     }
 
     @Test

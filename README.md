@@ -159,7 +159,9 @@ The top of the screen shows the most truthful thing Orbit can say, in this order
    Next list, which apps such as Jellyfin publish to. Title, episode and OK to resume,
    with the programme's own artwork bled in from the right and faded out across the
    middle and along the bottom, so it carries on behind the rows. Where there is more
-   than one thing to carry on with, the hero steps through them every ten seconds. A film
+   than one thing to carry on with, the hero steps through them every ten seconds, with
+   dots under it: one per hero, up to five, the one on screen in the middle and biggest,
+   sliding along on each step. A longer list shows a window of five. A film
    shows no episode line. The hero follows the app under the cursor, so a programme never
    appears behind a tile that knows nothing about it.
 
